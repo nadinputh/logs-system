@@ -4,7 +4,8 @@ import { useState, useCallback } from 'react'
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser'
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { toast } from 'sonner'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogIcon, DialogTitle } from '@/components/ui/dialog'
+import { toast } from '@/components/ui/sonner'
 import { Trash2, Plus, KeyRound } from 'lucide-react'
 
 interface Passkey {
@@ -23,6 +24,8 @@ interface PasskeyManagerProps {
 export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps) {
   const [passkeys, setPasskeys] = useState<Passkey[]>(initialPasskeys)
   const [loading, setLoading] = useState(false)
+  const [passkeyToDelete, setPasskeyToDelete] = useState<Passkey | null>(null)
+  const [deletingPasskeyId, setDeletingPasskeyId] = useState<string | null>(null)
 
   const handleRegister = useCallback(async () => {
     setLoading(true)
@@ -54,16 +57,22 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
     }
   }, [])
 
-  const handleDelete = useCallback(async (id: string) => {
+  const handleDelete = useCallback(async () => {
+    if (!passkeyToDelete) return
+
+    setDeletingPasskeyId(passkeyToDelete._id)
     try {
-      const res = await fetch(`/api/auth/passkey/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/auth/passkey/${passkeyToDelete._id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
-      setPasskeys((prev) => prev.filter((p) => p._id !== id))
+      setPasskeys((prev) => prev.filter((p) => p._id !== passkeyToDelete._id))
+      setPasskeyToDelete(null)
       toast.success('Passkey removed')
     } catch {
       toast.error('Failed to remove passkey')
+    } finally {
+      setDeletingPasskeyId(null)
     }
-  }, [])
+  }, [passkeyToDelete])
 
   return (
     <div className="space-y-4">
@@ -80,8 +89,8 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
       {passkeys.map((pk) => (
         <div key={pk._id} className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-              <KeyRound className="w-4 h-4 text-indigo-500" />
+            <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
+              <KeyRound className="w-4 h-4 text-sky-500" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">
@@ -101,13 +110,46 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
               variant="ghost"
               size="icon"
               className="text-red-500 hover:text-red-700 hover:bg-red-50"
-              onClick={() => handleDelete(pk._id)}
+              aria-label="Remove passkey"
+              onClick={() => setPasskeyToDelete(pk)}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         </div>
       ))}
+
+      <Dialog open={Boolean(passkeyToDelete)} onOpenChange={(open) => !open && setPasskeyToDelete(null)}>
+        <DialogContent size="xs">
+          <DialogHeader>
+            <DialogIcon className="size-12 rounded-full bg-red-50 text-red-500">
+              <Trash2 className="size-5" aria-hidden />
+            </DialogIcon>
+            <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">Remove passkey?</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="mt-3 text-sm leading-6 text-muted-foreground">
+            This will remove the selected {passkeyToDelete?.deviceType === 'multiDevice' ? 'synced' : 'device-bound'} passkey from your account. You can register it again later if this device is still available.
+          </DialogBody>
+          <DialogFooter className="mt-5 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPasskeyToDelete(null)}
+              disabled={Boolean(deletingPasskeyId)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              isLoading={deletingPasskeyId === passkeyToDelete?._id}
+            >
+              Remove Passkey
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

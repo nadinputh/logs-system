@@ -1,8 +1,10 @@
 import QRCodeDisplay from '@/components/admin/QRCodeDisplay'
 import Link from 'next/link'
+import { Card, CardContent } from '@/components/ui/card'
 import { connectDB } from '@/lib/db'
 import { QuestCard } from '@/lib/models/QuestCard'
 import { resolveLocationLabels } from '@/lib/locationLabels'
+import { QrCode, Sparkles } from 'lucide-react'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -30,8 +32,9 @@ async function getQuest(id: string) {
   } catch { return null }
 }
 
-export default async function AdminQuestDetailPage({ params }: { params: { id: string } }) {
-  const quest = await getQuest(params.id)
+export default async function AdminQuestDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const quest = await getQuest(id)
   if (!quest) return <div className="p-8 text-red-500">Quest not found</div>
 
   const appUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
@@ -42,14 +45,14 @@ export default async function AdminQuestDetailPage({ params }: { params: { id: s
       <div className="flex items-center gap-3">
         <Link
           href="/admin/quests"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted px-3 py-1.5 rounded-lg transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
         >
           ← Back
         </Link>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold text-foreground">{quest.title}</h1>
-            <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-indigo-600 bg-indigo-50">
+            <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-sky-600 bg-sky-50">
               {quest.type === 'location_chain' ? 'Location Chain' : 'Custom'}
             </span>
           </div>
@@ -59,26 +62,40 @@ export default async function AdminQuestDetailPage({ params }: { params: { id: s
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* QR card */}
-        <div className="bg-white rounded-2xl border border-border/60 shadow-sm overflow-hidden">
-          <div className="h-1.5 w-full gradient-primary" />
-          <div className="p-5">
-            <p className="text-sm font-semibold text-foreground mb-1">Quest Card QR</p>
-            <p className="text-xs text-muted-foreground mb-4">Give this to participants</p>
-            <div className="flex justify-center">
-              <QRCodeDisplay url={qrUrl} label={quest.title} sublabel={quest.type} />
+        <Card className="overflow-hidden bg-white" data-qr-export-card="true">
+          <CardContent className="p-5">
+            <div className="mb-5 flex items-start gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl gradient-primary text-white shadow-sm shadow-cyan-200">
+                <QrCode className="size-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Quest Card QR</p>
+                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Sparkles className="size-3.5" />
+                  Give this to participants
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
+            <div className="flex justify-center">
+              <QRCodeDisplay
+                url={qrUrl}
+                label={quest.title}
+                sublabel={quest.type}
+                exportTitle="Quest Card QR"
+                exportDescription="Give this to participants"
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Steps card */}
-        <div className="bg-white rounded-2xl border border-border/60 shadow-sm overflow-hidden">
-          <div className="h-1.5 w-full bg-violet-500" />
-          <div className="p-5">
+        <Card className="overflow-hidden">
+          <CardContent className="p-4">
             <p className="text-sm font-semibold text-foreground mb-4">Steps ({quest.steps.length})</p>
             <ol className="space-y-2">
               {quest.steps.sort((a: any, b: any) => a.order - b.order).map((step: any) => (
                 <li key={step.order} className="flex items-start gap-3 p-2.5 rounded-xl bg-muted/30 border border-border/40">
-                  <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  <span className="w-6 h-6 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
                     {step.order + 1}
                   </span>
                   <div className="min-w-0">
@@ -91,8 +108,8 @@ export default async function AdminQuestDetailPage({ params }: { params: { id: s
                 </li>
               ))}
             </ol>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

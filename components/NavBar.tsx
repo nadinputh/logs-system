@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
-import { cn } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: (
@@ -57,9 +57,12 @@ export default function NavBar() {
   }, [])
 
   const isLocationActive = locationItems.some(i => pathname.startsWith(i.href))
+  const navLinkBase = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap'
+  const navLinkActive = 'bg-accent/10 text-accent'
+  const navLinkInactive = 'text-muted-foreground hover:text-accent hover:bg-accent/10'
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border/60 bg-white/80 backdrop-blur-xl">
+    <nav className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-14 gap-4">
 
@@ -84,12 +87,7 @@ export default function NavBar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
-                    active
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                  )}
+                  className={`${navLinkBase} ${active ? navLinkActive : navLinkInactive}`}
                 >
                   {item.icon}
                   {item.label}
@@ -107,20 +105,16 @@ export default function NavBar() {
                 {/* Locations dropdown */}
                 <div ref={locRef} className="relative" onMouseEnter={() => setLocOpen(true)} onMouseLeave={() => setLocOpen(false)}>
                   <button
+                    type="button"
                     onClick={() => setLocOpen(o => !o)}
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
-                      isLocationActive
-                        ? 'bg-violet-500/10 text-violet-600'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                    )}
+                    className={`${navLinkBase} ${isLocationActive ? navLinkActive : navLinkInactive}`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                     <span className="hidden lg:block">Locations</span>
                     <svg
-                      className={cn('w-3 h-3 transition-transform duration-150', locOpen && 'rotate-180')}
+                      className={`w-3 h-3 transition-transform duration-150 ${locOpen ? 'rotate-180' : ''}`}
                       fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -129,29 +123,26 @@ export default function NavBar() {
 
                   {locOpen && (
                     <div className="absolute left-0 top-full pt-1.5 w-44 z-50">
-                      <div className="bg-white rounded-xl border border-border/60 shadow-lg shadow-black/[0.06] py-1">
-                      <p className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                      <div className="bg-overlay rounded-xl border border-border/60 shadow-lg shadow-black/[0.06] py-1">
+                      <p className="px-2.5 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
                         Locations
                       </p>
-                      {locationItems.map(item => {
-                        const active = pathname.startsWith(item.href)
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setLocOpen(false)}
-                            className={cn(
-                              'flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors mx-1 rounded-lg',
-                              active
-                                ? 'bg-violet-500/10 text-violet-600'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                            )}
-                          >
-                            {item.icon}
-                            {item.label}
-                          </Link>
-                        )
-                      })}
+                      <div className="space-y-1">
+                        {locationItems.map(item => {
+                          const active = pathname.startsWith(item.href)
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setLocOpen(false)}
+                              className={`flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium transition-colors mx-1 rounded-lg ${active ? navLinkActive : navLinkInactive}`}
+                            >
+                              {item.icon}
+                              {item.label}
+                            </Link>
+                          )
+                        })}
+                      </div>
                     </div>
                     </div>
                   )}
@@ -163,12 +154,7 @@ export default function NavBar() {
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={cn(
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
-                        active
-                          ? 'bg-violet-500/10 text-violet-600'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                      )}
+                      className={`${navLinkBase} ${active ? navLinkActive : navLinkInactive}`}
                     >
                       {item.icon}
                       <span className="hidden lg:block">{item.label}</span>
@@ -182,7 +168,7 @@ export default function NavBar() {
           {/* User section */}
           <div className="flex items-center gap-2 shrink-0">
             {isAdmin && (
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-violet-600 bg-violet-50 border border-violet-200/60 px-2 py-0.5 rounded-full">
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-full">
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" /></svg>
                 Admin
               </span>
@@ -190,27 +176,24 @@ export default function NavBar() {
             <Link
               href="/settings/passkeys"
               title="Passkeys"
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
-                pathname.startsWith('/settings/passkeys')
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-              )}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${pathname.startsWith('/settings/passkeys') ? navLinkActive : navLinkInactive}`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>
               <span className="hidden md:inline">Passkeys</span>
             </Link>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-cyan-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm">
               {initials}
             </div>
-            <button
+            <Button
+              type="button"
+              variant="ghost"
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-muted/60 hidden sm:block"
+              className="hidden sm:block"
             >
               Sign out
-            </button>
+            </Button>
           </div>
 
         </div>

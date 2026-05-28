@@ -4,13 +4,15 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Description } from '@/components/ui/description'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 
 interface Building { _id: string; name: string }
 interface Floor { _id: string; name: string; number: number; buildingId: string }
@@ -78,7 +80,7 @@ function RoomsContent() {
   const typeColors: Record<string, string> = {
     office: 'text-blue-600 bg-blue-50',
     lab: 'text-emerald-600 bg-emerald-50',
-    meeting: 'text-violet-600 bg-violet-50',
+    meeting: 'text-cyan-600 bg-cyan-50',
     storage: 'text-amber-600 bg-amber-50',
   }
 
@@ -92,7 +94,7 @@ function RoomsContent() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={
-            <button className="flex items-center gap-2 gradient-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all shadow-sm shadow-indigo-200" />
+            <Button />
           }>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -132,7 +134,7 @@ function RoomsContent() {
                 <div className="space-y-1.5"><Label>Type</Label><Input value={type} onChange={e => setType(e.target.value)} placeholder="Office, Lab…" /></div>
                 <div className="space-y-1.5"><Label>Capacity</Label><Input type="number" value={capacity} onChange={e => setCapacity(e.target.value)} placeholder="20" /></div>
               </div>
-              <div className="space-y-1.5"><Label>Description <span className="text-muted-foreground text-xs">(optional)</span></Label><Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} /></div>
+              <div className="space-y-1.5"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} /><Description>Optional</Description></div>
               <Button type="submit" className="w-full" disabled={saving}>{saving ? 'Creating…' : 'Create Room'}</Button>
             </form>
           </DialogContent>
@@ -140,7 +142,7 @@ function RoomsContent() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-border/60 shadow-sm shadow-black/[0.04] overflow-hidden">
+      <div>
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mb-3">
@@ -152,23 +154,21 @@ function RoomsContent() {
             <p className="text-xs text-muted-foreground mt-1">Add a room to enable QR-based check-ins</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border/60 bg-muted/30">
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Room</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Floor</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Type</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Check-in</th>
-                <th className="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">QR</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/40">
+          <Table aria-label="Rooms table">
+            <TableHeader>
+              <TableHead isRowHeader>Room</TableHead>
+              <TableHead className="hidden sm:table-cell">Floor</TableHead>
+              <TableHead className="hidden md:table-cell">Type</TableHead>
+              <TableHead className="hidden lg:table-cell">Check-in</TableHead>
+              <TableHead className="text-right">QR</TableHead>
+            </TableHeader>
+            <TableBody>
               {filtered.map(r => {
                 const typeKey = r.type?.toLowerCase() ?? ''
                 const badgeColor = typeColors[typeKey] ?? 'text-muted-foreground bg-muted'
                 return (
-                  <tr key={r._id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-6 py-4">
+                  <TableRow key={r._id}>
+                    <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                           <span className="text-xs font-bold text-muted-foreground">{r.number}</span>
@@ -178,11 +178,11 @@ function RoomsContent() {
                           <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">{getFloorName(r.floorId)}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 hidden sm:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <p className="text-sm text-muted-foreground">{getFloorName(r.floorId)}</p>
-                    </td>
-                    <td className="px-6 py-4 hidden md:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {r.type ? (
                         <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${badgeColor}`}>
                           {r.type}
@@ -190,26 +190,26 @@ function RoomsContent() {
                       ) : (
                         <span className="text-sm text-muted-foreground/50">—</span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 hidden lg:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <CheckInModeToggle locationId={r._id} value={r.checkInMode ?? 'click'} />
-                    </td>
-                    <td className="px-6 py-4 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <Link
                         href={`/admin/qr/${r._id}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground bg-muted hover:bg-muted/80 px-3 py-1.5 rounded-lg transition-colors"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                         </svg>
                         QR
                       </Link>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </div>
     </div>

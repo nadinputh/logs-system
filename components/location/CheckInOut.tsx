@@ -4,10 +4,12 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Description } from '@/components/ui/description'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { getPredictedAction, formatDuration } from '@/lib/predictive'
 
@@ -312,8 +314,9 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
 
   if (!location) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/20">
-        <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-8 w-full max-w-sm text-center">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-cyan-50/30 to-teal-50/20">
+        <Card className="w-full max-w-sm text-center">
+          <CardContent className="p-4">
           <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
             <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -321,27 +324,27 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           </div>
           <h2 className="font-bold text-foreground">Location not found</h2>
           <p className="text-sm text-muted-foreground mt-1.5">This QR code may be invalid or expired.</p>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   const locTypeColor = location.locationType === 'room'
-    ? 'text-indigo-600 bg-indigo-50'
+    ? 'text-sky-600 bg-sky-50'
     : location.locationType === 'floor'
-    ? 'text-violet-600 bg-violet-50'
+    ? 'text-cyan-600 bg-cyan-50'
     : 'text-amber-600 bg-amber-50'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/20 flex items-start justify-center p-4 pt-8 pb-16">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50/30 to-teal-50/20 flex items-start justify-center p-4 pt-8 pb-16">
       <div className="w-full max-w-sm space-y-3">
 
         {/* Loading skeleton */}
         {step === 'loading' && (
           <>
-            <div className="bg-white rounded-2xl border border-border/60 shadow-sm overflow-hidden animate-pulse">
-              <div className="h-1.5 w-full bg-gradient-to-r from-indigo-200 via-violet-200 to-indigo-200" />
-              <div className="p-5">
+            <Card className="overflow-hidden animate-pulse">
+              <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-2">
@@ -352,20 +355,21 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-muted shrink-0" />
                 </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5 space-y-3 animate-pulse">
+              </CardContent>
+            </Card>
+            <Card className="animate-pulse">
+              <CardContent className="p-4 space-y-3">
               <div className="h-10 w-full bg-muted rounded-xl" />
               <div className="h-10 w-full bg-muted/60 rounded-xl" />
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
 
         {/* Location card */}
         {step !== 'loading' && (
-        <div className="bg-white rounded-2xl border border-border/60 shadow-sm overflow-hidden">
-          <div className="h-1.5 w-full gradient-primary" />
-          <div className="p-5">
+        <Card className="overflow-hidden">
+          <CardContent className="p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-2">
@@ -397,72 +401,71 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 </svg>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
         )} {/* end location card */}
 
         {/* Step: Identity — step 1 */}
         {step === 'identity' && identitySubStep === 1 && (
-          <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5">
+          <Card>
+            <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">Who are you?</h3>
               <p className="text-sm text-muted-foreground mt-0.5">Enter your name to check in</p>
             </div>
             <form onSubmit={handleIdentityStep1} className="space-y-3.5">
               <div className="space-y-1.5">
-                <label htmlFor="visitor-name" className="text-sm font-medium text-foreground">
+                <Label htmlFor="visitor-name">
                   Full name <span className="text-red-500">*</span>
-                </label>
-                <input
+                </Label>
+                <Input
                   id="visitor-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="John Smith"
                   required
                   autoFocus
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="visitor-contact" className="text-sm font-medium text-foreground">
-                  Email or phone <span className="text-muted-foreground text-xs font-normal">(optional)</span>
-                </label>
-                <input
+                <Label htmlFor="visitor-contact">Email or phone</Label>
+                <Input
                   id="visitor-contact"
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder="you@example.com or +1 555…"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                 />
+                <Description>Optional</Description>
               </div>
-              <button
+              <Button
                 type="submit"
-                className="w-full gradient-primary text-white text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all shadow-sm shadow-indigo-200"
+                className="w-full"
               >
                 Continue →
-              </button>
+              </Button>
             </form>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Step: Identity — step 2 */}
         {step === 'identity' && identitySubStep === 2 && (
-          <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5">
+          <Card>
+            <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">A couple more details</h3>
               <p className="text-sm text-muted-foreground mt-0.5">Optional — you can skip these</p>
             </div>
             <div className="space-y-3.5">
               <div className="space-y-1.5">
-                <label htmlFor="visit-purpose" className="text-sm font-medium text-foreground">
+                <Label htmlFor="visit-purpose">
                   Purpose of visit
-                </label>
-                <input
+                </Label>
+                <Input
                   id="visit-purpose"
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value)}
                   placeholder="Meeting, interview, delivery…"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                 />
               </div>
               <div className="space-y-1.5">
@@ -481,29 +484,34 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                   </SelectContent>
                 </Select>
               </div>
-              <button
+              <Button
+                type="button"
                 onClick={() => completeIdentity(false)}
-                className="w-full gradient-primary text-white text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all shadow-sm shadow-indigo-200"
+                className="w-full"
               >
                 Continue →
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
                 onClick={() => completeIdentity(true)}
-                className="w-full text-sm text-muted-foreground hover:text-foreground py-2 rounded-xl hover:bg-muted/50 transition-all"
+                variant="ghost"
+                className="w-full"
               >
                 Skip
-              </button>
+              </Button>
             </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Step: Check-in */}
         {step === 'checkin' && (() => {
           const passkeyRequired = location.checkInMode === 'passkey'
           return (
-          <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5 space-y-3">
+          <Card>
+            <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2.5 bg-muted/40 rounded-xl px-3.5 py-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent/20 to-cyan-600/20 flex items-center justify-center text-sm font-bold text-accent shrink-0">
                 {name[0]?.toUpperCase() ?? '?'}
               </div>
               <div className="flex-1 min-w-0">
@@ -515,13 +523,16 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                   </p>
                 )}
               </div>
-              <button
+              <Button
+                type="button"
                 onClick={() => { setIdentitySubStep(1); setStep('identity') }}
-                className="shrink-0 text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-muted"
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
                 title="Edit your information"
               >
                 Edit
-              </button>
+              </Button>
             </div>
             {passkeyRequired ? (
               <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200/60 rounded-xl px-3 py-2">
@@ -531,12 +542,13 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 <span>This location requires a passkey (Face ID, Touch ID, or PIN) to check in.</span>
               </div>
             ) : (
-              <button
+              <Button
+                type="button"
                 onClick={() => setStep('selfie')}
-                className="w-full gradient-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all shadow-sm shadow-indigo-200 text-base"
+                className="w-full"
               >
                 Check In
-              </button>
+              </Button>
             )}
             {!passkeyRequired && (
               <div className="flex items-center gap-3 text-xs text-muted-foreground/60">
@@ -567,13 +579,15 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 handleCheckIn()
               }}
             />
-          </div>
+            </CardContent>
+          </Card>
           )
         })()}
 
         {/* Step: Selfie */}
         {step === 'selfie' && (
-          <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5">
+          <Card>
+            <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">Optional Selfie</h3>
               <p className="text-sm text-muted-foreground mt-0.5">Take a photo or skip</p>
@@ -585,12 +599,14 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               }}
               onSkip={() => handleCheckIn()}
             />
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Step: Checked In */}
         {step === 'checkedIn' && (
-          <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5 space-y-3">
+          <Card>
+            <CardContent className="p-4 space-y-3">
             {openLog && (
               <div className="bg-emerald-50 border border-emerald-200/60 rounded-xl px-4 py-3 space-y-1">
                 <p className="text-xs text-emerald-700 font-medium">
@@ -605,13 +621,15 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             )}
             {/* Click checkout — only if guest checked in by clicking */}
             {!checkedInViaPasskey && (
-              <button
+              <Button
+                type="button"
                 onClick={handleCheckOut}
                 disabled={loading}
-                className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed text-base"
+                variant="destructive"
+                className="w-full"
               >
                 {loading ? 'Checking out…' : 'Check Out'}
-              </button>
+              </Button>
             )}
             {/* Passkey checkout — only if guest checked in by passkey */}
             {checkedInViaPasskey && (
@@ -672,15 +690,17 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                   <span>quest</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
-                <button
+                <Button
+                  type="button"
                   onClick={() => setStep('questScan')}
-                  className="w-full text-sm text-muted-foreground border border-border/60 hover:bg-muted/40 hover:text-foreground py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
+                  variant="outline"
+                  className="w-full"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
                   Scan Quest Card
-                </button>
+                </Button>
               </>
             )}
             {questRecorded && (
@@ -688,29 +708,35 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 ✨ Quest step recorded!
               </div>
             )}
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Step: Quest scan */}
         {step === 'questScan' && (
-          <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5">
+          <Card>
+            <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">Scan Quest Card</h3>
               <p className="text-sm text-muted-foreground mt-0.5">Point camera at your quest card QR code</p>
             </div>
             <QRScanner onResult={handleQuestCardScanned} redirectOnScan={false} />
-            <button
+            <Button
+              type="button"
               onClick={() => setStep('checkedIn')}
-              className="w-full mt-3 text-sm text-muted-foreground hover:text-foreground py-2 rounded-xl hover:bg-muted/50 transition-all"
+              variant="ghost"
+              className="w-full mt-3"
             >
               Cancel
-            </button>
-          </div>
+            </Button>
+            </CardContent>
+          </Card>
         )}
 
         {/* Step: Checked Out */}
         {step === 'checkedOut' && (
-          <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-8 text-center">
+          <Card className="text-center">
+            <CardContent className="p-4">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -721,7 +747,8 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               You've checked out of <span className="font-medium text-foreground">{location.name}</span>
             </p>
             <p className="text-sm text-muted-foreground mt-1">Thanks for visiting. See you soon! 👋</p>
-          </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

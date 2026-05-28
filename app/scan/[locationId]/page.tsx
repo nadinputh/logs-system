@@ -38,14 +38,17 @@ export default async function ScanLocationPage({
   params,
   searchParams,
 }: {
-  params: { locationId: string }
-  searchParams: { token?: string }
+  params: Promise<{ locationId: string }>
+  searchParams: Promise<{ token?: string }>
 }) {
+  const { locationId } = await params
+  const resolvedSearchParams = await searchParams
+
   // When a dynamic kiosk QR is scanned it carries a signed JWT — verify it server-side
-  if (searchParams.token && process.env.KIOSK_SECRET) {
+  if (resolvedSearchParams.token && process.env.KIOSK_SECRET) {
     try {
-      const { locationId } = await verifyKioskToken(searchParams.token)
-      if (locationId !== params.locationId) {
+      const verified = await verifyKioskToken(resolvedSearchParams.token)
+      if (verified.locationId !== locationId) {
         return (
           <div className="min-h-screen flex items-center justify-center p-4">
             <p className="text-red-500 font-medium">Invalid QR code — location mismatch.</p>
@@ -63,11 +66,11 @@ export default async function ScanLocationPage({
     }
   }
 
-  const location = await getLocation(params.locationId)
+  const location = await getLocation(locationId)
 
   return (
     <Suspense>
-      <CheckInOutClient locationId={params.locationId} initialLocation={location} />
+      <CheckInOutClient locationId={locationId} initialLocation={location} />
     </Suspense>
   )
 }

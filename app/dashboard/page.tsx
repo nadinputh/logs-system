@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
+import { Card, CardContent } from '@/components/ui/card'
 
 interface Stats { totalToday: number; currentlyIn: number; totalAll: number }
 
@@ -22,22 +23,24 @@ function StatCard({
   badge?: React.ReactNode
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-border/60 p-6 shadow-sm shadow-black/[0.04] space-y-4 hover:shadow-md hover:shadow-black/[0.06] transition-shadow">
-      <div className="flex items-center justify-between">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${accent}`}>
-          {icon}
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${accent}`}>
+            {icon}
+          </div>
+          {badge}
         </div>
-        {badge}
-      </div>
-      <div>
-        {loading ? (
-          <div className="h-8 w-16 bg-muted rounded-lg animate-pulse" />
-        ) : (
-          <p className="text-3xl font-bold text-foreground tracking-tight">{value}</p>
-        )}
-        <p className="text-sm text-muted-foreground mt-1 font-medium">{label}</p>
-      </div>
-    </div>
+        <div>
+          {loading ? (
+            <div className="h-8 w-16 bg-muted rounded-lg animate-pulse" />
+          ) : (
+            <p className="text-3xl font-bold text-foreground tracking-tight">{value}</p>
+          )}
+          <p className="text-sm text-muted-foreground mt-1 font-medium">{label}</p>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -51,7 +54,7 @@ const quickActions = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
       </svg>
     ),
-    color: 'text-indigo-600 bg-indigo-50',
+    color: 'text-sky-600 bg-sky-50',
   },
   {
     href: '/admin/logs',
@@ -62,7 +65,7 @@ const quickActions = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
       </svg>
     ),
-    color: 'text-violet-600 bg-violet-50',
+    color: 'text-cyan-600 bg-cyan-50',
   },
   {
     href: '/admin/quests',
@@ -116,7 +119,7 @@ export default function DashboardPage() {
         </div>
         <Link
           href="/logs"
-          className="flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+          className="flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent/80 transition-colors"
         >
           View my logs
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -135,7 +138,7 @@ export default function DashboardPage() {
             label="Check-ins Today"
             value={stats.totalToday}
             loading={loading}
-            accent="bg-indigo-50 text-indigo-600"
+            accent="bg-sky-50 text-sky-600"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -165,7 +168,7 @@ export default function DashboardPage() {
             label="Total All-Time Logs"
             value={stats.totalAll}
             loading={loading}
-            accent="bg-violet-50 text-violet-600"
+            accent="bg-cyan-50 text-cyan-600"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -183,24 +186,24 @@ export default function DashboardPage() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {quickActions.map(action => (
-              <Link
-                key={action.href}
-                href={action.href}
-                className="group bg-white rounded-2xl border border-border/60 p-5 shadow-sm shadow-black/[0.04] flex items-start gap-4 hover:shadow-md hover:shadow-black/[0.06] hover:border-primary/20 transition-all"
-              >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${action.color}`}>
-                  {action.icon}
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                    {action.label}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{action.description}</p>
-                </div>
-                <svg className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary/60 transition-colors ml-auto shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
+              <Card key={action.href}>
+                <CardContent className="p-4">
+                  <Link href={action.href} className="group flex items-start gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${action.color}`}>
+                      {action.icon}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-foreground group-hover:text-accent transition-colors">
+                        {action.label}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{action.description}</p>
+                    </div>
+                    <svg className="w-4 h-4 text-muted-foreground/40 group-hover:text-accent/60 transition-colors ml-auto shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>

@@ -6,8 +6,9 @@ const nextConfig = {
     ],
   },
   experimental: {
-    serverComponentsExternalPackages: ['mongoose'],
+    devtoolSegmentExplorer: false,
   },
+  serverExternalPackages: ['mongoose'],
 }
 
 export default nextConfig

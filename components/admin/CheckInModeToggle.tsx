@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
+import { Button } from '@/components/ui/button'
 import { MousePointerClick, Fingerprint } from 'lucide-react'
 
 type Mode = 'click' | 'passkey'
@@ -40,8 +41,10 @@ export default function CheckInModeToggle({ locationId, value, onChange }: Props
 
   return (
     <div className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5 text-xs">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => update('click')}
         disabled={saving}
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
@@ -51,9 +54,11 @@ export default function CheckInModeToggle({ locationId, value, onChange }: Props
       >
         <MousePointerClick className="w-3 h-3" />
         Click
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => update('passkey')}
         disabled={saving}
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
@@ -63,7 +68,7 @@ export default function CheckInModeToggle({ locationId, value, onChange }: Props
       >
         <Fingerprint className="w-3 h-3" />
         Passkey
-      </button>
+      </Button>
     </div>
   )
 }

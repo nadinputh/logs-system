@@ -34,18 +34,18 @@ export async function resolveLocationLabels(
 
   const [buildings, floors, rooms] = await Promise.all([
     buildingIds.size
-      ? Building.find({ _id: { $in: [...buildingIds] } })
+      ? Building.find({ _id: { $in: Array.from(buildingIds) } })
           .select("name")
           .lean<any[]>()
       : [],
     floorIds.size
-      ? Floor.find({ _id: { $in: [...floorIds] } })
+      ? Floor.find({ _id: { $in: Array.from(floorIds) } })
           .populate("buildingId", "name")
           .select("name number buildingId")
           .lean<any[]>()
       : [],
     roomIds.size
-      ? Room.find({ _id: { $in: [...roomIds] } })
+      ? Room.find({ _id: { $in: Array.from(roomIds) } })
           .populate({
             path: "floorId",
             select: "name number buildingId",

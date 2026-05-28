@@ -8,8 +8,9 @@ export const runtime = "nodejs";
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { credentialId: string } },
+  { params }: { params: Promise<{ credentialId: string }> },
 ) {
+  const { credentialId } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,7 +19,7 @@ export async function DELETE(
   await connectDB();
   const userId = (session.user as any).id;
   const result = await PasskeyCredential.deleteOne({
-    _id: params.credentialId,
+    _id: credentialId,
     userId,
   });
 

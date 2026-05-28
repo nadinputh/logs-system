@@ -1,17 +1,127 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { EyeIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 interface LogEntry {
   _id: string; locationId: string; locationType: string
   locationName?: string | null
   locationPath?: string | null
-  visitorName?: string; timestamp: string; checkoutAt?: string
+  visitorName?: string
+  visitorEmail?: string
+  visitorPhone?: string
+  visitorGender?: string
+  visitPurpose?: string
+  sessionToken?: string
+  deviceId?: string
+  ipAddress?: string
+  userAgent?: string
+  geofenceStatus?: boolean
+  passkeyVerified?: boolean
+  autoCheckedOut?: boolean
+  timestamp: string
+  checkoutAt?: string
+  checkoutLog?: {
+    _id?: string
+    timestamp?: string
+    autoCheckedOut?: boolean
+  } | null
+}
+
+function formatValue(value?: string | boolean | null) {
+  if (value === undefined || value === null || value === '') return '—'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  return value
+}
+
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toLocaleString() : '—'
+}
+
+function durationLabel(entry: LogEntry) {
+  if (!entry.checkoutAt) return 'Still checked in'
+  const ms = new Date(entry.checkoutAt).getTime() - new Date(entry.timestamp).getTime()
+  const minutes = Math.max(0, Math.round(ms / 60000))
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return hours ? `${hours}h ${rest}m` : `${rest}m`
+}
+
+function DetailItem({ label, value }: { label: string; value?: string | boolean | null }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 break-words text-sm text-foreground">{formatValue(value)}</p>
+    </div>
+  )
+}
+
+function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  if (!log) return null
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="lg" className="flex max-h-[calc(100dvh-2rem)] max-w-3xl flex-col overflow-hidden [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col">
+        <DialogHeader>
+          <DialogTitle>Log details</DialogTitle>
+        </DialogHeader>
+        <DialogBody className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Visitor</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DetailItem label="Name" value={log.visitorName} />
+              <DetailItem label="Email" value={log.visitorEmail} />
+              <DetailItem label="Phone" value={log.visitorPhone} />
+              <DetailItem label="Gender" value={log.visitorGender} />
+              <DetailItem label="Purpose" value={log.visitPurpose} />
+              <DetailItem label="Session token" value={log.sessionToken} />
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Location</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DetailItem label="Name" value={log.locationName} />
+              <DetailItem label="Path" value={log.locationPath} />
+              <DetailItem label="Type" value={log.locationType} />
+              <DetailItem label="Location ID" value={log.locationId} />
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Check-in / Check-out</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DetailItem label="Check-in" value={formatDate(log.timestamp)} />
+              <DetailItem label="Check-out" value={formatDate(log.checkoutAt)} />
+              <DetailItem label="Duration" value={durationLabel(log)} />
+              <DetailItem label="Auto checked out" value={log.checkoutLog?.autoCheckedOut ?? log.autoCheckedOut} />
+              <DetailItem label="Passkey verified" value={log.passkeyVerified} />
+              <DetailItem label="Checkout log ID" value={log.checkoutLog?._id} />
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Request context</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DetailItem label="Device ID" value={log.deviceId} />
+              <DetailItem label="IP address" value={log.ipAddress} />
+              <DetailItem label="Geofence matched" value={log.geofenceStatus} />
+              <DetailItem label="User agent" value={log.userAgent} />
+            </div>
+          </section>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 export default function AdminLogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -30,8 +140,8 @@ export default function AdminLogsPage() {
   )
 
   const locationTypeColors: Record<string, string> = {
-    room: 'text-indigo-600 bg-indigo-50',
-    floor: 'text-violet-600 bg-violet-50',
+    room: 'text-sky-600 bg-sky-50',
+    floor: 'text-cyan-600 bg-cyan-50',
     building: 'text-amber-600 bg-amber-50',
   }
 
@@ -43,16 +153,18 @@ export default function AdminLogsPage() {
           <h1 className="text-xl font-bold text-foreground">All Logs</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{logs.length} entries total</p>
         </div>
-        <button
+        <Button
+          type="button"
           onClick={fetchLogs}
           disabled={loading}
-          className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground bg-white border border-border/60 hover:border-border hover:bg-muted/30 px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 shadow-sm"
+          variant="outline"
+          size="sm"
         >
           <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           {loading ? 'Loading…' : 'Refresh'}
-        </button>
+        </Button>
       </div>
 
       {/* Search */}
@@ -69,11 +181,11 @@ export default function AdminLogsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-border/60 shadow-sm shadow-black/[0.04] overflow-hidden">
+      <div>
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3">
-              <svg className="w-6 h-6 text-primary animate-spin" fill="none" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-accent animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
@@ -91,27 +203,26 @@ export default function AdminLogsPage() {
             <p className="text-xs text-muted-foreground mt-1">{search ? 'Try a different search term' : 'Logs will appear here as visitors check in'}</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border/60 bg-muted/30">
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Visitor</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Location</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Type</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Check-in</th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Check-out</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/40">
+          <Table aria-label="Admin logs table">
+            <TableHeader>
+              <TableHead isRowHeader>Visitor</TableHead>
+              <TableHead className="hidden md:table-cell">Location</TableHead>
+              <TableHead className="hidden sm:table-cell">Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="hidden lg:table-cell">Check-in</TableHead>
+              <TableHead className="hidden lg:table-cell">Check-out</TableHead>
+              <TableHead>Details</TableHead>
+            </TableHeader>
+            <TableBody>
               {filtered.map(l => {
                 const typeKey = l.locationType?.toLowerCase() ?? ''
                 const typeBadge = locationTypeColors[typeKey] ?? 'text-muted-foreground bg-muted'
                 const isIn = !l.checkoutAt
                 return (
-                  <tr key={l._id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-6 py-4">
+                  <TableRow key={l._id}>
+                    <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center shrink-0 text-xs font-semibold text-primary">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent/20 to-cyan-600/20 flex items-center justify-center shrink-0 text-xs font-semibold text-accent">
                           {(l.visitorName ?? '?')[0].toUpperCase()}
                         </div>
                         <div className="min-w-0">
@@ -119,21 +230,21 @@ export default function AdminLogsPage() {
                           <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px] md:hidden">{l.locationPath ?? l.locationName ?? 'Unknown location'}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 hidden md:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <p className="text-sm text-foreground truncate max-w-[260px]" title={l.locationPath ?? undefined}>
                         {l.locationName ?? <span className="text-muted-foreground/60">Unknown</span>}
                       </p>
                       {l.locationPath && l.locationPath !== l.locationName && (
                         <p className="text-xs text-muted-foreground truncate max-w-[260px]">{l.locationPath}</p>
                       )}
-                    </td>
-                    <td className="px-6 py-4 hidden sm:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${typeBadge}`}>
                         {l.locationType}
                       </span>
-                    </td>
-                    <td className="px-6 py-4">
+                    </TableCell>
+                    <TableCell>
                       {isIn ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
@@ -144,22 +255,40 @@ export default function AdminLogsPage() {
                           Out
                         </span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 hidden lg:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <p className="text-xs text-muted-foreground">{new Date(l.timestamp).toLocaleString()}</p>
-                    </td>
-                    <td className="px-6 py-4 hidden lg:table-cell">
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <p className="text-xs text-muted-foreground">
                         {l.checkoutAt ? new Date(l.checkoutAt).toLocaleString() : '—'}
                       </p>
-                    </td>
-                  </tr>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`View details for ${l.visitorName ?? 'log'}`}
+                        onClick={() => setSelectedLog(l)}
+                      >
+                        <EyeIcon className="h-4 w-4" aria-hidden />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 )
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </div>
+      <LogDetailsDialog
+        log={selectedLog}
+        open={selectedLog !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedLog(null)
+        }}
+      />
     </div>
   )
 }

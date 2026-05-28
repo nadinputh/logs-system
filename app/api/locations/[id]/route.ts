@@ -10,8 +10,9 @@ export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   const type = req.nextUrl.searchParams.get("type");
   await connectDB();
 
@@ -19,18 +20,18 @@ export async function GET(
   let locationType: string | null = null;
 
   if (!type || type === "room") {
-    doc = await Room.findById(params.id)
+    doc = await Room.findById(id)
       .populate("floorId")
       .populate("buildingId")
       .lean();
     if (doc) locationType = "room";
   }
   if (!doc && (!type || type === "floor")) {
-    doc = await Floor.findById(params.id).populate("buildingId").lean();
+    doc = await Floor.findById(id).populate("buildingId").lean();
     if (doc) locationType = "floor";
   }
   if (!doc && (!type || type === "building")) {
-    doc = await Building.findById(params.id).lean();
+    doc = await Building.findById(id).lean();
     if (doc) locationType = "building";
   }
 
@@ -41,8 +42,9 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   const { error } = await requireAuth("admin");
   if (error) return error;
 
@@ -65,7 +67,7 @@ export async function PATCH(
   ];
   for (const { model, type } of models) {
     const doc = await (model as any)
-      .findByIdAndUpdate(params.id, update, { returnDocument: "after" })
+      .findByIdAndUpdate(id, update, { returnDocument: "after" })
       .lean();
     if (doc) return NextResponse.json({ ...doc, locationType: type });
   }

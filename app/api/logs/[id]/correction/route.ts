@@ -22,8 +22,9 @@ const CorrectionSchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user || (session.user as any).role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -40,7 +41,7 @@ export async function POST(
 
   await connectDB();
 
-  const log = await Log.findById(params.id).lean();
+  const log = await Log.findById(id).lean();
   if (!log) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const { field, newValue, reasonForChange } = parsed.data;

@@ -37,8 +37,9 @@ async function getLocationCheckInMode(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   const body = await req.json();
   const { sessionToken } = body;
 
@@ -52,7 +53,7 @@ export async function PATCH(
   await connectDB();
 
   const checkinLog = await Log.findOne({
-    _id: params.id,
+    _id: id,
     sessionToken,
     action: "in",
   });

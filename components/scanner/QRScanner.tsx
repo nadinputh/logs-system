@@ -63,7 +63,11 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
     <div className="space-y-4">
       <div id={divId} className="w-full rounded-lg overflow-hidden" />
       {!started && (
-        <Button onClick={startScanner} className="w-full" size="lg">
+        <Button
+          onClick={startScanner}
+          className="w-full"
+          size="lg"
+        >
           Start Scanner
         </Button>
       )}

@@ -77,7 +77,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
           <Button onClick={startCamera} variant="outline" className="w-full">
             Take Selfie (optional)
           </Button>
-          <Button onClick={onSkip} variant="ghost" className="w-full text-muted-foreground">
+          <Button onClick={onSkip} variant="ghost" className="w-full">
             Skip
           </Button>
           {error && <p className="text-sm text-red-500">{error}</p>}
@@ -99,7 +99,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
             {uploading ? 'Uploading…' : 'Use this photo'}
           </Button>
           <Button onClick={retake} variant="outline" className="w-full">Retake</Button>
-          <Button onClick={onSkip} variant="ghost" className="w-full text-muted-foreground">Skip</Button>
+          <Button onClick={onSkip} variant="ghost" className="w-full">Skip</Button>
           {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
       )}

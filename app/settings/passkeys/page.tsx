@@ -6,6 +6,7 @@ import { User } from '@/lib/models/User'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import PasskeyManager from './PasskeyManager'
+import { Card, CardContent } from '@/components/ui/card'
 
 export default async function PasskeysSettingsPage() {
   const session = await getServerSession(authOptions)
@@ -41,9 +42,10 @@ export default async function PasskeysSettingsPage() {
       </div>
 
       {/* Account card */}
-      <div className="bg-white rounded-2xl border border-border/60 shadow-sm p-5">
+      <Card>
+        <CardContent className="p-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center text-white text-lg font-semibold shadow-sm shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent to-cyan-600 flex items-center justify-center text-white text-lg font-semibold shadow-sm shrink-0">
             {initials}
           </div>
           <div className="min-w-0 flex-1">
@@ -53,7 +55,7 @@ export default async function PasskeysSettingsPage() {
               <span
                 className={
                   u?.role === 'admin'
-                    ? 'inline-flex items-center text-[11px] font-medium text-violet-700 bg-violet-50 border border-violet-200/60 px-2 py-0.5 rounded-full'
+                    ? 'inline-flex items-center text-[11px] font-medium text-cyan-700 bg-cyan-50 border border-cyan-200/60 px-2 py-0.5 rounded-full'
                     : 'inline-flex items-center text-[11px] font-medium text-slate-700 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-full'
                 }
               >
@@ -67,15 +69,15 @@ export default async function PasskeysSettingsPage() {
             </div>
           </div>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Passkeys card */}
-      <div className="bg-white rounded-2xl border border-border/60 shadow-sm overflow-hidden">
-        <div className="h-1.5 w-full gradient-primary" />
-        <div className="p-5">
+      <Card className="overflow-hidden">
+        <CardContent className="p-4">
           <div className="mb-4 flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>
             </div>
@@ -87,8 +89,8 @@ export default async function PasskeysSettingsPage() {
             </div>
           </div>
           <PasskeyManager initialPasskeys={JSON.parse(JSON.stringify(passkeys))} />
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

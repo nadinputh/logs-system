@@ -4,7 +4,7 @@
 
 An enterprise-grade, high-throughput, and immutable Check-In/Out logging system. The engine balances zero-friction user experiences (Passkeys, QR, BLE) with strict cryptographic security, compliance tracking, and automated edge-case resolution.
 
-**Stack:** Next.js 14 (App Router, TypeScript) · MongoDB (Mongoose v9) · NextAuth v4 · shadcn v4 (@base-ui/react) · Tailwind v3 · Vercel + MongoDB Atlas
+**Stack:** Next.js 15 (App Router, TypeScript) · MongoDB (Mongoose v9) · NextAuth v4 · HeroUI v3 · Tailwind v4 · Vercel + MongoDB Atlas
 
 ---
 
@@ -248,17 +248,22 @@ Every check-in/out event must support cryptographic validation via the device's 
 
 ## Known Quirks & Rules
 
-### shadcn v4 / @base-ui/react patterns
+### HeroUI v3 patterns
 
-- **No `asChild` prop** — use `<Button render={<Link href="..." />}>` or `<Link className={cn(buttonVariants(...))}>` directly
-- **Select `onValueChange`** returns `string | null` — always coerce: `v => setState(v ?? '')`
-- `DialogTrigger` wraps children via `render` prop: `<DialogTrigger render={<Button />}>Label</DialogTrigger>`
+- Prefer HeroUI primitives/components in `components/ui/*` adapters and keep app-level usage stable.
+- HeroUI v3 event/disabled conventions are `onPress` and `isDisabled`; adapters accept legacy `onClick`/`disabled` where needed.
+- Use compound components where provided (`Component.Root`, `Modal.*`, etc.) instead of `asChild` patterns.
+- Keep Select change handlers nullable-safe: `onValueChange={(v) => setState(v ?? "")}`.
 
-### Tailwind v3 (not v4)
+### Tailwind v4 + HeroUI styles
 
-- Do not use `@import "shadcn/tailwind.css"` or `@import "tw-animate-css"` — these are Tailwind v4 syntax
-- All CSS token classes (`border-border`, `bg-background`, etc.) must be registered in `tailwind.config.ts` under `theme.extend.colors`
-- Use standard `@tailwind base; @tailwind components; @tailwind utilities;` directives
+- Global CSS should import Tailwind and HeroUI styles:
+  - `@import "tailwindcss";`
+  - `@import "@heroui/styles";`
+- Tailwind v4 uses `@tailwindcss/postcss` in `postcss.config.mjs`.
+- Token usage should follow HeroUI v3 naming:
+  - `primary` utility classes in app code should map to `accent`.
+  - `secondary` utility classes should map to `default` where appropriate.
 
 ### Mongoose v9 / Next.js App Router
 

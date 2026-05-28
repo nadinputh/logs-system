@@ -4,6 +4,9 @@ import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { startAuthentication } from '@simplewebauthn/browser'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -89,7 +92,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex">
       {/* Left — branding panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700" />
+        <div className="absolute inset-0 bg-gradient-to-br from-sky-700 via-cyan-700 to-teal-700" />
         {/* Subtle grid overlay */}
         <div className="absolute inset-0 opacity-10"
           style={{
@@ -118,13 +121,13 @@ export default function LoginPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { icon: '🔐', label: 'Passkey Auth' },
-                { icon: '📍', label: 'Geo-fencing' },
-                { icon: '📋', label: 'Audit Ledger' },
-                { icon: '⚡', label: 'Real-time' },
+                { icon: 'Secure', label: 'Passkey Auth' },
+                { icon: 'Fence', label: 'Geo-fencing' },
+                { icon: 'Audit', label: 'Audit Ledger' },
+                { icon: 'Live', label: 'Real-time' },
               ].map(f => (
                 <div key={f.label} className="flex items-center gap-2.5 bg-white/10 rounded-xl px-4 py-3">
-                  <span className="text-xl">{f.icon}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-white/85">{f.icon}</span>
                   <span className="text-sm font-medium">{f.label}</span>
                 </div>
               ))}
@@ -158,33 +161,10 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="email" className="text-sm font-medium text-foreground">
+              <Label htmlFor="email">
                 Email address
-
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-background px-2 text-xs uppercase tracking-wider text-muted-foreground/60">
-                  Or
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handlePasskeyLogin}
-              disabled={passkeyLoading || loading}
-              className="w-full flex items-center justify-center gap-2 bg-white border border-input text-foreground text-sm font-semibold py-2.5 px-4 rounded-xl hover:bg-muted/40 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-              </svg>
-              {passkeyLoading ? 'Waiting for passkey…' : 'Sign in with Passkey'}
-            </button>
-              </label>
-              <input
+              </Label>
+              <Input
                 id="email"
                 type="email"
                 value={email}
@@ -192,14 +172,13 @@ export default function LoginPage() {
                 required
                 autoComplete="email"
                 placeholder="you@company.com"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-white text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-sm font-medium text-foreground">
+              <Label htmlFor="password">
                 Password
-              </label>
-              <input
+              </Label>
+              <Input
                 id="password"
                 type="password"
                 value={password}
@@ -207,7 +186,6 @@ export default function LoginPage() {
                 required
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-white text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
               />
             </div>
 
@@ -220,10 +198,10 @@ export default function LoginPage() {
               </div>
             )}
 
-            <button
+            <Button
               type="submit"
               disabled={loading}
-              className="w-full gradient-primary text-white text-sm font-semibold py-2.5 px-4 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-indigo-200 mt-2"
+              className="w-full mt-2"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -234,7 +212,31 @@ export default function LoginPage() {
                   Signing in…
                 </span>
               ) : 'Sign In'}
-            </button>
+            </Button>
+
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-background px-2 text-xs uppercase tracking-wider text-muted-foreground/60">
+                  Or
+                </span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={handlePasskeyLogin}
+              disabled={passkeyLoading || loading}
+              variant="outline"
+              className="w-full"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              {passkeyLoading ? 'Waiting for passkey…' : 'Sign in with Passkey'}
+            </Button>
           </form>
         </div>
       </div>

@@ -1,14 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { connectDB } from '@/lib/db'
-import { Floor } from '@/lib/models/Floor'
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "@/lib/db";
+import { Floor } from "@/lib/models/Floor";
 
-export const runtime = 'nodejs'
+export const runtime = "nodejs";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  await connectDB()
-  const floors = await Floor.find({ buildingId: params.id }).sort({ number: 1 }).lean()
-  return NextResponse.json(floors)
+  const { id } = await params;
+  await connectDB();
+  const floors = await Floor.find({ buildingId: id })
+    .sort({ number: 1 })
+    .lean();
+  return NextResponse.json(floors);
 }

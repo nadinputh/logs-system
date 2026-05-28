@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Description } from '@/components/ui/description'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from '@/components/ui/sonner'
 
 const QRScanner = dynamic(() => import('@/components/scanner/QRScanner'), { ssr: false })
 
@@ -63,11 +69,11 @@ export default function TerminalPage() {
   const configured = Boolean(locationId)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-violet-50/20 flex items-start justify-center p-4 pt-10 pb-16">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50/30 to-teal-50/20 flex items-start justify-center p-4 pt-10 pb-16">
       <div className="w-full max-w-sm space-y-4">
         {/* Header */}
         <div className="text-center">
-          <div className="w-12 h-12 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-3 shadow-sm shadow-indigo-200">
+          <div className="w-12 h-12 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-3 shadow-sm shadow-cyan-200">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
             </svg>
@@ -77,36 +83,39 @@ export default function TerminalPage() {
         </div>
 
         {/* Config card */}
-        <div className="bg-white rounded-2xl border border-border/60 shadow-sm overflow-hidden">
-          <div className="h-1.5 w-full gradient-primary" />
-          <div className="p-5 space-y-4">
+        <Card className="overflow-hidden">
+          <CardContent className="p-4 space-y-3">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Location ID</label>
-              <input
-                className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                placeholder="MongoDB ObjectId of location"
+              <Label htmlFor="terminal-location-id">Location ID</Label>
+              <Input
+                id="terminal-location-id"
+                placeholder="507f1f77bcf86cd799439011"
                 value={locationId}
                 onChange={(e) => {
                   setLocationId(e.target.value)
                   saveLocation(e.target.value, locationType)
                 }}
               />
+              <Description>MongoDB ObjectId of the configured location.</Description>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">Location Type</label>
-              <select
-                className="w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              <Label>Location Type</Label>
+              <Select
                 value={locationType}
-                onChange={(e) => {
-                  const v = e.target.value as LocationType
-                  setLocationType(v)
-                  saveLocation(locationId, v)
+                onValueChange={(value) => {
+                  if (!value) return
+                  const nextLocationType = value as LocationType
+                  setLocationType(nextLocationType)
+                  saveLocation(locationId, nextLocationType)
                 }}
               >
-                {LOCATION_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {LOCATION_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-center gap-2">
               {configured ? (
@@ -121,13 +130,12 @@ export default function TerminalPage() {
                 </span>
               )}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Scanner card */}
-        <div className="bg-white rounded-2xl border border-border/60 shadow-sm overflow-hidden">
-          <div className="h-1.5 w-full bg-violet-500" />
-          <div className="p-5 space-y-3">
+        <Card className="overflow-hidden">
+          <CardContent className="p-4 space-y-3">
             <div>
               <h2 className="font-semibold text-foreground text-sm">Scan User QR</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Ask the visitor to show their profile QR code</p>
@@ -135,27 +143,30 @@ export default function TerminalPage() {
             {scanning ? (
               <>
                 <QRScanner onResult={handleScan} redirectOnScan={false} />
-                <button
+                <Button
+                  type="button"
                   onClick={() => setScanning(false)}
-                  className="w-full text-sm text-muted-foreground hover:text-foreground py-2.5 rounded-xl hover:bg-muted/50 transition-all border border-border/40"
+                  variant="outline"
+                  className="w-full"
                 >
                   Cancel
-                </button>
+                </Button>
               </>
             ) : (
-              <button
+              <Button
+                type="button"
                 onClick={() => setScanning(true)}
                 disabled={!configured}
-                className="w-full gradient-primary text-white text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 active:scale-[0.98] transition-all shadow-sm shadow-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full"
               >
                 Start Scanner
-              </button>
+              </Button>
             )}
             {lastResult && (
               <p className="text-sm text-center text-muted-foreground">{lastResult}</p>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
