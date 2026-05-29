@@ -10,9 +10,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
 import { toast } from '@/components/ui/sonner'
+import { fetchJsonOnce } from '@/lib/clientFetch'
 
 interface Building { _id: string; name: string }
 interface Floor { _id: string; name: string; number: number; buildingId: string }
@@ -33,14 +35,15 @@ function RoomsContent() {
   const [type, setType] = useState('')
   const [capacity, setCapacity] = useState('')
   const [description, setDescription] = useState('')
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/buildings').then(r => r.json()),
-      fetch('/api/floors').then(r => r.json()),
-      fetch('/api/rooms').then(r => r.json()),
-    ]).then(([b, f, r]) => { setBuildings(b); setFloors(f); setRooms(r) })
+      fetchJsonOnce<Building[]>('/api/buildings'),
+      fetchJsonOnce<Floor[]>('/api/floors'),
+      fetchJsonOnce<Room[]>('/api/rooms'),
+    ]).then(([b, f, r]) => { setBuildings(b); setFloors(f); setRooms(r) }).finally(() => setLoading(false))
   }, [])
 
   const availableFloors = buildingId ? floors.filter(f => f.buildingId === buildingId) : floors
@@ -90,7 +93,11 @@ function RoomsContent() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Rooms</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} room{filtered.length !== 1 ? 's' : ''}</p>
+          {loading ? (
+            <Skeleton className="mt-1.5 h-4 w-24" />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} room{filtered.length !== 1 ? 's' : ''}</p>
+          )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={
@@ -143,7 +150,36 @@ function RoomsContent() {
 
       {/* Table */}
       <div>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <Table aria-label="Rooms loading table">
+            <TableHeader>
+              <TableHead isRowHeader>Room</TableHead>
+              <TableHead className="hidden sm:table-cell">Floor</TableHead>
+              <TableHead className="hidden md:table-cell">Type</TableHead>
+              <TableHead className="hidden lg:table-cell">Check-in</TableHead>
+              <TableHead className="text-right">QR</TableHead>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-40 sm:hidden" />
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-44" /></TableCell>
+                  <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell className="hidden lg:table-cell"><Skeleton className="h-8 w-36 rounded-full" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="ml-auto h-8 w-14" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mb-3">
               <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from '@/components/ui/sonner'
+import { fetchJsonOnce } from '@/lib/clientFetch'
 
 interface QuestCard { _id: string; title: string; type: string; qrToken: string; isActive: boolean; steps: any[] }
 interface Building { _id: string; name: string }
@@ -28,13 +30,21 @@ export default function AdminQuestsPage() {
   const [type, setType] = useState<'location_chain' | 'custom'>('location_chain')
   const [count, setCount] = useState('1')
   const [steps, setSteps] = useState<Step[]>([{ order: 0, locationId: '', locationType: 'room' }])
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch('/api/quests').then(r => r.json()).then(setQuests)
-    fetch('/api/buildings').then(r => r.json()).then(setBuildings)
-    fetch('/api/floors').then(r => r.json()).then(setFloors)
-    fetch('/api/rooms').then(r => r.json()).then(setRooms)
+    Promise.all([
+      fetchJsonOnce<QuestCard[]>('/api/quests'),
+      fetchJsonOnce<Building[]>('/api/buildings'),
+      fetchJsonOnce<Floor[]>('/api/floors'),
+      fetchJsonOnce<Room[]>('/api/rooms'),
+    ]).then(([nextQuests, nextBuildings, nextFloors, nextRooms]) => {
+      setQuests(nextQuests)
+      setBuildings(nextBuildings)
+      setFloors(nextFloors)
+      setRooms(nextRooms)
+    }).finally(() => setLoading(false))
   }, [])
 
   function addStep() {
@@ -83,7 +93,11 @@ export default function AdminQuestsPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Quest Cards</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{quests.length} quest{quests.length !== 1 ? 's' : ''} issued</p>
+          {loading ? (
+            <Skeleton className="mt-1.5 h-4 w-28" />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-0.5">{quests.length} quest{quests.length !== 1 ? 's' : ''} issued</p>
+          )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={
@@ -168,7 +182,35 @@ export default function AdminQuestsPage() {
       </div>
 
       <div>
-        {quests.length === 0 ? (
+        {loading ? (
+          <Table aria-label="Quest cards loading table">
+            <TableHeader>
+              <TableHead isRowHeader>Title</TableHead>
+              <TableHead className="hidden sm:table-cell">Type</TableHead>
+              <TableHead className="hidden md:table-cell">Steps</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-28 rounded-full" /></TableCell>
+                  <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="ml-auto h-8 w-16" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : quests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-sky-50 flex items-center justify-center mb-3">
               <svg className="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,16 +261,10 @@ export default function AdminQuestsPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/admin/qr/${q._id}?type=quest&token=${q.qrToken}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
-                      >QR</Link>
-                      <Link
-                        href={`/admin/quests/${q._id}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
-                      >View</Link>
-                    </div>
+                    <Link
+                      href={`/admin/quests/${q._id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
+                    >View</Link>
                   </TableCell>
                 </TableRow>
               ))}

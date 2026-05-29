@@ -10,9 +10,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
 import { toast } from '@/components/ui/sonner'
+import { fetchJsonOnce } from '@/lib/clientFetch'
 
 interface Building { _id: string; name: string }
 interface Floor { _id: string; name: string; number: number; buildingId: string | Building; checkInMode?: 'click' | 'passkey' }
@@ -28,11 +30,17 @@ function FloorsContent() {
   const [number, setNumber] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch('/api/buildings').then(r => r.json()).then(setBuildings)
-    fetch('/api/floors').then(r => r.json()).then(setFloors)
+    Promise.all([
+      fetchJsonOnce<Building[]>('/api/buildings'),
+      fetchJsonOnce<Floor[]>('/api/floors'),
+    ]).then(([nextBuildings, nextFloors]) => {
+      setBuildings(nextBuildings)
+      setFloors(nextFloors)
+    }).finally(() => setLoading(false))
   }, [])
 
   const filtered = buildingFilter ? floors.filter(f => {
@@ -72,10 +80,14 @@ function FloorsContent() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Floors</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {filtered.length} floor{filtered.length !== 1 ? 's' : ''}
-            {buildingFilter && buildings.length > 0 && ` in ${getBuildingName(buildingFilter)}`}
-          </p>
+          {loading ? (
+            <Skeleton className="mt-1.5 h-4 w-28" />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {filtered.length} floor{filtered.length !== 1 ? 's' : ''}
+              {buildingFilter && buildings.length > 0 && ` in ${getBuildingName(buildingFilter)}`}
+            </p>
+          )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={
@@ -125,7 +137,39 @@ function FloorsContent() {
 
       {/* Table */}
       <div>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <Table aria-label="Floors loading table">
+            <TableHeader>
+              <TableHead isRowHeader>Floor</TableHead>
+              <TableHead className="hidden sm:table-cell">Building</TableHead>
+              <TableHead className="hidden md:table-cell">Check-in</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-40 sm:hidden" />
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-40" /></TableCell>
+                  <TableCell className="hidden md:table-cell"><Skeleton className="h-8 w-36 rounded-full" /></TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Skeleton className="h-8 w-14" />
+                      <Skeleton className="h-8 w-20" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-cyan-50 flex items-center justify-center mb-3">
               <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

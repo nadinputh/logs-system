@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { EyeIcon } from 'lucide-react'
+import { EyeIcon, MapPin, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { fetchJsonOnce } from '@/lib/clientFetch'
 
 interface LogEntry {
   _id: string
@@ -61,10 +63,19 @@ function detailDurationLabel(entry: LogEntry) {
 
 function DetailItem({ label, value }: { label: string; value?: string | boolean | null }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 rounded-xl bg-muted/40 px-3 py-2">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-1 break-words text-sm text-foreground">{formatValue(value)}</p>
+      <p className="mt-1 break-words text-sm leading-5 text-foreground">{formatValue(value)}</p>
     </div>
+  )
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5">
+      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+      <div className="grid gap-2">{children}</div>
+    </section>
   )
 }
 
@@ -73,54 +84,57 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" className="flex max-h-[calc(100dvh-2rem)] max-w-3xl flex-col overflow-hidden [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col">
-        <DialogHeader>
-          <DialogTitle>Log details</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground">Visitor</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+      <DialogContent size="sm" className="overflow-hidden bg-white [&>div]:flex [&>div]:max-h-[calc(100dvh-2rem)] [&>div]:min-h-0 [&>div]:flex-col">
+        <div className="p-5 pb-4 sm:p-6 sm:pb-4">
+          <div className="mx-auto w-full max-w-[17.625rem]">
+            <div className="flex items-start gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl gradient-primary text-white shadow-sm shadow-cyan-200">
+                <UserRound className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-base font-semibold text-foreground">Guest Details</DialogTitle>
+                <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <MapPin className="size-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{log.locationName ?? 'Unknown location'}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <DialogBody className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
+          <div className="mx-auto w-full max-w-[17.625rem] space-y-4">
+            <DetailSection title="Visitor">
               <DetailItem label="Name" value={log.visitorName} />
               <DetailItem label="Email" value={log.visitorEmail} />
               <DetailItem label="Phone" value={log.visitorPhone} />
               <DetailItem label="Gender" value={log.visitorGender} />
               <DetailItem label="Purpose" value={log.visitPurpose} />
               <DetailItem label="Session token" value={log.sessionToken} />
-            </div>
-          </section>
+            </DetailSection>
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground">Location</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <DetailSection title="Location">
               <DetailItem label="Name" value={log.locationName} />
               <DetailItem label="Path" value={log.locationPath} />
               <DetailItem label="Type" value={log.locationType} />
               <DetailItem label="Location ID" value={log.locationId} />
-            </div>
-          </section>
+            </DetailSection>
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground">Check-in / Check-out</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <DetailSection title="Check-in / Check-out">
               <DetailItem label="Check-in" value={formatDate(log.timestamp)} />
               <DetailItem label="Check-out" value={formatDate(log.checkoutAt)} />
               <DetailItem label="Duration" value={detailDurationLabel(log)} />
               <DetailItem label="Auto checked out" value={log.checkoutLog?.autoCheckedOut ?? log.autoCheckedOut} />
               <DetailItem label="Passkey verified" value={log.passkeyVerified} />
               <DetailItem label="Checkout log ID" value={log.checkoutLog?._id} />
-            </div>
-          </section>
+            </DetailSection>
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-foreground">Request context</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <DetailSection title="Request context">
               <DetailItem label="Device ID" value={log.deviceId} />
               <DetailItem label="IP address" value={log.ipAddress} />
               <DetailItem label="Geofence matched" value={log.geofenceStatus} />
               <DetailItem label="User agent" value={log.userAgent} />
-            </div>
-          </section>
+            </DetailSection>
+          </div>
         </DialogBody>
       </DialogContent>
     </Dialog>
@@ -133,9 +147,9 @@ export default function LogsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/logs')
-      .then(r => r.json())
+    fetchJsonOnce<{ logs?: LogEntry[] }>('/api/logs')
       .then(data => { setLogs(data.logs ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
 
   function durationLabel(entry: LogEntry) {
@@ -149,17 +163,47 @@ export default function LogsPage() {
     <div className="p-6 sm:p-8 space-y-6">
       <div>
         <h1 className="text-xl font-bold text-foreground">My Logs</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{logs.length} check-in{logs.length !== 1 ? 's' : ''} total</p>
+        {loading ? (
+          <Skeleton className="mt-1.5 h-4 w-32" />
+        ) : (
+          <p className="text-sm text-muted-foreground mt-0.5">{logs.length} check-in{logs.length !== 1 ? 's' : ''} total</p>
+        )}
       </div>
 
       <div>
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <svg className="w-6 h-6 text-accent animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          </div>
+          <Table aria-label="My logs loading table">
+            <TableHeader>
+              <TableHead isRowHeader>Visitor</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead className="hidden sm:table-cell">Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="hidden md:table-cell">When</TableHead>
+              <TableHead>Details</TableHead>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded-full" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-36" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                  <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-sky-50 flex items-center justify-center mb-3">

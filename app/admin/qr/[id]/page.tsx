@@ -63,7 +63,7 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
       : 'Back to buildings'
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-br from-slate-50 via-cyan-50/30 to-teal-50/20 flex items-center justify-center p-4">
+    <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center p-4">
       <div className="w-full max-w-sm print-area">
         <Link
           href={backHref}

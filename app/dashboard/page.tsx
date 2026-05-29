@@ -4,8 +4,246 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { Card, CardContent } from '@/components/ui/card'
+import { fetchJsonOnce } from '@/lib/clientFetch'
 
-interface Stats { totalToday: number; currentlyIn: number; totalAll: number }
+interface Stats { totalToday: number; currentlyIn: number; totalAll: number; checkedOut: number }
+
+interface CountPoint {
+  label: string
+  count: number
+}
+
+interface DailyPoint extends CountPoint {
+  date: string
+}
+
+interface HourlyPoint extends CountPoint {
+  hour: number
+}
+
+interface LocationTypePoint extends CountPoint {
+  type: string
+}
+
+interface TopLocationPoint extends CountPoint {
+  locationId: string
+  locationType: string
+  name: string
+  path?: string | null
+  stillIn: number
+}
+
+interface DashboardMetrics {
+  stats: Stats
+  daily: DailyPoint[]
+  hourlyToday: HourlyPoint[]
+  locationTypeBreakdown: LocationTypePoint[]
+  topLocations: TopLocationPoint[]
+}
+
+const emptyStats: Stats = { totalToday: 0, currentlyIn: 0, totalAll: 0, checkedOut: 0 }
+
+const emptyMetrics: DashboardMetrics = {
+  stats: emptyStats,
+  daily: [],
+  hourlyToday: [],
+  locationTypeBreakdown: [],
+  topLocations: [],
+}
+
+const typeAccents: Record<string, string> = {
+  building: 'bg-amber-500',
+  floor: 'bg-cyan-500',
+  room: 'bg-sky-500',
+}
+
+function maxCount(items: CountPoint[]) {
+  return Math.max(1, ...items.map(item => item.count))
+}
+
+function hasCounts(items: CountPoint[]) {
+  return items.some(item => item.count > 0)
+}
+
+function VerticalBarChart({
+  title,
+  subtitle,
+  data,
+  loading,
+  compact = false,
+}: {
+  title: string
+  subtitle: string
+  data: CountPoint[]
+  loading: boolean
+  compact?: boolean
+}) {
+  const max = maxCount(data)
+  const hasData = hasCounts(data)
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-5">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+        </div>
+        {loading ? (
+          <div className="h-44 rounded-xl bg-muted animate-pulse" />
+        ) : hasData ? (
+          <div className="overflow-x-auto pb-1">
+            <div className={`${compact ? 'min-w-[560px]' : 'min-w-[360px]'} h-44 flex items-end gap-2`}>
+              {data.map(item => {
+                const height = item.count === 0 ? 0 : Math.max(8, Math.round((item.count / max) * 100))
+                return (
+                  <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                    <div className="flex h-32 w-full items-end rounded-lg bg-muted/60 px-1.5">
+                      <div
+                        className="w-full rounded-md bg-gradient-to-t from-sky-600 to-cyan-400 transition-all"
+                        style={{ height: `${height}%` }}
+                        aria-label={`${item.label}: ${item.count} logs`}
+                        title={`${item.label}: ${item.count} logs`}
+                      />
+                    </div>
+                    <p className="h-8 text-center text-[11px] leading-4 text-muted-foreground">
+                      {item.label}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+            No log data yet
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProgressBreakdown({
+  title,
+  subtitle,
+  items,
+  loading,
+  accentFor,
+}: {
+  title: string
+  subtitle: string
+  items: CountPoint[]
+  loading: boolean
+  accentFor?: (item: CountPoint) => string
+}) {
+  const max = maxCount(items)
+  const hasData = hasCounts(items)
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-5">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+        </div>
+        {loading ? (
+          <div className="space-y-4">
+            {[0, 1, 2].map(item => (
+              <div key={item} className="space-y-2">
+                <div className="h-4 w-32 rounded bg-muted animate-pulse" />
+                <div className="h-3 rounded-full bg-muted animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : hasData ? (
+          <div className="space-y-4">
+            {items.map(item => {
+              const width = item.count === 0 ? 0 : Math.max(4, Math.round((item.count / max) * 100))
+              const accent = accentFor?.(item) ?? 'bg-emerald-500'
+              return (
+                <div key={item.label} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
+                    <p className="text-sm font-semibold text-foreground">{item.count}</p>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className={`h-full rounded-full ${accent}`} style={{ width: `${width}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+            No log data yet
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function TopLocationsChart({
+  locations,
+  loading,
+}: {
+  locations: TopLocationPoint[]
+  loading: boolean
+}) {
+  const items = locations.map(location => ({ ...location, label: location.name }))
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-5">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Top Locations</h3>
+          <p className="text-xs text-muted-foreground mt-1">Most visited places in the last 30 days</p>
+        </div>
+        {loading ? (
+          <div className="space-y-4">
+            {[0, 1, 2, 3].map(item => (
+              <div key={item} className="h-12 rounded-xl bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : locations.length ? (
+          <div className="space-y-4">
+            {items.map((item, index) => {
+              const max = maxCount(items)
+              const width = Math.max(4, Math.round((item.count / max) * 100))
+              return (
+                <div key={item.locationId} className="space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {index + 1}. {item.name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">{item.path ?? item.locationType}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-2 text-xs font-semibold">
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-foreground">
+                        Total {item.count}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
+                        Still IN {item.stillIn}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${width}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+            No location activity yet
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 function StatCard({
   label,
@@ -82,23 +320,24 @@ const quickActions = [
 
 export default function DashboardPage() {
   const { data: session } = useSession()
-  const [stats, setStats] = useState<Stats>({ totalToday: 0, currentlyIn: 0, totalAll: 0 })
+  const [metrics, setMetrics] = useState<DashboardMetrics>(emptyMetrics)
   const [loading, setLoading] = useState(true)
   const isAdmin = (session?.user as any)?.role === 'admin'
 
   useEffect(() => {
-    fetch('/api/logs?page=1')
-      .then(r => r.json())
+    fetchJsonOnce<Partial<DashboardMetrics> & { stats?: Partial<Stats> }>('/api/dashboard/metrics')
       .then(data => {
-        const now = new Date()
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const logs = data.logs ?? []
-        const totalToday = logs.filter((l: any) => new Date(l.timestamp) >= todayStart).length
-        const currentlyIn = logs.filter((l: any) => !l.checkoutAt).length
-        setStats({ totalToday, currentlyIn, totalAll: data.total })
+        setMetrics({ ...emptyMetrics, ...data, stats: { ...emptyStats, ...(data.stats ?? {}) } })
         setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [])
+
+  const { stats } = metrics
+  const statusBreakdown = [
+    { label: 'Checked out', count: stats.checkedOut },
+    { label: 'Still checked in', count: stats.currentlyIn },
+  ]
 
   const firstName = session?.user?.name?.split(' ')[0] ?? session?.user?.email?.split('@')[0] ?? 'there'
   const hour = new Date().getHours()
@@ -175,6 +414,45 @@ export default function DashboardPage() {
               </svg>
             }
           />
+        </div>
+      </div>
+
+      {/* Charts */}
+      <div>
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70 mb-4">
+          Log Analytics
+        </h2>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <VerticalBarChart
+            title="Check-ins Over Time"
+            subtitle="Daily volume across the last 7 days"
+            data={metrics.daily}
+            loading={loading}
+          />
+          <VerticalBarChart
+            title="Today's Activity"
+            subtitle="Check-ins grouped by hour"
+            data={metrics.hourlyToday}
+            loading={loading}
+            compact
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4">
+            <ProgressBreakdown
+              title="Location Type Mix"
+              subtitle="Building, floor, and room check-ins over 30 days"
+              items={metrics.locationTypeBreakdown}
+              loading={loading}
+              accentFor={(item) => typeAccents[(item as LocationTypePoint).type] ?? 'bg-muted-foreground'}
+            />
+            <ProgressBreakdown
+              title="Completion Status"
+              subtitle="All-time check-ins with linked check-out logs"
+              items={statusBreakdown}
+              loading={loading}
+              accentFor={(item) => item.label === 'Still checked in' ? 'bg-emerald-500' : 'bg-slate-500'}
+            />
+          </div>
+          <TopLocationsChart locations={metrics.topLocations} loading={loading} />
         </div>
       </div>
 

@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
 import { toast } from '@/components/ui/sonner'
+import { fetchJsonOnce } from '@/lib/clientFetch'
 
 interface Building { _id: string; name: string; address: string; description?: string; checkInMode?: 'click' | 'passkey' }
 
@@ -20,11 +22,16 @@ export default function AdminBuildingsPage() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [description, setDescription] = useState('')
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   async function load() {
-    const res = await fetch('/api/buildings')
-    setBuildings(await res.json())
+    setLoading(true)
+    try {
+      setBuildings(await fetchJsonOnce<Building[]>('/api/buildings'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -56,7 +63,11 @@ export default function AdminBuildingsPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Buildings</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{buildings.length} location{buildings.length !== 1 ? 's' : ''} registered</p>
+          {loading ? (
+            <Skeleton className="mt-1.5 h-4 w-32" />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-0.5">{buildings.length} location{buildings.length !== 1 ? 's' : ''} registered</p>
+          )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={
@@ -95,7 +106,39 @@ export default function AdminBuildingsPage() {
 
       {/* Table */}
       <div>
-        {buildings.length === 0 ? (
+        {loading ? (
+          <Table aria-label="Buildings loading table">
+            <TableHeader>
+              <TableHead isRowHeader>Building</TableHead>
+              <TableHead className="hidden sm:table-cell">Address</TableHead>
+              <TableHead className="hidden md:table-cell">Check-in</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-44" /></TableCell>
+                  <TableCell className="hidden md:table-cell"><Skeleton className="h-8 w-36 rounded-full" /></TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <Skeleton className="h-8 w-14" />
+                      <Skeleton className="h-8 w-20" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : buildings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-sky-50 flex items-center justify-center mb-3">
               <svg className="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
