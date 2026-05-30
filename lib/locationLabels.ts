@@ -20,6 +20,7 @@ export async function resolveLocationLabels(
     locationType: LocationType;
     locationId: string | Types.ObjectId;
   }>,
+  teamId?: string | Types.ObjectId,
 ): Promise<Map<string, LocationLabel>> {
   const buildingIds = new Set<string>();
   const floorIds = new Set<string>();
@@ -34,18 +35,27 @@ export async function resolveLocationLabels(
 
   const [buildings, floors, rooms] = await Promise.all([
     buildingIds.size
-      ? Building.find({ _id: { $in: Array.from(buildingIds) } })
+      ? Building.find({
+          _id: { $in: Array.from(buildingIds) },
+          ...(teamId ? { teamId } : {}),
+        })
           .select("name")
           .lean<any[]>()
       : [],
     floorIds.size
-      ? Floor.find({ _id: { $in: Array.from(floorIds) } })
+      ? Floor.find({
+          _id: { $in: Array.from(floorIds) },
+          ...(teamId ? { teamId } : {}),
+        })
           .populate("buildingId", "name")
           .select("name number buildingId")
           .lean<any[]>()
       : [],
     roomIds.size
-      ? Room.find({ _id: { $in: Array.from(roomIds) } })
+      ? Room.find({
+          _id: { $in: Array.from(roomIds) },
+          ...(teamId ? { teamId } : {}),
+        })
           .populate({
             path: "floorId",
             select: "name number buildingId",

@@ -66,12 +66,14 @@ export default function VisitorPasskey({
   useEffect(() => {
     if (!sessionToken) { setHasPasskey(false); return }
     let cancelled = false
-    fetch(`/api/logs/passkey/visitor/exists?sessionToken=${encodeURIComponent(sessionToken)}`)
+    fetch(
+      `/api/logs/passkey/visitor/exists?sessionToken=${encodeURIComponent(sessionToken)}&locationId=${encodeURIComponent(locationId)}&locationType=${encodeURIComponent(locationType)}`,
+    )
       .then((r) => r.json())
       .then((d) => { if (!cancelled) setHasPasskey(!!d.exists) })
       .catch(() => { if (!cancelled) setHasPasskey(false) })
     return () => { cancelled = true }
-  }, [sessionToken])
+  }, [sessionToken, locationId, locationType])
 
   const authenticate = useCallback(async () => {
     setLoading(true)
@@ -112,7 +114,15 @@ export default function VisitorPasskey({
     setLoading(true)
     try {
       const { startRegistration } = await import('@simplewebauthn/browser')
-      const payload = { sessionToken, visitorName, ...contactFields(visitorContact), visitorGender, visitPurpose }
+      const payload = {
+        locationId,
+        locationType,
+        sessionToken,
+        visitorName,
+        ...contactFields(visitorContact),
+        visitorGender,
+        visitPurpose,
+      }
 
       const optionsRes = await fetch('/api/logs/passkey/visitor/register/options', {
         method: 'POST',

@@ -4,21 +4,23 @@ import { Card, CardContent } from '@/components/ui/card'
 import { connectDB } from '@/lib/db'
 import { QuestCard } from '@/lib/models/QuestCard'
 import { resolveLocationLabels } from '@/lib/locationLabels'
+import { requireTeamPageAccess } from '@/lib/server/requireTeamPageAccess'
 import { ArrowLeft, ListChecks, MapPin, QrCode, Sparkles } from 'lucide-react'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-async function getQuest(id: string) {
+async function getQuest(id: string, teamId: string) {
   try {
     await connectDB()
-    const quest = await QuestCard.findById(id).lean<any>()
+    const quest = await QuestCard.findOne({ _id: id, teamId }).lean<any>()
     if (!quest) return null
     const labels = await resolveLocationLabels(
       (quest.steps ?? []).map((s: any) => ({
         locationType: s.locationType,
         locationId: s.locationId,
       })),
+      teamId,
     )
     const stepsWithLabels = (quest.steps ?? []).map((s: any) => {
       const label = labels.get(`${s.locationType}:${s.locationId.toString()}`)
@@ -34,7 +36,8 @@ async function getQuest(id: string) {
 
 export default async function AdminQuestDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const quest = await getQuest(id)
+  const access = await requireTeamPageAccess('manager', '/admin/quests')
+  const quest = await getQuest(id, access.teamId)
   if (!quest) return <div className="p-8 text-red-500">Quest not found</div>
 
   const appUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'

@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { QuestCard } from "@/lib/models/QuestCard";
 import { QuestProgress } from "@/lib/models/QuestProgress";
 import { QuestProgressSchema } from "@/lib/validations/quest";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 
 export const runtime = "nodejs";
 
@@ -30,14 +31,34 @@ export async function POST(
   if (!card)
     return NextResponse.json({ error: "Quest not found" }, { status: 404 });
 
-  let progress = await QuestProgress.findOne({ questCardId: card._id });
+  const location = await findOwnedLocationByType(
+    locationType as LocationType,
+    locationId,
+  );
+  if (!location) {
+    return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
+  if (location.teamId.toString() !== card.teamId.toString()) {
+    return NextResponse.json(
+      { error: "Location is not part of this quest's team" },
+      { status: 403 },
+    );
+  }
+
+  let progress = await QuestProgress.findOne({
+    teamId: card.teamId,
+    questCardId: card._id,
+  });
   if (!progress) {
     progress = new QuestProgress({
+      teamId: card.teamId,
       questCardId: card._id,
       sessionToken,
       userId: session?.user ? (session.user as any).id : undefined,
       completedSteps: [],
     });
+  } else if (!progress.teamId) {
+    progress.teamId = card.teamId;
   }
 
   const alreadyDone = progress.completedSteps.some(
@@ -54,7 +75,11 @@ export async function POST(
     const nextStep = card.steps.find(
       (s) => !progress!.completedSteps.some((cs) => cs.stepOrder === s.order),
     );
-    if (!nextStep || nextStep.locationId.toString() !== locationId) {
+    if (
+      !nextStep ||
+      nextStep.locationId.toString() !== locationId ||
+      nextStep.locationType !== locationType
+    ) {
       return NextResponse.json(
         { error: "Not the next location in sequence" },
         { status: 400 },
@@ -66,7 +91,11 @@ export async function POST(
       timestamp: new Date(),
     });
   } else {
-    const step = card.steps.find((s) => s.locationId.toString() === locationId);
+    const step = card.steps.find(
+      (s) =>
+        s.locationId.toString() === locationId &&
+        s.locationType === locationType,
+    );
     if (!step)
       return NextResponse.json(
         { error: "Location not in this quest" },

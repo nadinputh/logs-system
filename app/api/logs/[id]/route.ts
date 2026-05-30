@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
-import { Building } from "@/lib/models/Building";
-import { Floor } from "@/lib/models/Floor";
-import { Room } from "@/lib/models/Room";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 
 export const runtime = "nodejs";
 
@@ -13,26 +11,6 @@ function getClientIp(req: NextRequest): string {
     req.headers.get("x-real-ip") ??
     "unknown"
   );
-}
-
-async function getLocationCheckInMode(
-  locationType: string,
-  locationId: any,
-): Promise<"click" | "passkey"> {
-  const model =
-    locationType === "room"
-      ? Room
-      : locationType === "floor"
-        ? Floor
-        : locationType === "building"
-          ? Building
-          : null;
-  if (!model) return "click";
-  const doc: any = await (model as any)
-    .findById(locationId)
-    .select("checkInMode")
-    .lean();
-  return (doc?.checkInMode as "click" | "passkey") ?? "click";
 }
 
 export async function PATCH(
@@ -60,10 +38,11 @@ export async function PATCH(
   if (!checkinLog)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const mode = await getLocationCheckInMode(
-    checkinLog.locationType,
-    checkinLog.locationId,
+  const location = await findOwnedLocationByType(
+    checkinLog.locationType as LocationType,
+    checkinLog.locationId.toString(),
   );
+  const mode = location?.checkInMode ?? "click";
   if (mode === "passkey") {
     return NextResponse.json(
       {
@@ -75,6 +54,7 @@ export async function PATCH(
   }
 
   const existing = await Log.findOne({
+    teamId: checkinLog.teamId,
     relatedLogId: checkinLog._id,
     action: "out",
   });
@@ -83,6 +63,7 @@ export async function PATCH(
 
   // Append-only: create a new OUT document instead of mutating the check-in
   const checkoutLog = await Log.create({
+    teamId: checkinLog.teamId,
     locationId: checkinLog.locationId,
     locationType: checkinLog.locationType,
     sessionToken: checkinLog.sessionToken,

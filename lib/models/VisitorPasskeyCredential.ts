@@ -1,6 +1,7 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
 export interface IVisitorPasskeyCredential extends Document {
+  teamId: Types.ObjectId;
   sessionToken: string;
   credentialId: string;
   publicKey: string;
@@ -17,6 +18,7 @@ export interface IVisitorPasskeyCredential extends Document {
 
 const VisitorPasskeyCredentialSchema = new Schema<IVisitorPasskeyCredential>(
   {
+    teamId: { type: Schema.Types.ObjectId, ref: "Team", required: true },
     sessionToken: { type: String, required: true },
     credentialId: { type: String, required: true, unique: true },
     publicKey: { type: String, required: true },
@@ -38,7 +40,14 @@ VisitorPasskeyCredentialSchema.index(
   { createdAt: 1 },
   { expireAfterSeconds: 604800 },
 );
-VisitorPasskeyCredentialSchema.index({ sessionToken: 1 });
+VisitorPasskeyCredentialSchema.index({ teamId: 1, sessionToken: 1 });
+
+if (
+  mongoose.models.VisitorPasskeyCredential &&
+  !mongoose.models.VisitorPasskeyCredential.schema.path("teamId")
+) {
+  delete mongoose.models.VisitorPasskeyCredential;
+}
 
 export const VisitorPasskeyCredential: Model<IVisitorPasskeyCredential> =
   mongoose.models.VisitorPasskeyCredential ||

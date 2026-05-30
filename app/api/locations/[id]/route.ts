@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/db";
 import { Building } from "@/lib/models/Building";
 import { Floor } from "@/lib/models/Floor";
 import { Room } from "@/lib/models/Room";
-import { requireAuth } from "@/lib/middleware/auth";
+import { requireTeamPermission } from "@/lib/middleware/auth";
 import { UpdateLocationModeSchema } from "@/lib/validations/location";
 
 export const runtime = "nodejs";
@@ -12,6 +12,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireTeamPermission("locations.read");
+  if (auth.error || !auth.teamId) return auth.error;
+
   const { id } = await params;
   const type = req.nextUrl.searchParams.get("type");
   await connectDB();
@@ -20,18 +23,20 @@ export async function GET(
   let locationType: string | null = null;
 
   if (!type || type === "room") {
-    doc = await Room.findById(id)
+    doc = await Room.findOne({ _id: id, teamId: auth.teamId })
       .populate("floorId")
       .populate("buildingId")
       .lean();
     if (doc) locationType = "room";
   }
   if (!doc && (!type || type === "floor")) {
-    doc = await Floor.findById(id).populate("buildingId").lean();
+    doc = await Floor.findOne({ _id: id, teamId: auth.teamId })
+      .populate("buildingId")
+      .lean();
     if (doc) locationType = "floor";
   }
   if (!doc && (!type || type === "building")) {
-    doc = await Building.findById(id).lean();
+    doc = await Building.findOne({ _id: id, teamId: auth.teamId }).lean();
     if (doc) locationType = "building";
   }
 
@@ -45,8 +50,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const { error } = await requireAuth("admin");
-  if (error) return error;
+  const auth = await requireTeamPermission("locations.mode.update");
+  if (auth.error || !auth.teamId) return auth.error;
 
   const body = await req.json();
   const parsed = UpdateLocationModeSchema.safeParse(body);
@@ -67,7 +72,9 @@ export async function PATCH(
   ];
   for (const { model, type } of models) {
     const doc = await (model as any)
-      .findByIdAndUpdate(id, update, { returnDocument: "after" })
+      .findOneAndUpdate({ _id: id, teamId: auth.teamId }, update, {
+        returnDocument: "after",
+      })
       .lean();
     if (doc) return NextResponse.json({ ...doc, locationType: type });
   }

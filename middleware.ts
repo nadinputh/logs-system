@@ -6,10 +6,20 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    if (
-      (pathname.startsWith("/admin") || pathname.startsWith("/terminal")) &&
-      token?.role !== "admin"
-    ) {
+    const requiresTeamContext =
+      pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/logs") ||
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/profile") ||
+      pathname.startsWith("/terminal");
+
+    if (requiresTeamContext && !token?.activeTeamId) {
+      return NextResponse.redirect(
+        new URL("/settings/team?next=" + encodeURIComponent(pathname), req.url),
+      );
+    }
+
+    if (pathname.startsWith("/terminal") && token?.role !== "admin") {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     return NextResponse.next();

@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { Avatar, Chip, Dropdown, Separator } from '@heroui/react'
+import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/sonner'
 import type { LucideIcon } from 'lucide-react'
 import {
   Building2,
@@ -20,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   UserRound,
+  Users,
 } from 'lucide-react'
 
 type NavigationItem = {
@@ -30,6 +33,14 @@ type NavigationItem = {
 }
 
 type DropdownKey = 'locations' | 'account' | 'menu'
+
+type TeamSummary = {
+  id: string
+  name: string
+  slug: string
+  role: 'owner' | 'admin' | 'manager' | 'member' | 'auditor'
+  isActive: boolean
+}
 
 const primaryItems: NavigationItem[] = [
   { href: '/dashboard', label: 'Dashboard', description: 'Overview and activity', Icon: Home },
@@ -52,6 +63,13 @@ const passkeyItem: NavigationItem = {
   label: 'Passkeys',
   description: 'Device authentication',
   Icon: Fingerprint,
+}
+
+const teamAccessItem: NavigationItem = {
+  href: '/settings/team',
+  label: 'Team & Access',
+  description: 'Switch team and manage members',
+  Icon: Users,
 }
 
 function isRouteActive(pathname: string, href: string) {
@@ -291,7 +309,7 @@ function DropdownNavigationItem({
 export default function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { data: session } = useSession()
+  const { data: session, update } = useSession()
   const userRole = (session?.user as { role?: string } | undefined)?.role ?? 'staff'
   const roleLabel = userRole.charAt(0).toUpperCase() + userRole.slice(1)
   const isAdmin = userRole === 'admin'
@@ -299,7 +317,9 @@ export default function NavBar() {
   const userName = (session?.user?.name ?? userEmail) || 'Account'
   const initials = userEmail ? userEmail[0].toUpperCase() : 'LM'
   const isLocationActive = locationItems.some((item) => isRouteActive(pathname, item.href))
-  const accountMenuItems = [passkeyItem]
+  const accountMenuItems = [passkeyItem, teamAccessItem]
+  const [teams, setTeams] = useState<TeamSummary[]>([])
+  const [switchingTeamId, setSwitchingTeamId] = useState<string | null>(null)
   const [openDropdown, setOpenDropdown] = useState<DropdownKey | null>(null)
   const locationDropdown = useHoverDropdown('locations', openDropdown, setOpenDropdown)
   const accountDropdown = useHoverDropdown('account', openDropdown, setOpenDropdown)
@@ -307,9 +327,74 @@ export default function NavBar() {
   const mobileMenuItems = isAdmin
     ? [...primaryItems, ...locationItems, ...adminItems]
     : [...primaryItems]
+  const activeTeam = teams.find((team) => team.isActive) ?? null
+
+  useEffect(() => {
+    if (!session?.user) return
+
+    let cancelled = false
+
+    async function loadTeams() {
+      try {
+        const res = await fetch('/api/teams')
+        const payload = await res.json()
+        if (!res.ok) return
+        if (!cancelled) {
+          setTeams((payload.teams ?? []) as TeamSummary[])
+        }
+      } catch {
+        if (!cancelled) setTeams([])
+      }
+    }
+
+    void loadTeams()
+
+    return () => {
+      cancelled = true
+    }
+  }, [session?.user?.email])
 
   function navigateTo(href: string) {
     router.push(href)
+  }
+
+  function handleSignOut() {
+    void signOut({ callbackUrl: '/login' })
+  }
+
+  async function switchTeam(teamId: string) {
+    if (!teamId || teamId === activeTeam?.id) return
+
+    setSwitchingTeamId(teamId)
+    try {
+      const res = await fetch('/api/teams/active', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId }),
+      })
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error ?? 'Failed to switch team')
+      }
+
+      setTeams((current) =>
+        current.map((team) => ({ ...team, isActive: team.id === teamId })),
+      )
+
+      try {
+        await update?.({ activeTeamId: teamId } as any)
+      } catch {
+        // Keep UI responsive even if session token refresh fails.
+      }
+
+      router.refresh()
+      toast.success('Switched active team')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to switch team'
+      toast.error(message)
+    } finally {
+      setSwitchingTeamId(null)
+    }
   }
 
   return (
@@ -410,6 +495,9 @@ export default function NavBar() {
                           <RolePill isAdmin={isAdmin} label={roleLabel} className="shrink-0" />
                         </div>
                         <p className="truncate text-xs text-muted-foreground">{userEmail || 'Signed in'}</p>
+                        {activeTeam && (
+                          <p className="truncate text-[11px] text-cyan-700">Team: {activeTeam.name}</p>
+                        )}
                       </div>
                     </div>
                     <Separator className="my-2 bg-border/70" />
@@ -422,20 +510,47 @@ export default function NavBar() {
                           onSelect={navigateTo}
                         />
                       ))}
-                      <Dropdown.Item
-                        id="sign-out"
-                        textValue="Sign out"
-                        onAction={() => void signOut({ callbackUrl: '/login' })}
-                        className="rounded-xl px-3 py-2 text-danger outline-none transition-colors hover:bg-danger/10 focus:bg-danger/10"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger">
-                            <LogOut className="size-4" strokeWidth={2.2} />
-                          </span>
-                          <span className="text-sm font-semibold">Sign out</span>
-                        </div>
-                      </Dropdown.Item>
+                      {teams.length > 1 && (
+                        <>
+                          <div className="px-3 pb-1 pt-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Switch Team</p>
+                          </div>
+                          {teams.map((team) => (
+                            <Dropdown.Item
+                              key={team.id}
+                              id={`team-${team.id}`}
+                              textValue={`Switch to ${team.name}`}
+                              onAction={() => void switchTeam(team.id)}
+                              className="rounded-xl px-3 py-2 outline-none transition-colors hover:bg-accent/10 focus:bg-accent/10"
+                            >
+                              <div className="flex items-center justify-between gap-3 text-sm">
+                                <span className="truncate font-semibold text-foreground">{team.name}</span>
+                                {team.isActive ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                    Active
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">
+                                    {switchingTeamId === team.id ? 'Switching...' : 'Switch'}
+                                  </span>
+                                )}
+                              </div>
+                            </Dropdown.Item>
+                          ))}
+                        </>
+                      )}
                     </Dropdown.Menu>
+
+                    <Separator className="my-2 bg-border/70" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSignOut}
+                      className="w-full justify-start gap-2 border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
+                    >
+                      <LogOut className="size-4" strokeWidth={2.2} />
+                      Sign out
+                    </Button>
                   </div>
                 </Dropdown.Popover>
               )}
@@ -464,6 +579,12 @@ export default function NavBar() {
                         onSelect={navigateTo}
                         className="sm:hidden"
                       />
+                      <DropdownNavigationItem
+                        item={teamAccessItem}
+                        active={isRouteActive(pathname, teamAccessItem.href)}
+                        onSelect={navigateTo}
+                        className="sm:hidden"
+                      />
                       {mobileMenuItems.map((item) => (
                         <DropdownNavigationItem
                           key={item.href}
@@ -488,13 +609,16 @@ export default function NavBar() {
                               <span className="truncate text-xs text-muted-foreground">{userEmail || 'Signed in'}</span>
                               <RolePill isAdmin={isAdmin} label={roleLabel} className="shrink-0" />
                             </span>
+                            {activeTeam && (
+                              <span className="block truncate text-[11px] text-cyan-700">Team: {activeTeam.name}</span>
+                            )}
                           </span>
                         </div>
                       </Dropdown.Item>
                       <Dropdown.Item
                         id="mobile-sign-out"
                         textValue="Sign out"
-                        onAction={() => void signOut({ callbackUrl: '/login' })}
+                        onAction={handleSignOut}
                         className="rounded-xl px-3 py-2 text-danger outline-none transition-colors hover:bg-danger/10 focus:bg-danger/10"
                       >
                         <div className="flex items-center gap-3">

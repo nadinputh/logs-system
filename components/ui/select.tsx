@@ -20,6 +20,7 @@ interface SelectProps {
   onValueChange?: (value: string | null) => void
   items?: Record<string, string>
   disabled?: boolean
+  required?: boolean
   variant?: "primary" | "secondary"
   children?: React.ReactNode
 }
@@ -30,6 +31,7 @@ function Select({
   onValueChange,
   items,
   disabled,
+  required,
   variant = "secondary",
   children,
 }: SelectProps) {
@@ -112,6 +114,7 @@ function Select({
       selectedKey={currentValue === "" ? null : currentValue}
       onSelectionChange={handleSelectionChange}
       isDisabled={disabled}
+      isRequired={required}
       aria-label={fallbackAriaLabel}
       variant={variant}
       fullWidth

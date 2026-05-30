@@ -3,6 +3,8 @@ import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { User } from "@/lib/models/User";
 import { verifySessionQrToken } from "@/lib/jwt";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
+import { requireTeamPermission } from "@/lib/middleware/auth";
 
 export const runtime = "nodejs";
 
@@ -44,17 +46,31 @@ export async function POST(req: NextRequest) {
 
   await connectDB();
 
+  const location = await findOwnedLocationByType(
+    locationType as LocationType,
+    locationId,
+  );
+  if (!location) {
+    return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
+  const teamId = location.teamId.toString();
+
+  const auth = await requireTeamPermission("terminal.scan", { teamId });
+  if (auth.error) return auth.error;
+
   const user = await User.findById(userId).lean();
   if (!user)
     return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   const lastCheckin = await Log.findOne({
+    teamId,
     locationId,
     userId,
     action: "in",
   }).sort({ timestamp: -1 });
   if (lastCheckin) {
     const existingCheckout = await Log.findOne({
+      teamId,
       relatedLogId: lastCheckin._id,
       action: "out",
     });
@@ -67,6 +83,7 @@ export async function POST(req: NextRequest) {
   }
 
   const log = await Log.create({
+    teamId,
     locationId,
     locationType,
     sessionToken: userId,

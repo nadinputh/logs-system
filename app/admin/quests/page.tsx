@@ -112,7 +112,7 @@ export default function AdminQuestsPage() {
             <DialogHeader><DialogTitle>Issue Quest Cards</DialogTitle></DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1"><Label>Title</Label><Input value={title} onChange={e => setTitle(e.target.value)} required /></div>
-              <div className="space-y-1"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} /></div>
+              <div className="space-y-1"><Label>Description (optional)</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Quest Type</Label>
@@ -120,6 +120,7 @@ export default function AdminQuestsPage() {
                     value={type}
                     onValueChange={(v) => setType((v ?? 'location_chain') as any)}
                     items={{ location_chain: 'Location Chain', custom: 'Custom' }}
+                    required
                   >
                     <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -128,7 +129,7 @@ export default function AdminQuestsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1"><Label>Number of Cards</Label><Input type="number" min="1" max="200" value={count} onChange={e => setCount(e.target.value)} /></div>
+                <div className="space-y-1"><Label>Number of Cards</Label><Input type="number" min="1" max="200" value={count} onChange={e => setCount(e.target.value)} required /></div>
               </div>
 
               <div className="space-y-2">
@@ -144,6 +145,7 @@ export default function AdminQuestsPage() {
                         value={step.locationType}
                         onValueChange={v => updateStep(idx, 'locationType', v ?? 'room')}
                         items={{ building: 'Building', floor: 'Floor', room: 'Room' }}
+                        required
                       >
                         <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -156,6 +158,7 @@ export default function AdminQuestsPage() {
                         value={step.locationId}
                         onValueChange={v => updateStep(idx, 'locationId', v ?? '')}
                         items={Object.fromEntries(getLocationOptions(step.locationType).map(o => [o.id, o.label]))}
+                        required
                       >
                         <SelectTrigger className="w-full"><SelectValue placeholder="Select location" /></SelectTrigger>
                         <SelectContent>

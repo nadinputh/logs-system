@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0",
+    "dev": "node scripts/next-with-port.mjs dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/next-with-port.mjs start",
     "lint": "next lint",
     "seed": "npx tsx scripts/seed.ts",
+    "backfill:team:dry": "npx tsx scripts/backfill-team-ownership.ts --dry-run",
+    "backfill:team": "npx tsx scripts/backfill-team-ownership.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

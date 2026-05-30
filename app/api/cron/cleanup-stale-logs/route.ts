@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
 
   // Find all check-in logs older than 12h
   const staleCheckins = await Log.find({
+    teamId: { $exists: true },
     action: "in",
     timestamp: { $lt: cutoff },
   }).lean();
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
   // Append-only: create OUT documents for each stale check-in
   await Log.insertMany(
     truly_stale.map((checkin: any) => ({
+      teamId: checkin.teamId,
       locationId: checkin.locationId,
       locationType: checkin.locationType,
       sessionToken: checkin.sessionToken,

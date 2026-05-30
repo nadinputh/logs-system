@@ -11,11 +11,15 @@ export async function GET(
 ) {
   const { token } = await params;
   await connectDB();
-  const card = await QuestCard.findOne({ qrToken: token }).lean();
+  const card = await QuestCard.findOne({
+    qrToken: token,
+    isActive: true,
+  }).lean<any>();
   if (!card)
     return NextResponse.json({ error: "Quest not found" }, { status: 404 });
 
   const progress = await QuestProgress.findOne({
+    teamId: card.teamId,
     questCardId: (card as any)._id,
   }).lean();
   return NextResponse.json({ card, progress: progress ?? null });

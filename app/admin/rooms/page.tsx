@@ -4,7 +4,6 @@ import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Description } from '@/components/ui/description'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -117,6 +116,7 @@ function RoomsContent() {
                   value={buildingId}
                   onValueChange={v => { setBuildingId(v ?? ''); setFloorId('') }}
                   items={Object.fromEntries(buildings.map(b => [b._id, b.name]))}
+                  required
                 >
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select building" /></SelectTrigger>
                   <SelectContent>{buildings.map(b => <SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>)}</SelectContent>
@@ -128,6 +128,7 @@ function RoomsContent() {
                   value={floorId}
                   onValueChange={v => setFloorId(v ?? '')}
                   items={Object.fromEntries(availableFloors.map(f => [f._id, `Floor ${f.number} · ${f.name}`]))}
+                  required
                 >
                   <SelectTrigger className="w-full"><SelectValue placeholder="Select floor" /></SelectTrigger>
                   <SelectContent>{availableFloors.map(f => <SelectItem key={f._id} value={f._id}>Floor {f.number} · {f.name}</SelectItem>)}</SelectContent>
@@ -138,10 +139,10 @@ function RoomsContent() {
                 <div className="space-y-1.5"><Label>Number</Label><Input value={number} onChange={e => setNumber(e.target.value)} required placeholder="101" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label>Type</Label><Input value={type} onChange={e => setType(e.target.value)} placeholder="Office, Lab…" /></div>
-                <div className="space-y-1.5"><Label>Capacity</Label><Input type="number" value={capacity} onChange={e => setCapacity(e.target.value)} placeholder="20" /></div>
+                <div className="space-y-1.5"><Label>Type (optional)</Label><Input value={type} onChange={e => setType(e.target.value)} placeholder="Office, Lab…" /></div>
+                <div className="space-y-1.5"><Label>Capacity (optional)</Label><Input type="number" value={capacity} onChange={e => setCapacity(e.target.value)} placeholder="20" /></div>
               </div>
-              <div className="space-y-1.5"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} /><Description>Optional</Description></div>
+              <div className="space-y-1.5"><Label>Description (optional)</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} /></div>
               <Button type="submit" className="w-full" disabled={saving}>{saving ? 'Creating…' : 'Create Room'}</Button>
             </form>
           </DialogContent>

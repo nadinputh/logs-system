@@ -48,7 +48,9 @@ export async function POST(req: NextRequest) {
   let challenge: string;
   try {
     const clientData = JSON.parse(
-      Buffer.from(response.response.clientDataJSON, "base64url").toString("utf8"),
+      Buffer.from(response.response.clientDataJSON, "base64url").toString(
+        "utf8",
+      ),
     );
     challenge = clientData.challenge;
   } catch {
@@ -85,6 +87,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const teamId = intentDoc.teamId;
+  if (!teamId) {
+    return NextResponse.json(
+      { error: "Challenge is missing team context" },
+      { status: 400 },
+    );
+  }
+
   // Step 4: Replay idempotency cache if this key was already committed
   const cached = await checkIdempotency(idempotencyKey);
   if (cached) {
@@ -92,10 +102,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Step 5: Resolve credential — try staff first, then visitor
-  const staffCred = await PasskeyCredential.findOne({ credentialId: response.id });
+  const staffCred = await PasskeyCredential.findOne({
+    credentialId: response.id,
+  });
   const visitorCred = staffCred
     ? null
-    : await VisitorPasskeyCredential.findOne({ credentialId: response.id });
+    : await VisitorPasskeyCredential.findOne({
+        credentialId: response.id,
+        teamId,
+      });
 
   if (!staffCred && !visitorCred) {
     return NextResponse.json(
@@ -110,7 +125,9 @@ export async function POST(req: NextRequest) {
     : Buffer.from(visitorCred!.publicKey, "base64url");
   const credCounter = staffCred ? staffCred.counter : visitorCred!.counter;
   const credId = staffCred ? staffCred.credentialId : visitorCred!.credentialId;
-  const credTransports = staffCred ? staffCred.transports : visitorCred!.transports;
+  const credTransports = staffCred
+    ? staffCred.transports
+    : visitorCred!.transports;
 
   const origin = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const rpID = new URL(origin).hostname;
@@ -142,12 +159,18 @@ export async function POST(req: NextRequest) {
   if (staffCred) {
     await PasskeyCredential.updateOne(
       { _id: staffCred._id },
-      { counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() },
+      {
+        counter: verification.authenticationInfo.newCounter,
+        lastUsedAt: new Date(),
+      },
     );
   } else {
     await VisitorPasskeyCredential.updateOne(
       { _id: visitorCred!._id },
-      { counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() },
+      {
+        counter: verification.authenticationInfo.newCounter,
+        lastUsedAt: new Date(),
+      },
     );
   }
 
@@ -162,11 +185,12 @@ export async function POST(req: NextRequest) {
   if (action === "in") {
     // Idempotency check: reject if already checked in without checkout
     const checkinQuery = resolvedUserId
-      ? { locationId, userId: resolvedUserId, action: "in" as const }
-      : { locationId, sessionToken, action: "in" as const };
+      ? { teamId, locationId, userId: resolvedUserId, action: "in" as const }
+      : { teamId, locationId, sessionToken, action: "in" as const };
     const lastCheckin = await Log.findOne(checkinQuery).sort({ timestamp: -1 });
     if (lastCheckin) {
       const existingCheckout = await Log.findOne({
+        teamId,
         relatedLogId: lastCheckin._id,
         action: "out",
       });
@@ -178,6 +202,7 @@ export async function POST(req: NextRequest) {
     }
 
     log = await Log.create({
+      teamId,
       locationId,
       locationType,
       sessionToken,
@@ -198,7 +223,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const checkinLog = await Log.findOne({ _id: relatedLogId, action: "in" });
+    const checkinLog = await Log.findOne({
+      _id: relatedLogId,
+      teamId,
+      action: "in",
+    });
     if (!checkinLog) {
       return NextResponse.json(
         { error: "Check-in log not found" },
@@ -207,6 +236,7 @@ export async function POST(req: NextRequest) {
     }
 
     const existing = await Log.findOne({
+      teamId,
       relatedLogId: checkinLog._id,
       action: "out",
     });
@@ -217,6 +247,7 @@ export async function POST(req: NextRequest) {
     }
 
     log = await Log.create({
+      teamId,
       locationId: checkinLog.locationId,
       locationType: checkinLog.locationType,
       sessionToken: checkinLog.sessionToken,

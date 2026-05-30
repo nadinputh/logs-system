@@ -32,6 +32,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           role: user.role,
+          activeTeamId: user.activeTeamId?.toString() ?? null,
         };
       },
     }),
@@ -57,22 +58,32 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           role: user.role,
+          activeTeamId: user.activeTeamId?.toString() ?? null,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.activeTeamId = (user as any).activeTeamId ?? null;
       }
+
+      if (trigger === "update") {
+        token.activeTeamId =
+          (session as any)?.activeTeamId ?? token.activeTeamId ?? null;
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
         (session.user as any).id = token.id as string;
         (session.user as any).role = token.role as string;
+        (session.user as any).activeTeamId =
+          (token as any).activeTeamId ?? null;
       }
       return session;
     },

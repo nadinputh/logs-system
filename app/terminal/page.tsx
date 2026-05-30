@@ -95,6 +95,7 @@ export default function TerminalPage() {
                   setLocationId(e.target.value)
                   saveLocation(e.target.value, locationType)
                 }}
+                required
               />
               <Description>MongoDB ObjectId of the configured location.</Description>
             </div>
@@ -108,6 +109,7 @@ export default function TerminalPage() {
                   setLocationType(nextLocationType)
                   saveLocation(locationId, nextLocationType)
                 }}
+                required
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>

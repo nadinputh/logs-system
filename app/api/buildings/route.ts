@@ -1,28 +1,39 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { connectDB } from '@/lib/db'
-import { Building } from '@/lib/models/Building'
-import { requireAuth } from '@/lib/middleware/auth'
-import { CreateBuildingSchema } from '@/lib/validations/location'
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "@/lib/db";
+import { Building } from "@/lib/models/Building";
+import { requireTeamPermission } from "@/lib/middleware/auth";
+import { CreateBuildingSchema } from "@/lib/validations/location";
 
-export const runtime = 'nodejs'
+export const runtime = "nodejs";
 
 export async function GET() {
-  await connectDB()
-  const buildings = await Building.find({}).sort({ name: 1 }).lean()
-  return NextResponse.json(buildings)
+  const auth = await requireTeamPermission("locations.read");
+  if (auth.error || !auth.teamId) return auth.error;
+
+  await connectDB();
+  const buildings = await Building.find({ teamId: auth.teamId })
+    .sort({ name: 1 })
+    .lean();
+  return NextResponse.json(buildings);
 }
 
 export async function POST(req: NextRequest) {
-  const { error } = await requireAuth('admin')
-  if (error) return error
+  const auth = await requireTeamPermission("locations.write");
+  if (auth.error || !auth.teamId || !auth.session?.user) return auth.error;
 
-  const body = await req.json()
-  const parsed = CreateBuildingSchema.safeParse(body)
+  const body = await req.json();
+  const parsed = CreateBuildingSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 },
+    );
   }
 
-  await connectDB()
-  const building = await Building.create(parsed.data)
-  return NextResponse.json(building, { status: 201 })
+  await connectDB();
+  const building = await Building.create({
+    ...parsed.data,
+    teamId: auth.teamId,
+  });
+  return NextResponse.json(building, { status: 201 });
 }

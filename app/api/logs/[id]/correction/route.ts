@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { AuditLog } from "@/lib/models/AuditLog";
+import { requireTeamPermission } from "@/lib/middleware/auth";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -25,10 +24,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user || (session.user as any).role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const auth = await requireTeamPermission("logs.correct");
+  if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;
 
   const body = await req.json();
   const parsed = CorrectionSchema.safeParse(body);
@@ -41,7 +38,7 @@ export async function POST(
 
   await connectDB();
 
-  const log = await Log.findById(id).lean();
+  const log = await Log.findOne({ _id: id, teamId: auth.teamId }).lean();
   if (!log) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const { field, newValue, reasonForChange } = parsed.data;
@@ -55,8 +52,9 @@ export async function POST(
   }
 
   const auditEntry = await AuditLog.create({
+    teamId: auth.teamId,
     logId: log._id,
-    modifiedByUserId: (session.user as any).id,
+    modifiedByUserId: (auth.session.user as any).id,
     field,
     originalValue,
     newValue,

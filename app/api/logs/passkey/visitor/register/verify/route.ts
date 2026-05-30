@@ -3,17 +3,22 @@ import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential";
 import { VisitorPasskeyChallenge } from "@/lib/models/VisitorPasskeyChallenge";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
   response: z.any(),
+  locationId: z.string().min(1),
+  locationType: z.enum(["building", "floor", "room"]),
   sessionToken: z.string().uuid(),
   visitorName: z.string().optional(),
   visitorEmail: z.string().email().optional(),
   visitorPhone: z.string().max(30).optional(),
-  visitorGender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional(),
+  visitorGender: z
+    .enum(["male", "female", "non_binary", "prefer_not_to_say"])
+    .optional(),
   visitPurpose: z.string().max(200).optional(),
 });
 
@@ -27,11 +32,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { response, sessionToken, visitorName, visitorEmail, visitorPhone, visitorGender, visitPurpose } = parsed.data;
+  const {
+    response,
+    locationId,
+    locationType,
+    sessionToken,
+    visitorName,
+    visitorEmail,
+    visitorPhone,
+    visitorGender,
+    visitPurpose,
+  } = parsed.data;
 
   await connectDB();
 
-  const challengeDoc = await VisitorPasskeyChallenge.findOne({ sessionToken });
+  const location = await findOwnedLocationByType(
+    locationType as LocationType,
+    locationId,
+  );
+  if (!location) {
+    return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
+  const teamId = location.teamId.toString();
+
+  const challengeDoc = await VisitorPasskeyChallenge.findOne({
+    teamId,
+    sessionToken,
+  });
   if (!challengeDoc) {
     return NextResponse.json(
       { error: "No pending registration challenge" },
@@ -61,6 +88,7 @@ export async function POST(req: NextRequest) {
   const { credential } = verification.registrationInfo;
 
   await VisitorPasskeyCredential.create({
+    teamId,
     sessionToken,
     credentialId: credential.id,
     publicKey: Buffer.from(credential.publicKey).toString("base64url"),

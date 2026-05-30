@@ -1,36 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
-import { Building } from "@/lib/models/Building";
-import { Floor } from "@/lib/models/Floor";
-import { Room } from "@/lib/models/Room";
+import { TeamMember } from "@/lib/models/TeamMember";
 import { CreateLogSchema } from "@/lib/validations/log";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { resolveLocationLabels } from "@/lib/locationLabels";
+import {
+  requireTeamAccess,
+  requireTeamPermission,
+} from "@/lib/middleware/auth";
 
 export const runtime = "nodejs";
-
-async function getLocationCheckInMode(
-  locationType: string,
-  locationId: string,
-): Promise<"click" | "passkey"> {
-  const model =
-    locationType === "room"
-      ? Room
-      : locationType === "floor"
-        ? Floor
-        : locationType === "building"
-          ? Building
-          : null;
-  if (!model) return "click";
-  const doc: any = await (model as any)
-    .findById(locationId)
-    .select("checkInMode")
-    .lean();
-  return (doc?.checkInMode as "click" | "passkey") ?? "click";
-}
 
 function getClientIp(req: NextRequest): string {
   return (
@@ -41,18 +22,16 @@ function getClientIp(req: NextRequest): string {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireTeamPermission("logs.read");
+  if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;
 
-  await connectDB();
-  const userId = (session.user as any).id;
-  const role = (session.user as any).role;
+  const userId = (auth.session.user as any).id;
+  const role = (auth.session.user as any).role;
 
   const query =
     role === "admin"
-      ? { action: "in" as const }
-      : { userId, action: "in" as const };
+      ? { teamId: auth.teamId, action: "in" as const }
+      : { teamId: auth.teamId, userId, action: "in" as const };
   const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1");
   const limit = 50;
 
@@ -67,6 +46,7 @@ export async function GET(req: NextRequest) {
 
   const checkinIds = logs.map((l: any) => l._id);
   const checkouts = await Log.find({
+    teamId: auth.teamId,
     relatedLogId: { $in: checkinIds },
     action: "out",
   })
@@ -82,6 +62,7 @@ export async function GET(req: NextRequest) {
       locationType: l.locationType,
       locationId: l.locationId,
     })),
+    auth.teamId,
   );
 
   const enriched = logs.map((l: any) => {
@@ -125,7 +106,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const session = await getServerSession(authOptions);
   await connectDB();
 
   const {
@@ -143,11 +123,21 @@ export async function POST(req: NextRequest) {
     geofenceStatus,
   } = parsed.data;
 
+  const location = await findOwnedLocationByType(
+    locationType as LocationType,
+    locationId,
+  );
+  if (!location) {
+    return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
+
+  const teamId = location.teamId.toString();
+
   const ipAddress = getClientIp(req);
   const userAgent = req.headers.get("user-agent") ?? undefined;
 
   // Enforce per-location passkey policy
-  const mode = await getLocationCheckInMode(locationType, locationId);
+  const mode = location.checkInMode ?? "click";
   if (mode === "passkey") {
     return NextResponse.json(
       {
@@ -158,8 +148,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const auth = await requireTeamPermission("logs.write", { teamId });
+  const actorSession = auth.session?.user ? auth.session : null;
+  if (auth.error && actorSession) return auth.error;
+
+  const actorUserId = actorSession ? (actorSession.user as any).id : undefined;
+  if (actorUserId) {
+    const membership = await TeamMember.findOne({
+      teamId,
+      userId: actorUserId,
+      status: "active",
+    })
+      .select("_id")
+      .lean();
+    if (!membership) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
   // Open check-in detection (append-only model)
   const lastCheckin = await Log.findOne({
+    teamId,
     locationId,
     locationType,
     sessionToken,
@@ -168,6 +177,7 @@ export async function POST(req: NextRequest) {
 
   if (lastCheckin) {
     const existingCheckout = await Log.findOne({
+      teamId,
       relatedLogId: lastCheckin._id,
       action: "out",
     });
@@ -180,6 +190,7 @@ export async function POST(req: NextRequest) {
   }
 
   const log = await Log.create({
+    teamId,
     locationId,
     locationType,
     sessionToken,
@@ -188,7 +199,7 @@ export async function POST(req: NextRequest) {
     visitorPhone: visitorPhone ?? undefined,
     visitorGender: visitorGender ?? undefined,
     visitPurpose: visitPurpose ?? undefined,
-    userId: session?.user ? (session.user as any).id : undefined,
+    userId: actorUserId ?? undefined,
     deviceId: deviceId ?? undefined,
     ipAddress,
     userAgent,

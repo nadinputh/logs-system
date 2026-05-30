@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Description } from '@/components/ui/description'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -428,14 +427,13 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="visitor-contact">Email or phone</Label>
+                <Label htmlFor="visitor-contact">Email or phone (optional)</Label>
                 <Input
                   id="visitor-contact"
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   placeholder="you@example.com or +1 555…"
                 />
-                <Description>Optional</Description>
               </div>
               <Button
                 type="submit"
@@ -459,7 +457,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             <div className="space-y-3.5">
               <div className="space-y-1.5">
                 <Label htmlFor="visit-purpose">
-                  Purpose of visit
+                  Purpose of visit (optional)
                 </Label>
                 <Input
                   id="visit-purpose"
@@ -469,7 +467,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="visitor-gender">Gender</Label>
+                <Label htmlFor="visitor-gender">Gender (optional)</Label>
                 <Select value={gender} onValueChange={v => setGender(v ?? '')}>
                   <SelectTrigger id="visitor-gender" className="w-full">
                     <SelectValue placeholder="Select…">

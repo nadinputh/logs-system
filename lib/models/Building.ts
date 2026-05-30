@@ -1,8 +1,9 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
 export type CheckInMode = "click" | "passkey";
 
 export interface IBuilding extends Document {
+  teamId: Types.ObjectId;
   name: string;
   address: string;
   description?: string;
@@ -13,6 +14,7 @@ export interface IBuilding extends Document {
 
 const BuildingSchema = new Schema<IBuilding>(
   {
+    teamId: { type: Schema.Types.ObjectId, ref: "Team", required: true },
     name: { type: String, required: true, trim: true },
     address: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
@@ -21,9 +23,12 @@ const BuildingSchema = new Schema<IBuilding>(
   { timestamps: true },
 );
 
+BuildingSchema.index({ teamId: 1, name: 1 });
+
 if (
   mongoose.models.Building &&
-  !mongoose.models.Building.schema.path("checkInMode")
+  (!mongoose.models.Building.schema.path("checkInMode") ||
+    !mongoose.models.Building.schema.path("teamId"))
 ) {
   delete mongoose.models.Building;
 }

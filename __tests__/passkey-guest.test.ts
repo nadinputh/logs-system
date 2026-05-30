@@ -30,6 +30,7 @@ function makeReq(
 
 const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
 const LOCATION_ID = "507f1f77bcf86cd799439011";
+const TEAM_ID = "507f1f77bcf86cd799439012";
 
 // ─── shared mock reset ───────────────────────────────────────────────────────
 
@@ -113,6 +114,9 @@ describe("POST /api/logs/passkey/visitor/register/options", () => {
         create: vi.fn().mockResolvedValue({}),
       },
     }));
+    vi.doMock("@/lib/locationOwnership", () => ({
+      findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
+    }));
     vi.doMock("@simplewebauthn/server", () => ({
       generateRegistrationOptions: vi.fn().mockResolvedValue({
         challenge: "mock-challenge-base64url",
@@ -132,7 +136,12 @@ describe("POST /api/logs/passkey/visitor/register/options", () => {
 
   it("returns 200 with registration options for a valid sessionToken", async () => {
     const POST = await setupMocks();
-    const req = makeReq({ sessionToken: VALID_UUID, visitorName: "Alice" });
+    const req = makeReq({
+      locationId: LOCATION_ID,
+      locationType: "room",
+      sessionToken: VALID_UUID,
+      visitorName: "Alice",
+    });
     const res = await POST(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -141,7 +150,11 @@ describe("POST /api/logs/passkey/visitor/register/options", () => {
 
   it("returns 400 for an invalid (non-UUID) sessionToken", async () => {
     const POST = await setupMocks();
-    const req = makeReq({ sessionToken: "not-a-uuid" });
+    const req = makeReq({
+      locationId: LOCATION_ID,
+      locationType: "room",
+      sessionToken: "not-a-uuid",
+    });
     const res = await POST(req);
     expect(res.status).toBe(400);
   });
@@ -171,6 +184,9 @@ describe("POST /api/logs/passkey/visitor/register/options", () => {
         create: vi.fn().mockResolvedValue({}),
       },
     }));
+    vi.doMock("@/lib/locationOwnership", () => ({
+      findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
+    }));
     const generateRegistrationOptions = vi
       .fn()
       .mockResolvedValue({ challenge: "c" });
@@ -180,7 +196,13 @@ describe("POST /api/logs/passkey/visitor/register/options", () => {
 
     const { POST } =
       await import("@/app/api/logs/passkey/visitor/register/options/route");
-    await POST(makeReq({ sessionToken: VALID_UUID }));
+    await POST(
+      makeReq({
+        locationId: LOCATION_ID,
+        locationType: "room",
+        sessionToken: VALID_UUID,
+      }),
+    );
 
     expect(generateRegistrationOptions).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -199,6 +221,7 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
   const CHALLENGE_DOC = {
     _id: "ch-id",
     challenge: "base64-challenge",
+    teamId: TEAM_ID,
     sessionToken: VALID_UUID,
   };
 
@@ -215,6 +238,9 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
         findOne: vi.fn().mockResolvedValue(challengeDoc),
         deleteOne: vi.fn().mockResolvedValue({}),
       },
+    }));
+    vi.doMock("@/lib/locationOwnership", () => ({
+      findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
     }));
     vi.doMock("@/lib/models/VisitorPasskeyCredential", () => ({
       VisitorPasskeyCredential: {
@@ -243,7 +269,12 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
 
   it("returns { verified: true } on successful registration", async () => {
     const POST = await setupMocks();
-    const req = makeReq({ response: MOCK_RESPONSE, sessionToken: VALID_UUID });
+    const req = makeReq({
+      response: MOCK_RESPONSE,
+      locationId: LOCATION_ID,
+      locationType: "room",
+      sessionToken: VALID_UUID,
+    });
     const res = await POST(req);
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -252,7 +283,12 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
 
   it("returns 400 when no pending challenge exists", async () => {
     const POST = await setupMocks({ challengeDoc: null });
-    const req = makeReq({ response: MOCK_RESPONSE, sessionToken: VALID_UUID });
+    const req = makeReq({
+      response: MOCK_RESPONSE,
+      locationId: LOCATION_ID,
+      locationType: "room",
+      sessionToken: VALID_UUID,
+    });
     const res = await POST(req);
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -261,7 +297,12 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
 
   it("returns 400 when verification fails", async () => {
     const POST = await setupMocks({ verified: false });
-    const req = makeReq({ response: MOCK_RESPONSE, sessionToken: VALID_UUID });
+    const req = makeReq({
+      response: MOCK_RESPONSE,
+      locationId: LOCATION_ID,
+      locationType: "room",
+      sessionToken: VALID_UUID,
+    });
     const res = await POST(req);
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -270,7 +311,12 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
 
   it("returns 400 when sessionToken is not a UUID", async () => {
     const POST = await setupMocks();
-    const req = makeReq({ response: MOCK_RESPONSE, sessionToken: "bad" });
+    const req = makeReq({
+      response: MOCK_RESPONSE,
+      locationId: LOCATION_ID,
+      locationType: "room",
+      sessionToken: "bad",
+    });
     const res = await POST(req);
     expect(res.status).toBe(400);
   });
@@ -289,6 +335,9 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
     vi.doMock("@/lib/models/VisitorPasskeyCredential", () => ({
       VisitorPasskeyCredential: { create: vi.fn().mockResolvedValue({}) },
     }));
+    vi.doMock("@/lib/locationOwnership", () => ({
+      findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
+    }));
     vi.doMock("@simplewebauthn/server", () => ({
       verifyRegistrationResponse: vi.fn().mockResolvedValue({
         verified: true,
@@ -304,7 +353,14 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
     }));
     const { POST } =
       await import("@/app/api/logs/passkey/visitor/register/verify/route");
-    await POST(makeReq({ response: MOCK_RESPONSE, sessionToken: VALID_UUID }));
+    await POST(
+      makeReq({
+        response: MOCK_RESPONSE,
+        locationId: LOCATION_ID,
+        locationType: "room",
+        sessionToken: VALID_UUID,
+      }),
+    );
     expect(deleteOne).toHaveBeenCalledWith({ _id: "ch-id" });
   });
 });
@@ -331,6 +387,9 @@ describe("POST /api/logs/passkey/challenge", () => {
         deleteMany: vi.fn().mockResolvedValue({}),
         create: vi.fn().mockResolvedValue({}),
       },
+    }));
+    vi.doMock("@/lib/locationOwnership", () => ({
+      findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
     }));
     vi.doMock("@simplewebauthn/server", () => ({
       generateAuthenticationOptions: vi.fn().mockResolvedValue({
@@ -364,6 +423,9 @@ describe("POST /api/logs/passkey/challenge", () => {
         create: vi.fn().mockResolvedValue({}),
       },
     }));
+    vi.doMock("@/lib/locationOwnership", () => ({
+      findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
+    }));
     vi.doMock("@simplewebauthn/server", () => ({
       generateAuthenticationOptions: vi
         .fn()
@@ -372,6 +434,7 @@ describe("POST /api/logs/passkey/challenge", () => {
     const { POST } = await import("@/app/api/logs/passkey/challenge/route");
     await POST(makeReq(VALID_BODY));
     expect(deleteMany).toHaveBeenCalledWith({
+      teamId: TEAM_ID,
       sessionToken: VALID_UUID,
       action: "in",
     });
@@ -414,6 +477,7 @@ const VISITOR_CRED = {
 const INTENT_DOC = {
   _id: "intent-id",
   challenge: "stored-challenge",
+  teamId: TEAM_ID,
   locationId: LOCATION_ID,
   locationType: "room",
   action: "in",
@@ -611,6 +675,7 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
 describe("POST /api/logs/passkey/verify — check-out", () => {
   const CHECK_IN_LOG = {
     _id: "checkin-log-id",
+    teamId: TEAM_ID,
     action: "in",
     locationId: LOCATION_ID,
     locationType: "room",

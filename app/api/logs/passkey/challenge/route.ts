@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { PasskeyCheckInChallenge } from "@/lib/models/PasskeyCheckInChallenge";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
 
 export const runtime = "nodejs";
@@ -36,8 +37,17 @@ export async function POST(req: NextRequest) {
 
   await connectDB();
 
+  const location = await findOwnedLocationByType(
+    locationType as LocationType,
+    locationId,
+  );
+  if (!location) {
+    return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
+  const teamId = location.teamId.toString();
+
   // Remove any stale pending challenge for this session + action (e.g. user cancelled then retried)
-  await PasskeyCheckInChallenge.deleteMany({ sessionToken, action });
+  await PasskeyCheckInChallenge.deleteMany({ teamId, sessionToken, action });
 
   const rpID = new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000")
     .hostname;
@@ -51,6 +61,7 @@ export async function POST(req: NextRequest) {
 
   await PasskeyCheckInChallenge.create({
     challenge: options.challenge,
+    teamId,
     locationId,
     locationType,
     action,

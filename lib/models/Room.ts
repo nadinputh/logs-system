@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
 export interface IRoom extends Document {
+  teamId: Types.ObjectId;
   floorId: Types.ObjectId;
   buildingId: Types.ObjectId;
   name: string;
@@ -15,6 +16,12 @@ export interface IRoom extends Document {
 
 const RoomSchema = new Schema<IRoom>(
   {
+    teamId: {
+      type: Schema.Types.ObjectId,
+      ref: "Team",
+      required: true,
+      index: true,
+    },
     floorId: {
       type: Schema.Types.ObjectId,
       ref: "Floor",
@@ -37,7 +44,14 @@ const RoomSchema = new Schema<IRoom>(
   { timestamps: true },
 );
 
-if (mongoose.models.Room && !mongoose.models.Room.schema.path("checkInMode")) {
+RoomSchema.index({ teamId: 1, floorId: 1, number: 1 });
+RoomSchema.index({ teamId: 1, buildingId: 1, number: 1 });
+
+if (
+  mongoose.models.Room &&
+  (!mongoose.models.Room.schema.path("checkInMode") ||
+    !mongoose.models.Room.schema.path("teamId"))
+) {
   delete mongoose.models.Room;
 }
 

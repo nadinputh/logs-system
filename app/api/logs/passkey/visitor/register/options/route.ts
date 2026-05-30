@@ -4,16 +4,21 @@ import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential";
 import { VisitorPasskeyChallenge } from "@/lib/models/VisitorPasskeyChallenge";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
+  locationId: z.string().min(1),
+  locationType: z.enum(["building", "floor", "room"]),
   sessionToken: z.string().uuid(),
   visitorName: z.string().optional(),
   visitorEmail: z.string().email().optional(),
   visitorPhone: z.string().max(30).optional(),
-  visitorGender: z.enum(["male", "female", "non_binary", "prefer_not_to_say"]).optional(),
+  visitorGender: z
+    .enum(["male", "female", "non_binary", "prefer_not_to_say"])
+    .optional(),
   visitPurpose: z.string().max(200).optional(),
 });
 
@@ -27,11 +32,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { sessionToken, visitorName } = parsed.data;
+  const { locationId, locationType, sessionToken, visitorName } = parsed.data;
 
   await connectDB();
 
-  const existing = await VisitorPasskeyCredential.find({ sessionToken }).lean();
+  const location = await findOwnedLocationByType(
+    locationType as LocationType,
+    locationId,
+  );
+  if (!location) {
+    return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
+
+  const teamId = location.teamId.toString();
+
+  const existing = await VisitorPasskeyCredential.find({
+    teamId,
+    sessionToken,
+  }).lean();
 
   // Derive a deterministic 16-byte userID from the sessionToken
   const userID = createHash("sha256")
@@ -61,8 +79,9 @@ export async function POST(req: NextRequest) {
   });
 
   // Remove any stale pending challenge for this visitor session
-  await VisitorPasskeyChallenge.deleteMany({ sessionToken });
+  await VisitorPasskeyChallenge.deleteMany({ teamId, sessionToken });
   await VisitorPasskeyChallenge.create({
+    teamId,
     sessionToken,
     challenge: options.challenge,
   });

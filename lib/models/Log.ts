@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model, Types } from "mongoose";
 export type LocationType = "building" | "floor" | "room";
 
 export interface ILog extends Document {
+  teamId: Types.ObjectId;
   locationId: Types.ObjectId;
   locationType: LocationType;
   userId?: Types.ObjectId;
@@ -29,6 +30,7 @@ export interface ILog extends Document {
 
 const LogSchema = new Schema<ILog>(
   {
+    teamId: { type: Schema.Types.ObjectId, ref: "Team", required: true },
     locationId: { type: Schema.Types.ObjectId, required: true },
     locationType: {
       type: String,
@@ -57,12 +59,18 @@ const LogSchema = new Schema<ILog>(
   { timestamps: true },
 );
 
-LogSchema.index({ locationType: 1, locationId: 1, action: 1 });
+LogSchema.index({ teamId: 1, locationType: 1, locationId: 1, action: 1 });
+LogSchema.index({ teamId: 1, timestamp: -1 });
+LogSchema.index({ teamId: 1, relatedLogId: 1 });
 LogSchema.index({ sessionToken: 1, action: 1 });
 LogSchema.index({ userId: 1 });
 LogSchema.index({ questCardId: 1 });
 LogSchema.index({ timestamp: -1 });
 LogSchema.index({ relatedLogId: 1 });
+
+if (mongoose.models.Log && !mongoose.models.Log.schema.path("teamId")) {
+  delete mongoose.models.Log;
+}
 
 export const Log: Model<ILog> =
   mongoose.models.Log || mongoose.model<ILog>("Log", LogSchema);

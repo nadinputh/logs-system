@@ -12,7 +12,10 @@ async function getQuestData(token: string) {
     await connectDB()
     const card = await QuestCard.findOne({ qrToken: token, isActive: true }).lean<any>()
     if (!card) return null
-    const progress = await QuestProgress.findOne({ questCardId: card._id }).lean<any>()
+    const progress = await QuestProgress.findOne({
+      teamId: card.teamId,
+      questCardId: card._id,
+    }).lean<any>()
     return JSON.parse(JSON.stringify({ card, progress: progress ?? null }))
   } catch { return null }
 }

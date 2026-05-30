@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Description } from '@/components/ui/description'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -92,9 +91,8 @@ export default function AdminBuildingsPage() {
                 <Input value={address} onChange={e => setAddress(e.target.value)} required placeholder="123 Main St" />
               </div>
               <div className="space-y-1.5">
-                <Label>Description</Label>
+                <Label>Description (optional)</Label>
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Brief description…" />
-                <Description>Optional</Description>
               </div>
               <Button type="submit" className="w-full" disabled={saving}>
                 {saving ? 'Creating…' : 'Create Building'}

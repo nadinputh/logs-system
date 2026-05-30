@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { Types } from "mongoose";
-import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { LocationType, resolveLocationLabels } from "@/lib/locationLabels";
+import { requireTeamPermission } from "@/lib/middleware/auth";
 
 export const runtime = "nodejs";
 
@@ -39,16 +38,17 @@ function countFromAggregate(result: Array<{ count: number }>) {
 }
 
 export async function GET(_req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireTeamPermission("dashboard.read");
+  if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;
 
   await connectDB();
 
-  const role = (session.user as any).role;
-  const userId = (session.user as any).id;
-  const scopedMatch: Record<string, unknown> = { action: "in" };
+  const role = (auth.session.user as any).role;
+  const userId = (auth.session.user as any).id;
+  const scopedMatch: Record<string, unknown> = {
+    teamId: new Types.ObjectId(auth.teamId),
+    action: "in",
+  };
 
   if (role !== "admin") {
     if (!Types.ObjectId.isValid(userId)) {
@@ -200,6 +200,7 @@ export async function GET(_req: NextRequest) {
       locationType: item._id.locationType,
       locationId: item._id.locationId,
     })),
+    auth.teamId,
   );
 
   const topLocations = topLocationsRaw.map((item) => {

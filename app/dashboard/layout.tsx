@@ -1,6 +1,9 @@
 import NavBar from '@/components/NavBar'
+import { requireTeamPageAccess } from '@/lib/server/requireTeamPageAccess'
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  await requireTeamPageAccess('member', '/dashboard')
+
   return (
     <div className="min-h-screen bg-background">
       <NavBar />
