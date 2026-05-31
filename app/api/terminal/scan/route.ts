@@ -5,6 +5,7 @@ import { User } from "@/lib/models/User";
 import { verifySessionQrToken } from "@/lib/jwt";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { requireTeamPermission } from "@/lib/middleware/auth";
+import { publishLogCreated } from "@/lib/realtime/logEvents";
 
 export const runtime = "nodejs";
 
@@ -94,6 +95,8 @@ export async function POST(req: NextRequest) {
     action: "in",
     timestamp: new Date(),
   });
+
+  publishLogCreated(log);
 
   return NextResponse.json(log, { status: 201 });
 }

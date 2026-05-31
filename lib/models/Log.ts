@@ -22,6 +22,7 @@ export interface ILog extends Document {
   relatedLogId?: Types.ObjectId;
   autoCheckedOut?: boolean;
   passkeyVerified?: boolean;
+  passkeyCredentialId?: string;
   photo?: string;
   questCardId?: Types.ObjectId;
   createdAt: Date;
@@ -53,6 +54,7 @@ const LogSchema = new Schema<ILog>(
     relatedLogId: { type: Schema.Types.ObjectId, ref: "Log" },
     autoCheckedOut: { type: Boolean, default: false },
     passkeyVerified: { type: Boolean, default: false },
+    passkeyCredentialId: { type: String },
     photo: { type: String, select: false },
     questCardId: { type: Schema.Types.ObjectId, ref: "QuestCard" },
   },

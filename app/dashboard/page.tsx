@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { Card, CardContent } from '@/components/ui/card'
 import { fetchJsonOnce } from '@/lib/clientFetch'
+import { useLogRealtime } from '@/lib/useLogRealtime'
 
 interface Stats { totalToday: number; currentlyIn: number; totalAll: number; checkedOut: number }
 
@@ -324,14 +325,20 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const isAdmin = (session?.user as any)?.role === 'admin'
 
-  useEffect(() => {
-    fetchJsonOnce<Partial<DashboardMetrics> & { stats?: Partial<Stats> }>('/api/dashboard/metrics')
-      .then(data => {
-        setMetrics({ ...emptyMetrics, ...data, stats: { ...emptyStats, ...(data.stats ?? {}) } })
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+  const refreshMetrics = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+
+    try {
+      const data = await fetchJsonOnce<Partial<DashboardMetrics> & { stats?: Partial<Stats> }>('/api/dashboard/metrics')
+      setMetrics({ ...emptyMetrics, ...data, stats: { ...emptyStats, ...(data.stats ?? {}) } })
+    } catch {
+    } finally {
+      if (showLoading) setLoading(false)
+    }
   }, [])
+
+  useEffect(() => { void refreshMetrics() }, [refreshMetrics])
+  useLogRealtime(() => { void refreshMetrics(false) })
 
   const { stats } = metrics
   const statusBreakdown = [

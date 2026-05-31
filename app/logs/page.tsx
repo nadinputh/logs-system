@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { EyeIcon, MapPin, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { fetchJsonOnce } from '@/lib/clientFetch'
+import { useLogRealtime } from '@/lib/useLogRealtime'
 
 interface LogEntry {
   _id: string
@@ -146,11 +147,20 @@ export default function LogsPage() {
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchJsonOnce<{ logs?: LogEntry[] }>('/api/logs')
-      .then(data => { setLogs(data.logs ?? []); setLoading(false) })
-      .catch(() => setLoading(false))
+  const fetchLogs = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+
+    try {
+      const data = await fetchJsonOnce<{ logs?: LogEntry[] }>('/api/logs')
+      setLogs(data.logs ?? [])
+    } catch {
+    } finally {
+      if (showLoading) setLoading(false)
+    }
   }, [])
+
+  useEffect(() => { void fetchLogs() }, [fetchLogs])
+  useLogRealtime(() => { void fetchLogs(false) })
 
   function durationLabel(entry: LogEntry) {
     if (!entry.checkoutAt) return null

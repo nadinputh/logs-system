@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
+import { publishLogCreated } from "@/lib/realtime/logEvents";
 
 export const runtime = "nodejs";
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Append-only: create OUT documents for each stale check-in
-  await Log.insertMany(
+  const checkoutLogs = await Log.insertMany(
     truly_stale.map((checkin: any) => ({
       teamId: checkin.teamId,
       locationId: checkin.locationId,
@@ -64,6 +65,8 @@ export async function GET(req: NextRequest) {
       timestamp: new Date(),
     })),
   );
+
+  checkoutLogs.forEach((log) => publishLogCreated(log));
 
   return NextResponse.json({ cleaned: truly_stale.length });
 }

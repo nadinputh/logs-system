@@ -22,6 +22,27 @@ const Schema = z.object({
   visitPurpose: z.string().max(200).optional(),
 });
 
+function buildVisitorPasskeyNames({
+  visitorName,
+  visitorEmail,
+  visitorPhone,
+  sessionToken,
+}: {
+  visitorName?: string;
+  visitorEmail?: string;
+  visitorPhone?: string;
+  sessionToken: string;
+}) {
+  const contact = visitorEmail?.trim() || visitorPhone?.trim();
+  const name = visitorName?.trim();
+
+  return {
+    userName: contact || name || `visitor-${sessionToken.slice(0, 8)}`,
+    userDisplayName:
+      name && contact ? `${name} (${contact})` : name || contact || "Visitor",
+  };
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = Schema.safeParse(body);
@@ -32,7 +53,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { locationId, locationType, sessionToken, visitorName } = parsed.data;
+  const {
+    locationId,
+    locationType,
+    sessionToken,
+    visitorName,
+    visitorEmail,
+    visitorPhone,
+  } = parsed.data;
 
   await connectDB();
 
@@ -59,13 +87,19 @@ export async function POST(req: NextRequest) {
 
   const rpID = new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000")
     .hostname;
+  const { userName, userDisplayName } = buildVisitorPasskeyNames({
+    visitorName,
+    visitorEmail,
+    visitorPhone,
+    sessionToken,
+  });
 
   const options = await generateRegistrationOptions({
     rpName: "Check-In System",
     rpID,
     userID,
-    userName: sessionToken.slice(0, 8),
-    userDisplayName: visitorName ?? "Visitor",
+    userName,
+    userDisplayName,
     attestationType: "none",
     excludeCredentials: existing.map((c: any) => ({
       id: c.credentialId as string,

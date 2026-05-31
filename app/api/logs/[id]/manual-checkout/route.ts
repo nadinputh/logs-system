@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
-import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
+import { AuditLog } from "@/lib/models/AuditLog";
+import { requireTeamPermission } from "@/lib/middleware/auth";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 
 export const runtime = "nodejs";
+
+const ManualCheckoutSchema = z.object({
+  reasonForChange: z.string().min(3).max(500),
+});
 
 function getClientIp(req: NextRequest): string {
   return (
@@ -14,17 +20,19 @@ function getClientIp(req: NextRequest): string {
   );
 }
 
-export async function PATCH(
+export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const body = await req.json();
-  const { sessionToken } = body;
+  const auth = await requireTeamPermission("logs.manualCheckout");
+  if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;
 
-  if (!sessionToken) {
+  const body = await req.json();
+  const parsed = ManualCheckoutSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "sessionToken required" },
+      { error: parsed.error.flatten() },
       { status: 400 },
     );
   }
@@ -33,43 +41,36 @@ export async function PATCH(
 
   const checkinLog = await Log.findOne({
     _id: id,
-    sessionToken,
+    teamId: auth.teamId,
     action: "in",
   });
-  if (!checkinLog)
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const location = await findOwnedLocationByType(
-    checkinLog.locationType as LocationType,
-    checkinLog.locationId.toString(),
-  );
-  const mode = location?.checkInMode ?? "click";
-  if (mode === "passkey") {
+  if (!checkinLog) {
     return NextResponse.json(
-      {
-        error: "PASSKEY_REQUIRED",
-        message: "This location requires biometric (passkey) check-out.",
-      },
-      { status: 403 },
+      { error: "Check-in log not found" },
+      { status: 404 },
     );
   }
 
   const existing = await Log.findOne({
-    teamId: checkinLog.teamId,
+    teamId: auth.teamId,
     relatedLogId: checkinLog._id,
     action: "out",
   });
-  if (existing)
+  if (existing) {
     return NextResponse.json({ already: true, log: existing }, { status: 200 });
+  }
 
-  // Append-only: create a new OUT document instead of mutating the check-in
   const checkoutLog = await Log.create({
     teamId: checkinLog.teamId,
     locationId: checkinLog.locationId,
     locationType: checkinLog.locationType,
     sessionToken: checkinLog.sessionToken,
-    userId: checkinLog.userId,
+    ...(checkinLog.userId && { userId: checkinLog.userId }),
     visitorName: checkinLog.visitorName,
+    visitorEmail: checkinLog.visitorEmail,
+    visitorPhone: checkinLog.visitorPhone,
+    visitorGender: checkinLog.visitorGender,
+    visitPurpose: checkinLog.visitPurpose,
     deviceId: checkinLog.deviceId,
     ipAddress: getClientIp(req),
     userAgent: req.headers.get("user-agent") ?? undefined,
@@ -78,7 +79,18 @@ export async function PATCH(
     timestamp: new Date(),
   });
 
+  await AuditLog.create({
+    teamId: auth.teamId,
+    logId: checkinLog._id,
+    modifiedByUserId: (auth.session.user as any).id,
+    field: "manualCheckout",
+    originalValue: "open",
+    newValue: checkoutLog._id.toString(),
+    reasonForChange: parsed.data.reasonForChange,
+    timestamp: new Date(),
+  });
+
   publishLogCreated(checkoutLog);
 
-  return NextResponse.json(checkoutLog, { status: 201 });
+  return NextResponse.json({ log: checkoutLog }, { status: 201 });
 }

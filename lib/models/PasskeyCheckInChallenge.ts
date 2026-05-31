@@ -9,6 +9,12 @@ export interface IPasskeyCheckInChallenge extends Document {
   sessionToken: string;
   relatedLogId?: string;
   idempotencyKey: string;
+  visitorName?: string;
+  visitorEmail?: string;
+  visitorPhone?: string;
+  visitorGender?: string;
+  visitPurpose?: string;
+  deviceId?: string;
   createdAt: Date;
 }
 
@@ -22,6 +28,12 @@ const PasskeyCheckInChallengeSchema = new Schema<IPasskeyCheckInChallenge>(
     sessionToken: { type: String, required: true },
     relatedLogId: { type: String },
     idempotencyKey: { type: String, required: true },
+    visitorName: { type: String, trim: true },
+    visitorEmail: { type: String, trim: true },
+    visitorPhone: { type: String, trim: true },
+    visitorGender: { type: String, trim: true },
+    visitPurpose: { type: String, trim: true },
+    deviceId: { type: String },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: false },
@@ -37,7 +49,8 @@ PasskeyCheckInChallengeSchema.index({ teamId: 1, sessionToken: 1, action: 1 });
 
 if (
   mongoose.models.PasskeyCheckInChallenge &&
-  !mongoose.models.PasskeyCheckInChallenge.schema.path("teamId")
+  (!mongoose.models.PasskeyCheckInChallenge.schema.path("teamId") ||
+    !mongoose.models.PasskeyCheckInChallenge.schema.path("deviceId"))
 ) {
   delete mongoose.models.PasskeyCheckInChallenge;
 }

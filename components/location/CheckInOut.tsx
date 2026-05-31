@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/ui/sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { getPredictedAction, formatDuration } from '@/lib/predictive'
+import { useLogRealtime } from '@/lib/useLogRealtime'
 
 const SelfieCapture = dynamic(() => import('@/components/selfie/SelfieCapture'), { ssr: false })
 const QRScanner = dynamic(() => import('@/components/scanner/QRScanner'), { ssr: false })
@@ -32,6 +33,7 @@ interface OpenLog {
   _id: string
   timestamp: string
   visitorName?: string
+  passkeyVerified?: boolean
 }
 
 type Step = 'loading' | 'identity' | 'checkin' | 'selfie' | 'checkedIn' | 'checkedOut' | 'questScan'
@@ -110,6 +112,26 @@ function clearActiveCheckIn(locationId: string) {
   } catch {}
 }
 
+function toOpenLog(log: any, fallbackName?: string): OpenLog | null {
+  const id = log?._id ?? log?.id
+  if (!id) return null
+
+  return {
+    _id: id,
+    timestamp: log?.timestamp ?? new Date().toISOString(),
+    visitorName: log?.visitorName ?? fallbackName,
+    passkeyVerified: log?.passkeyVerified,
+  }
+}
+
+function formatCheckInTime(value: string | Date) {
+  return new Date(value).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 // Split a raw contact string into email or phone fields for the API
 function splitContact(contact?: string): { visitorEmail?: string; visitorPhone?: string } {
   if (!contact) return {}
@@ -139,7 +161,9 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
   const [loading, setLoading] = useState(false)
   const [questRecorded, setQuestRecorded] = useState(false)
   const [visitorPasskeyRegistered, setVisitorPasskeyRegistered] = useState(false)
+  const [passkeySavedThisVisit, setPasskeySavedThisVisit] = useState(false)
   const [checkedInViaPasskey, setCheckedInViaPasskey] = useState(false)
+  const [currentTime, setCurrentTime] = useState(() => new Date())
 
   useEffect(() => {
     const id = getOrCreateDeviceId()
@@ -157,11 +181,46 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
     }
   }, [locationId])
 
+  useEffect(() => {
+    if (step !== 'checkedIn') return
+    setCurrentTime(new Date())
+
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [step])
+
+  useLogRealtime(
+    (event) => {
+      if (event.locationId !== locationId) return
+
+      if (event.action === 'in') {
+        setActiveLogId(event.logId)
+        setOpenLog({ _id: event.logId, timestamp: event.timestamp, visitorName: name })
+        setActiveCheckIn(locationId, event.logId, checkedInViaPasskey)
+        setStep('checkedIn')
+        return
+      }
+
+      if (event.relatedLogId === activeLogId || event.relatedLogId === openLog?._id) {
+        clearActiveCheckIn(locationId)
+        setActiveLogId(null)
+        setOpenLog(null)
+        setStep('checkedOut')
+      }
+    },
+    Boolean(sessionToken),
+    sessionToken
+      ? `/api/realtime/guest-log?locationId=${encodeURIComponent(locationId)}&sessionToken=${encodeURIComponent(sessionToken)}`
+      : '/api/realtime/guest-log',
+  )
+
   async function checkOpenLog(token: string) {
     try {
       const [logRes, pkRes] = await Promise.all([
         fetch(`/api/logs/open?locationId=${locationId}&sessionToken=${token}`),
-        fetch(`/api/logs/passkey/visitor/exists?sessionToken=${encodeURIComponent(token)}`),
+        fetch(
+          `/api/logs/passkey/visitor/exists?sessionToken=${encodeURIComponent(token)}&locationId=${encodeURIComponent(locationId)}&locationType=${encodeURIComponent(location?.locationType ?? '')}`,
+        ),
       ])
       const data = await logRes.json()
       const pkData = await pkRes.json()
@@ -169,6 +228,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
       if (data.openLog) {
         setOpenLog(data.openLog)
         setActiveLogId(data.openLog._id)
+        setPasskeySavedThisVisit(false)
         // Source of truth: localStorage (survives across reloads without mutation of the log doc)
         const stored = getActiveCheckIn(locationId)
         const viaPasskey = stored?.viaPasskey ?? !!data.openLog.passkeyVerified
@@ -203,6 +263,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
   async function handleCheckIn(photo?: string) {
     setLoading(true)
     setCheckedInViaPasskey(false)
+    setPasskeySavedThisVisit(false)
     try {
       const res = await fetch('/api/logs', {
         method: 'POST',
@@ -220,8 +281,13 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         }),
       })
       const data = await res.json()
-      const logId = data.existing ? data.log._id : data._id
+      if (!res.ok) throw new Error(data.error ?? 'Check-in failed')
+      const checkedInLog = data.existing ? data.log : data
+      const logId = checkedInLog?._id ?? checkedInLog?.id
+      const nextOpenLog = toOpenLog(checkedInLog, name)
+      if (!logId) throw new Error('Check-in response missing log ID')
       setActiveLogId(logId)
+      if (nextOpenLog) setOpenLog(nextOpenLog)
       setActiveCheckIn(locationId, logId, false)
 
       if (questToken) {
@@ -564,17 +630,25 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               visitorContact={contact || undefined}
               visitorGender={gender || undefined}
               visitPurpose={purpose || undefined}
-              onAuthenticated={(logId) => {
+              deviceId={deviceId || undefined}
+              onAuthenticated={(logId, log) => {
+                const nextOpenLog = toOpenLog(
+                  log ?? { _id: logId, timestamp: new Date().toISOString(), visitorName: name, passkeyVerified: true },
+                  name,
+                )
                 setActiveLogId(logId)
+                if (nextOpenLog) setOpenLog(nextOpenLog)
                 setActiveCheckIn(locationId, logId, true)
                 if (questToken) recordQuestProgress(logId)
+                setVisitorPasskeyRegistered(true)
+                setPasskeySavedThisVisit(false)
                 setCheckedInViaPasskey(true)
                 setStep('checkedIn')
                 toast.success(`Checked in`)
               }}
               onRegistered={() => {
                 setVisitorPasskeyRegistered(true)
-                handleCheckIn()
+                setPasskeySavedThisVisit(true)
               }}
             />
             </CardContent>
@@ -602,17 +676,19 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         )}
 
         {/* Step: Checked In */}
-        {step === 'checkedIn' && (
+        {step === 'checkedIn' && (() => {
+          const checkoutSuggested = openLog ? getPredictedAction(openLog.timestamp, currentTime) === 'checkout_suggested' : false
+          return (
           <Card>
             <CardContent className="p-4 space-y-3">
             {openLog && (
               <div className="bg-emerald-50 border border-emerald-200/60 rounded-xl px-4 py-3 space-y-1">
                 <p className="text-xs text-emerald-700 font-medium">
-                  Checked in at {new Date(openLog.timestamp).toLocaleTimeString()} · {formatDuration(openLog.timestamp)}
+                  Checked in at {formatCheckInTime(openLog.timestamp)} · {formatDuration(openLog.timestamp, currentTime)}
                 </p>
-                {getPredictedAction(openLog.timestamp) === 'checkout_suggested' && (
+                {checkoutSuggested && (
                   <p className="text-xs font-semibold text-amber-700">
-                    ⏰ Time to check out?
+                    Suggested: time to check out.
                   </p>
                 )}
               </div>
@@ -626,7 +702,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 variant="destructive"
                 className="w-full"
               >
-                {loading ? 'Checking out…' : 'Check Out'}
+                {loading ? 'Checking out…' : checkoutSuggested ? 'Check Out - Suggested' : 'Check Out'}
               </Button>
             )}
             {/* Passkey checkout — only if guest checked in by passkey */}
@@ -641,6 +717,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 visitorContact={contact || undefined}
                 visitorGender={gender || undefined}
                 visitPurpose={purpose || undefined}
+                deviceId={deviceId || undefined}
                 authOnly
                 onAuthenticated={() => {
                   clearActiveCheckIn(locationId)
@@ -651,7 +728,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             )}
 
             {/* Offer to save passkey only if location is click-mode and passkey not yet registered */}
-            {location.checkInMode !== 'passkey' && !visitorPasskeyRegistered && (
+            {location.checkInMode !== 'passkey' && !checkedInViaPasskey && !visitorPasskeyRegistered && (
               <>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground/60">
                   <div className="flex-1 h-px bg-border" />
@@ -667,12 +744,16 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                   visitorContact={contact || undefined}
                   visitorGender={gender || undefined}
                   visitPurpose={purpose || undefined}
+                  deviceId={deviceId || undefined}
                   registerOnly
-                  onRegistered={() => setVisitorPasskeyRegistered(true)}
+                  onRegistered={() => {
+                    setVisitorPasskeyRegistered(true)
+                    setPasskeySavedThisVisit(true)
+                  }}
                 />
               </>
             )}
-            {visitorPasskeyRegistered && (
+            {passkeySavedThisVisit && (
               <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-600 font-medium">
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -708,7 +789,8 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             )}
             </CardContent>
           </Card>
-        )}
+          )
+        })()}
 
         {/* Step: Quest scan */}
         {step === 'questScan' && (

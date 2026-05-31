@@ -14,6 +14,14 @@ const ChallengeSchema = z.object({
   sessionToken: z.string().uuid(),
   relatedLogId: z.string().optional(),
   idempotencyKey: z.string().min(1),
+  visitorName: z.string().min(1).max(100).optional(),
+  visitorEmail: z.string().email().optional(),
+  visitorPhone: z.string().max(30).optional(),
+  visitorGender: z
+    .enum(["male", "female", "non_binary", "prefer_not_to_say"])
+    .optional(),
+  visitPurpose: z.string().max(200).optional(),
+  deviceId: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -33,6 +41,12 @@ export async function POST(req: NextRequest) {
     sessionToken,
     relatedLogId,
     idempotencyKey,
+    visitorName,
+    visitorEmail,
+    visitorPhone,
+    visitorGender,
+    visitPurpose,
+    deviceId,
   } = parsed.data;
 
   await connectDB();
@@ -68,6 +82,12 @@ export async function POST(req: NextRequest) {
     sessionToken,
     relatedLogId,
     idempotencyKey,
+    visitorName: visitorName ?? undefined,
+    visitorEmail: visitorEmail ?? undefined,
+    visitorPhone: visitorPhone ?? undefined,
+    visitorGender: visitorGender ?? undefined,
+    visitPurpose: visitPurpose ?? undefined,
+    deviceId: deviceId ?? undefined,
   });
 
   return NextResponse.json(options);

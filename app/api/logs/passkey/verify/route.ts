@@ -5,6 +5,7 @@ import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
 import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential";
 import { PasskeyCheckInChallenge } from "@/lib/models/PasskeyCheckInChallenge";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
+import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 
 export const runtime = "nodejs";
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     sessionToken,
     relatedLogId,
     idempotencyKey,
-    visitorName,
+    visitorName: bodyVisitorName,
   } = body;
 
   if (
@@ -97,8 +98,22 @@ export async function POST(req: NextRequest) {
 
   // Step 4: Replay idempotency cache if this key was already committed
   const cached = await checkIdempotency(idempotencyKey);
-  if (cached) {
-    return NextResponse.json(cached.body, { status: cached.statusCode });
+  if (cached && action !== "out") {
+    const cachedBody = cached.body as any;
+    const cachedLogId = cachedBody?.log?._id ?? cachedBody?.log?.id;
+    if (cachedLogId) {
+      const cachedCheckout = await Log.findOne({
+        teamId,
+        relatedLogId: cachedLogId,
+        action: "out",
+      })
+        .select("_id")
+        .lean();
+
+      if (!cachedCheckout) {
+        return NextResponse.json(cached.body, { status: cached.statusCode });
+      }
+    }
   }
 
   // Step 5: Resolve credential — try staff first, then visitor
@@ -114,7 +129,10 @@ export async function POST(req: NextRequest) {
 
   if (!staffCred && !visitorCred) {
     return NextResponse.json(
-      { error: "Passkey not registered on this server" },
+      {
+        code: "PASSKEY_NOT_REGISTERED",
+        error: "This passkey is not registered for this team",
+      },
       { status: 401 },
     );
   }
@@ -179,6 +197,7 @@ export async function POST(req: NextRequest) {
 
   const ipAddress = getClientIp(req);
   const userAgent = req.headers.get("user-agent") ?? undefined;
+  const visitorName = intentDoc.visitorName ?? bodyVisitorName;
 
   // Step 9: Write the append-only log entry with passkeyVerified: true
   let log;
@@ -207,11 +226,17 @@ export async function POST(req: NextRequest) {
       locationType,
       sessionToken,
       ...(resolvedUserId && { userId: resolvedUserId }),
-      visitorName,
+      visitorName: visitorName ?? undefined,
+      visitorEmail: intentDoc.visitorEmail ?? undefined,
+      visitorPhone: intentDoc.visitorPhone ?? undefined,
+      visitorGender: intentDoc.visitorGender ?? undefined,
+      visitPurpose: intentDoc.visitPurpose ?? undefined,
+      deviceId: intentDoc.deviceId ?? undefined,
       ipAddress,
       userAgent,
       action: "in",
       passkeyVerified: true,
+      passkeyCredentialId: credId,
       timestamp: new Date(),
     });
   } else {
@@ -233,6 +258,55 @@ export async function POST(req: NextRequest) {
         { error: "Check-in log not found" },
         { status: 404 },
       );
+    }
+
+    if (!checkinLog.passkeyVerified) {
+      return NextResponse.json(
+        {
+          code: "CHECKIN_NOT_PASSKEY_VERIFIED",
+          error: "Original check-in was not passkey verified",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!checkinLog.passkeyCredentialId) {
+      return NextResponse.json(
+        {
+          code: "PASSKEY_CREDENTIAL_CONTEXT_MISSING",
+          error: "Original check-in is missing passkey credential context",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (checkinLog.passkeyCredentialId !== credId) {
+      return NextResponse.json(
+        {
+          code: "PASSKEY_MISMATCH",
+          error: "This is not the same passkey used to check in",
+        },
+        { status: 403 },
+      );
+    }
+
+    if (cached) {
+      const cachedBody = cached.body as any;
+      const cachedLogId = cachedBody?.log?._id ?? cachedBody?.log?.id;
+      if (cachedLogId) {
+        const cachedCheckout = await Log.findOne({
+          _id: cachedLogId,
+          teamId,
+          relatedLogId,
+          action: "out",
+        })
+          .select("_id")
+          .lean();
+
+        if (cachedCheckout) {
+          return NextResponse.json(cached.body, { status: cached.statusCode });
+        }
+      }
     }
 
     const existing = await Log.findOne({
@@ -258,11 +332,13 @@ export async function POST(req: NextRequest) {
       action: "out",
       relatedLogId: checkinLog._id,
       passkeyVerified: true,
+      passkeyCredentialId: credId,
       timestamp: new Date(),
     });
   }
 
   // Step 10: Commit idempotency key so the same ceremony can never write twice
+  publishLogCreated(log);
   const responsePayload = { verified: true, log: log.toObject() };
   await saveIdempotency(idempotencyKey, 201, responsePayload);
 

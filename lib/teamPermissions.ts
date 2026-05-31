@@ -14,6 +14,7 @@ export type TeamPermission =
   | "locations.mode.update"
   | "logs.read"
   | "logs.write"
+  | "logs.manualCheckout"
   | "logs.correct"
   | "dashboard.read"
   | "team.audit.read"
@@ -30,6 +31,7 @@ export const TEAM_PERMISSION_MIN_ROLE: Record<TeamPermission, TeamRole> = {
   "locations.mode.update": "admin",
   "logs.read": "member",
   "logs.write": "member",
+  "logs.manualCheckout": "manager",
   "logs.correct": "admin",
   "dashboard.read": "member",
   "team.audit.read": "admin",

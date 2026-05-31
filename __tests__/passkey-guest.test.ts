@@ -210,6 +210,51 @@ describe("POST /api/logs/passkey/visitor/register/options", () => {
       }),
     );
   });
+
+  it("uses readable visitor identity for passkey account labels", async () => {
+    vi.doMock("@/lib/db", () => ({
+      connectDB: vi.fn().mockResolvedValue(undefined),
+    }));
+    vi.doMock("@/lib/models/VisitorPasskeyCredential", () => ({
+      VisitorPasskeyCredential: {
+        find: vi.fn().mockReturnValue({ lean: () => Promise.resolve([]) }),
+      },
+    }));
+    vi.doMock("@/lib/models/VisitorPasskeyChallenge", () => ({
+      VisitorPasskeyChallenge: {
+        deleteMany: vi.fn().mockResolvedValue({}),
+        create: vi.fn().mockResolvedValue({}),
+      },
+    }));
+    vi.doMock("@/lib/locationOwnership", () => ({
+      findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
+    }));
+    const generateRegistrationOptions = vi
+      .fn()
+      .mockResolvedValue({ challenge: "c" });
+    vi.doMock("@simplewebauthn/server", () => ({
+      generateRegistrationOptions,
+    }));
+
+    const { POST } =
+      await import("@/app/api/logs/passkey/visitor/register/options/route");
+    await POST(
+      makeReq({
+        locationId: LOCATION_ID,
+        locationType: "room",
+        sessionToken: VALID_UUID,
+        visitorName: "Alice Visitor",
+        visitorEmail: "alice@example.com",
+      }),
+    );
+
+    expect(generateRegistrationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userName: "alice@example.com",
+        userDisplayName: "Alice Visitor (alice@example.com)",
+      }),
+    );
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -515,7 +560,8 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
     visitorCred?: unknown;
     existingCheckIn?: unknown;
     existingCheckOut?: unknown;
-    idempotencyHit?: boolean;
+    idempotencyResponse?: { statusCode: number; body: unknown } | null;
+    cachedCheckout?: unknown;
   }) {
     const {
       intentDoc = INTENT_DOC,
@@ -523,7 +569,8 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
       visitorCred = VISITOR_CRED,
       existingCheckIn = null,
       existingCheckOut = null,
-      idempotencyHit = false,
+      idempotencyResponse = null,
+      cachedCheckout = null,
     } = options ?? {};
 
     vi.doMock("@/lib/db", () => ({
@@ -552,40 +599,44 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
       _id: "new-log-id",
       action: "in",
       passkeyVerified: true,
+      passkeyCredentialId: "visitor-cred-id",
       toObject: () => ({
         _id: "new-log-id",
         action: "in",
         passkeyVerified: true,
+        passkeyCredentialId: "visitor-cred-id",
       }),
     };
 
     // Route calls Log.findOne(...).sort({...}) for the open-check-in query.
     // We need findOne to return a thenable with a .sort() method.
-    let firstCall = true;
-    const logFindOne = vi.fn().mockImplementation(() => {
-      if (firstCall) {
-        firstCall = false;
-        // First call: findOne(...).sort(...)
+    const logFindOne = vi.fn().mockImplementation((query?: any) => {
+      if (query?.relatedLogId === "cached-log-id") {
+        return {
+          select: vi.fn().mockReturnValue({
+            lean: vi.fn().mockResolvedValue(cachedCheckout),
+          }),
+        };
+      }
+
+      if (query?.action === "in") {
         const result = existingCheckIn ?? null;
         return { sort: vi.fn().mockResolvedValue(result) };
       }
-      // Second call: findOne({ relatedLogId, action:'out' }) — plain promise
+
       return Promise.resolve(existingCheckOut ?? null);
     });
 
+    const logCreate = vi.fn().mockResolvedValue(createdLog);
     vi.doMock("@/lib/models/Log", () => ({
       Log: {
         findOne: logFindOne,
-        create: vi.fn().mockResolvedValue(createdLog),
+        create: logCreate,
       },
     }));
 
     vi.doMock("@/lib/idempotency", () => ({
-      checkIdempotency: vi
-        .fn()
-        .mockResolvedValue(
-          idempotencyHit ? { statusCode: 201, body: { verified: true } } : null,
-        ),
+      checkIdempotency: vi.fn().mockResolvedValue(idempotencyResponse),
       saveIdempotency: vi.fn().mockResolvedValue(undefined),
     }));
 
@@ -597,7 +648,7 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
     }));
 
     const { POST } = await import("@/app/api/logs/passkey/verify/route");
-    return POST;
+    return Object.assign(POST, { logCreate });
   }
 
   it("returns 201 with verified:true and a log on successful check-in", async () => {
@@ -608,6 +659,7 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
     expect(body.verified).toBe(true);
     expect(body.log).toHaveProperty("_id");
     expect(body.log.passkeyVerified).toBe(true);
+    expect(body.log.passkeyCredentialId).toBe("visitor-cred-id");
   });
 
   it("returns 400 when the intent challenge is not found (expired/not issued)", async () => {
@@ -636,16 +688,81 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
     const res = await POST(makeReq(VERIFY_BODY));
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.error).toMatch(/Passkey not registered/);
+    expect(body.code).toBe("PASSKEY_NOT_REGISTERED");
+    expect(body.error).toMatch(/not registered/);
   });
 
   it("returns cached idempotency response without re-writing", async () => {
-    const POST = await setupCheckInMocks({ idempotencyHit: true });
+    const POST = await setupCheckInMocks({
+      idempotencyResponse: {
+        statusCode: 201,
+        body: { verified: true, log: { _id: "cached-log-id" } },
+      },
+    });
     const res = await POST(makeReq(VERIFY_BODY));
     // Idempotency cache returns the cached statusCode
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.verified).toBe(true);
+    expect(body.log._id).toBe("cached-log-id");
+    expect(POST.logCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not treat malformed cached idempotency responses as successful check-ins", async () => {
+    const POST = await setupCheckInMocks({
+      idempotencyResponse: { statusCode: 201, body: { verified: true } },
+    });
+
+    const res = await POST(makeReq(VERIFY_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body.log).toHaveProperty("_id");
+    expect(POST.logCreate).toHaveBeenCalledOnce();
+  });
+
+  it("creates a new check-in when the cached same-day passkey check-in was already checked out", async () => {
+    const POST = await setupCheckInMocks({
+      idempotencyResponse: {
+        statusCode: 201,
+        body: { verified: true, log: { _id: "cached-log-id" } },
+      },
+      cachedCheckout: { _id: "cached-checkout-id" },
+    });
+
+    const res = await POST(makeReq(VERIFY_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body.log._id).toBe("new-log-id");
+    expect(POST.logCreate).toHaveBeenCalledOnce();
+  });
+
+  it("writes visitor metadata from the issued passkey intent", async () => {
+    const POST = await setupCheckInMocks({
+      intentDoc: {
+        ...INTENT_DOC,
+        visitorName: "Alice Visitor",
+        visitorEmail: "alice@example.com",
+        visitorGender: "female",
+        visitPurpose: "Interview",
+        deviceId: "device-123",
+      },
+    });
+
+    await POST(makeReq(VERIFY_BODY));
+
+    expect(POST.logCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visitorName: "Alice Visitor",
+        visitorEmail: "alice@example.com",
+        visitorGender: "female",
+        visitPurpose: "Interview",
+        deviceId: "device-123",
+        passkeyVerified: true,
+        passkeyCredentialId: "visitor-cred-id",
+      }),
+    );
   });
 
   it("returns existing:true when visitor is already checked in (no checkout)", async () => {
@@ -681,10 +798,13 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
     locationType: "room",
     sessionToken: VALID_UUID,
     visitorName: "Alice",
+    passkeyVerified: true,
+    passkeyCredentialId: "visitor-cred-id",
     toObject: () => ({
       _id: "checkin-log-id",
       action: "in",
       passkeyVerified: true,
+      passkeyCredentialId: "visitor-cred-id",
     }),
   };
 
@@ -703,9 +823,15 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
   async function setupCheckOutMocks(options?: {
     checkinLog?: unknown;
     existingCheckout?: unknown;
+    idempotencyResponse?: { statusCode: number; body: unknown } | null;
+    cachedCheckout?: unknown;
   }) {
-    const { checkinLog = CHECK_IN_LOG, existingCheckout = null } =
-      options ?? {};
+    const {
+      checkinLog = CHECK_IN_LOG,
+      existingCheckout = null,
+      idempotencyResponse = null,
+      cachedCheckout = null,
+    } = options ?? {};
 
     vi.doMock("@/lib/db", () => ({
       connectDB: vi.fn().mockResolvedValue(undefined),
@@ -729,18 +855,32 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
       },
     }));
 
-    const logFindOne = vi.fn();
-    logFindOne.mockResolvedValueOnce(checkinLog); // findOne({ _id: relatedLogId, action:'in' })
-    logFindOne.mockResolvedValueOnce(existingCheckout); // findOne({ relatedLogId, action:'out' })
+    const logFindOne = vi.fn().mockImplementation((query?: any) => {
+      if (query?.action === "out" && query?._id) {
+        return {
+          select: vi.fn().mockReturnValue({
+            lean: vi.fn().mockResolvedValue(cachedCheckout),
+          }),
+        };
+      }
+
+      if (query?.action === "in" && query?._id) {
+        return Promise.resolve(checkinLog);
+      }
+
+      return Promise.resolve(existingCheckout);
+    });
 
     const createdCheckout = {
       _id: "checkout-log-id",
       action: "out",
       passkeyVerified: true,
+      passkeyCredentialId: "visitor-cred-id",
       toObject: () => ({
         _id: "checkout-log-id",
         action: "out",
         passkeyVerified: true,
+        passkeyCredentialId: "visitor-cred-id",
       }),
     };
     const logCreate = vi.fn().mockResolvedValue(createdCheckout);
@@ -752,7 +892,7 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
     }));
 
     vi.doMock("@/lib/idempotency", () => ({
-      checkIdempotency: vi.fn().mockResolvedValue(null),
+      checkIdempotency: vi.fn().mockResolvedValue(idempotencyResponse),
       saveIdempotency: vi.fn().mockResolvedValue(undefined),
     }));
 
@@ -775,6 +915,7 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
     expect(body.verified).toBe(true);
     expect(body.log.action).toBe("out");
     expect(body.log.passkeyVerified).toBe(true);
+    expect(body.log.passkeyCredentialId).toBe("visitor-cred-id");
   });
 
   it("inserts a new OUT log row with relatedLogId pointing to the check-in", async () => {
@@ -785,9 +926,109 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
       expect.objectContaining({
         action: "out",
         passkeyVerified: true,
+        passkeyCredentialId: "visitor-cred-id",
         relatedLogId: CHECK_IN_LOG._id,
       }),
     );
+  });
+
+  it("rejects checkout when it uses a different passkey than check-in", async () => {
+    const { POST, logCreate } = await setupCheckOutMocks({
+      checkinLog: {
+        ...CHECK_IN_LOG,
+        passkeyCredentialId: "different-credential-id",
+      },
+    });
+
+    const res = await POST(makeReq(CHECKOUT_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.code).toBe("PASSKEY_MISMATCH");
+    expect(body.error).toMatch(/same passkey/);
+    expect(logCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not replay cached checkout before same-passkey validation", async () => {
+    const { POST, logCreate } = await setupCheckOutMocks({
+      checkinLog: {
+        ...CHECK_IN_LOG,
+        passkeyCredentialId: "different-credential-id",
+      },
+      idempotencyResponse: {
+        statusCode: 201,
+        body: {
+          verified: true,
+          log: { _id: "cached-checkout-id", relatedLogId: "checkin-log-id" },
+        },
+      },
+      cachedCheckout: { _id: "cached-checkout-id" },
+    });
+
+    const res = await POST(makeReq(CHECKOUT_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.code).toBe("PASSKEY_MISMATCH");
+    expect(body.error).toMatch(/same passkey/);
+    expect(logCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects passkey checkout when the original check-in has no credential context", async () => {
+    const { POST, logCreate } = await setupCheckOutMocks({
+      checkinLog: {
+        ...CHECK_IN_LOG,
+        passkeyCredentialId: undefined,
+      },
+    });
+
+    const res = await POST(makeReq(CHECKOUT_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe("PASSKEY_CREDENTIAL_CONTEXT_MISSING");
+    expect(body.error).toMatch(/missing passkey credential context/);
+    expect(logCreate).not.toHaveBeenCalled();
+  });
+
+  it("returns cached checkout only when it belongs to the current check-in", async () => {
+    const { POST, logCreate } = await setupCheckOutMocks({
+      idempotencyResponse: {
+        statusCode: 201,
+        body: {
+          verified: true,
+          log: { _id: "cached-checkout-id", relatedLogId: "checkin-log-id" },
+        },
+      },
+      cachedCheckout: { _id: "cached-checkout-id" },
+    });
+
+    const res = await POST(makeReq(CHECKOUT_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body.log._id).toBe("cached-checkout-id");
+    expect(logCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates a new checkout when the cached same-day checkout belongs to an older check-in", async () => {
+    const { POST, logCreate } = await setupCheckOutMocks({
+      idempotencyResponse: {
+        statusCode: 201,
+        body: {
+          verified: true,
+          log: { _id: "old-checkout-id", relatedLogId: "old-checkin-id" },
+        },
+      },
+      cachedCheckout: null,
+    });
+
+    const res = await POST(makeReq(CHECKOUT_BODY));
+    const body = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(body.log._id).toBe("checkout-log-id");
+    expect(logCreate).toHaveBeenCalledOnce();
   });
 
   it("does NOT call Log.create when the check-in log is not found", async () => {

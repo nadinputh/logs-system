@@ -6,6 +6,7 @@ import { CreateLogSchema } from "@/lib/validations/log";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { resolveLocationLabels } from "@/lib/locationLabels";
+import { publishLogCreated } from "@/lib/realtime/logEvents";
 import {
   requireTeamAccess,
   requireTeamPermission,
@@ -23,7 +24,16 @@ function getClientIp(req: NextRequest): string {
 
 export async function GET(req: NextRequest) {
   const auth = await requireTeamPermission("logs.read");
-  if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
+  if (!auth.session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!auth.teamId) {
+    return NextResponse.json(
+      { error: "No active team selected" },
+      { status: 400 },
+    );
+  }
 
   const userId = (auth.session.user as any).id;
   const role = (auth.session.user as any).role;
@@ -209,6 +219,8 @@ export async function POST(req: NextRequest) {
     action: "in",
     timestamp: new Date(),
   });
+
+  publishLogCreated(log);
 
   if (idempotencyKey) {
     await saveIdempotency(idempotencyKey, 201, log.toObject());

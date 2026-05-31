@@ -15,12 +15,21 @@ interface Props {
   visitorContact?: string
   visitorGender?: string
   visitPurpose?: string
+  deviceId?: string
   // authOnly: never show the register path (checkout screen)
   authOnly?: boolean
   // registerOnly: always show the register path (save passkey after click check-in)
   registerOnly?: boolean
-  onAuthenticated?: (logId: string) => void
+  onAuthenticated?: (logId: string, log?: VisitorPasskeyLog) => void
   onRegistered?: () => void
+}
+
+interface VisitorPasskeyLog {
+  _id?: string
+  id?: string
+  timestamp?: string
+  visitorName?: string
+  passkeyVerified?: boolean
 }
 
 // sha256(sessionToken:locationId:YYYY-MM-DD:action)
@@ -37,6 +46,23 @@ function contactFields(contact?: string) {
   return contact.includes('@') ? { visitorEmail: contact } : { visitorPhone: contact }
 }
 
+function passkeyVerificationMessage(data: any, action: 'in' | 'out') {
+  switch (data?.code) {
+    case 'PASSKEY_NOT_REGISTERED':
+      return action === 'out'
+        ? 'This passkey is not registered here. Use the same passkey that checked in.'
+        : 'This passkey is not registered here. Save a passkey first or use normal check-in.'
+    case 'PASSKEY_MISMATCH':
+      return 'This is not the same passkey used to check in. Please use the original passkey.'
+    case 'PASSKEY_CREDENTIAL_CONTEXT_MISSING':
+      return 'This check-in is missing passkey details. Please ask staff to help check out.'
+    case 'CHECKIN_NOT_PASSKEY_VERIFIED':
+      return 'This check-in was not made with passkey. Please use normal checkout.'
+    default:
+      return data?.error ?? 'Verification failed'
+  }
+}
+
 export default function VisitorPasskey({
   locationId,
   locationType,
@@ -47,6 +73,7 @@ export default function VisitorPasskey({
   visitorContact,
   visitorGender,
   visitPurpose,
+  deviceId,
   authOnly = false,
   registerOnly = false,
   onAuthenticated,
@@ -80,11 +107,24 @@ export default function VisitorPasskey({
     try {
       const { startAuthentication } = await import('@simplewebauthn/browser')
       const idempotencyKey = await buildIdempotencyKey(sessionToken, locationId, action)
+      const intentPayload = {
+        locationId,
+        locationType,
+        action,
+        sessionToken,
+        relatedLogId,
+        idempotencyKey,
+        visitorName,
+        ...contactFields(visitorContact),
+        visitorGender,
+        visitPurpose,
+        deviceId,
+      }
 
       const challengeRes = await fetch('/api/logs/passkey/challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locationId, locationType, action, sessionToken, relatedLogId, idempotencyKey }),
+        body: JSON.stringify(intentPayload),
       })
       if (!challengeRes.ok) {
         const d = await challengeRes.json()
@@ -96,19 +136,20 @@ export default function VisitorPasskey({
       const verifyRes = await fetch('/api/logs/passkey/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response, locationId, locationType, action, sessionToken, relatedLogId, idempotencyKey, visitorName }),
+        body: JSON.stringify({ response, ...intentPayload }),
       })
       const data = await verifyRes.json()
-      if (!verifyRes.ok) throw new Error(data.error ?? 'Verification failed')
+      if (!verifyRes.ok) throw new Error(passkeyVerificationMessage(data, action))
 
       const logId = data.log?._id ?? data.log?.id ?? ''
-      if (data.verified || data.existing || data.already || logId) onAuthenticated?.(logId)
+      if (!logId) throw new Error('Passkey verified, but no log was recorded. Please try again.')
+      onAuthenticated?.(logId, data.log)
     } catch (err: any) {
       if (err.name !== 'NotAllowedError') toast.error(err.message ?? 'Biometric check-in failed')
     } finally {
       setLoading(false)
     }
-  }, [locationId, locationType, action, sessionToken, relatedLogId, visitorName, onAuthenticated])
+  }, [locationId, locationType, action, sessionToken, relatedLogId, visitorName, visitorContact, visitorGender, visitPurpose, deviceId, onAuthenticated])
 
   const register = useCallback(async () => {
     setLoading(true)
@@ -147,12 +188,13 @@ export default function VisitorPasskey({
       }
       setHasPasskey(true)
       onRegistered?.()
+      if (!registerOnly) await authenticate()
     } catch (err: any) {
       if (err.name !== 'NotAllowedError') toast.error(err.message ?? 'Biometric registration failed')
     } finally {
       setLoading(false)
     }
-  }, [sessionToken, visitorName, visitorContact, visitorGender, visitPurpose, onRegistered])
+  }, [sessionToken, visitorName, visitorContact, visitorGender, visitPurpose, registerOnly, authenticate, onRegistered])
 
   if (!supported) return null
   // registerOnly: hide once a passkey is already saved for this session

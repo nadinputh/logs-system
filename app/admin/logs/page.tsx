@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { EyeIcon, MapPin, UserRound } from 'lucide-react'
+import { EyeIcon, LogOut, MapPin, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
+import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce } from '@/lib/clientFetch'
+import { useLogRealtime } from '@/lib/useLogRealtime'
 
 interface LogEntry {
   _id: string; locationId: string; locationType: string
@@ -42,6 +45,12 @@ function formatValue(value?: string | boolean | null) {
 
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : '—'
+}
+
+function readApiError(payload: any, fallback: string) {
+  if (typeof payload?.message === 'string') return payload.message
+  if (typeof payload?.error === 'string') return payload.error
+  return fallback
 }
 
 function durationLabel(entry: LogEntry) {
@@ -136,21 +145,65 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
 export default function AdminLogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
+  const [manualCheckoutLog, setManualCheckoutLog] = useState<LogEntry | null>(null)
+  const [manualCheckoutReason, setManualCheckoutReason] = useState('')
+  const [manualCheckoutLoading, setManualCheckoutLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
-  const fetchLogs = useCallback(() => {
-    setLoading(true)
-    fetchJsonOnce<{ logs?: LogEntry[] }>('/api/logs')
-      .then(d => { setLogs(d.logs ?? []); setLoading(false) })
-      .catch(() => setLoading(false))
+  const fetchLogs = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+
+    try {
+      const data = await fetchJsonOnce<{ logs?: LogEntry[] }>('/api/logs')
+      setLogs(data.logs ?? [])
+    } catch {
+    } finally {
+      if (showLoading) setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { fetchLogs() }, [fetchLogs])
+  useEffect(() => { void fetchLogs() }, [fetchLogs])
+  useLogRealtime(() => { void fetchLogs(false) })
 
   const filtered = logs.filter(l =>
     !search || (l.visitorName ?? '').toLowerCase().includes(search.toLowerCase())
   )
+
+  function openManualCheckout(log: LogEntry) {
+    setManualCheckoutLog(log)
+    setManualCheckoutReason(log.passkeyVerified ? 'Manual checkout due to passkey verification issue' : '')
+  }
+
+  async function submitManualCheckout() {
+    if (!manualCheckoutLog) return
+    const reasonForChange = manualCheckoutReason.trim()
+    if (reasonForChange.length < 3) {
+      toast.error('Add a reason before checking out manually')
+      return
+    }
+
+    setManualCheckoutLoading(true)
+    try {
+      const res = await fetch(`/api/logs/${manualCheckoutLog._id}/manual-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reasonForChange }),
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(readApiError(payload, 'Manual checkout failed'))
+
+      toast.success(payload.already ? 'Log was already checked out' : 'Checked out manually')
+      setManualCheckoutLog(null)
+      setManualCheckoutReason('')
+      setSelectedLog(null)
+      await fetchLogs(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Manual checkout failed')
+    } finally {
+      setManualCheckoutLoading(false)
+    }
+  }
 
   const locationTypeColors: Record<string, string> = {
     room: 'text-sky-600 bg-sky-50',
@@ -172,7 +225,7 @@ export default function AdminLogsPage() {
         </div>
         <Button
           type="button"
-          onClick={fetchLogs}
+          onClick={() => { void fetchLogs() }}
           disabled={loading}
           variant="outline"
           size="sm"
@@ -208,7 +261,7 @@ export default function AdminLogsPage() {
               <TableHead>Status</TableHead>
               <TableHead className="hidden lg:table-cell">Check-in</TableHead>
               <TableHead className="hidden lg:table-cell">Check-out</TableHead>
-              <TableHead>Details</TableHead>
+              <TableHead>Actions</TableHead>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 6 }).map((_, index) => (
@@ -256,7 +309,7 @@ export default function AdminLogsPage() {
               <TableHead>Status</TableHead>
               <TableHead className="hidden lg:table-cell">Check-in</TableHead>
               <TableHead className="hidden lg:table-cell">Check-out</TableHead>
-              <TableHead>Details</TableHead>
+              <TableHead>Actions</TableHead>
             </TableHeader>
             <TableBody>
               {filtered.map(l => {
@@ -310,15 +363,29 @@ export default function AdminLogsPage() {
                       </p>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`View details for ${l.visitorName ?? 'log'}`}
-                        onClick={() => setSelectedLog(l)}
-                      >
-                        <EyeIcon className="h-4 w-4" aria-hidden />
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`View details for ${l.visitorName ?? 'log'}`}
+                          onClick={() => setSelectedLog(l)}
+                        >
+                          <EyeIcon className="h-4 w-4" aria-hidden />
+                        </Button>
+                        {isIn && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Manually check out ${l.visitorName ?? 'visitor'}`}
+                            onClick={() => openManualCheckout(l)}
+                          >
+                            <LogOut className="h-3.5 w-3.5" aria-hidden />
+                            Check out
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
@@ -334,6 +401,56 @@ export default function AdminLogsPage() {
           if (!open) setSelectedLog(null)
         }}
       />
+      <Dialog
+        open={manualCheckoutLog !== null}
+        onOpenChange={(open) => {
+          if (!open && !manualCheckoutLoading) {
+            setManualCheckoutLog(null)
+            setManualCheckoutReason('')
+          }
+        }}
+      >
+        <DialogContent size="sm" className="bg-white">
+          <DialogHeader className="px-5 pt-5 sm:px-6 sm:pt-6">
+            <DialogTitle className="text-base font-semibold text-foreground">Manual checkout</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="px-5 pb-2 pt-0 sm:px-6">
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                This will append a checkout log for {manualCheckoutLog?.visitorName ?? 'this visitor'} and record the reason in the audit ledger.
+              </p>
+              <Textarea
+                placeholder="Reason for manual checkout"
+                value={manualCheckoutReason}
+                disabled={manualCheckoutLoading}
+                onChange={(event) => setManualCheckoutReason(event.target.value)}
+                rows={4}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter className="flex justify-end gap-2 px-5 pb-5 pt-3 sm:px-6 sm:pb-6">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={manualCheckoutLoading}
+              onClick={() => {
+                setManualCheckoutLog(null)
+                setManualCheckoutReason('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={manualCheckoutLoading}
+              onClick={submitManualCheckout}
+            >
+              {manualCheckoutLoading ? 'Checking out…' : 'Check out manually'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
