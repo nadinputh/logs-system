@@ -6,17 +6,10 @@ import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential"
 import { PasskeyCheckInChallenge } from "@/lib/models/PasskeyCheckInChallenge";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
+import { getClientIp } from "@/lib/server/getClientIp";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 
 export const runtime = "nodejs";
-
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
 
 export async function POST(req: NextRequest) {
   const body = await req.json();

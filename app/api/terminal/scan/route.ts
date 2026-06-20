@@ -6,16 +6,9 @@ import { verifySessionQrToken } from "@/lib/jwt";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
+import { getClientIp } from "@/lib/server/getClientIp";
 
 export const runtime = "nodejs";
-
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
 
 export async function POST(req: NextRequest) {
   const body = await req.json();

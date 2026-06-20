@@ -5,20 +5,13 @@ import { Log } from "@/lib/models/Log";
 import { AuditLog } from "@/lib/models/AuditLog";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
+import { getClientIp } from "@/lib/server/getClientIp";
 
 export const runtime = "nodejs";
 
 const ManualCheckoutSchema = z.object({
   reasonForChange: z.string().min(3).max(500),
 });
-
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
 
 export async function POST(
   req: NextRequest,

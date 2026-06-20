@@ -377,6 +377,11 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
       ? `${(location as any).buildingId?.name ?? ''} › ${location.name}`
       : location?.name ?? 'Location'
 
+  const passkeyRequired = location?.checkInMode === 'passkey'
+  const checkoutSuggested = openLog
+    ? getPredictedAction(openLog.timestamp, currentTime) === 'checkout_suggested'
+    : false
+
   if (!location) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-cyan-50/30 to-teal-50/20">
@@ -569,9 +574,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         )}
 
         {/* Step: Check-in */}
-        {step === 'checkin' && (() => {
-          const passkeyRequired = location.checkInMode === 'passkey'
-          return (
+        {step === 'checkin' && (
           <Card>
             <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2.5 bg-muted/40 rounded-xl px-3.5 py-2.5">
@@ -653,8 +656,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             />
             </CardContent>
           </Card>
-          )
-        })()}
+        )}
 
         {/* Step: Selfie */}
         {step === 'selfie' && (
@@ -676,9 +678,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         )}
 
         {/* Step: Checked In */}
-        {step === 'checkedIn' && (() => {
-          const checkoutSuggested = openLog ? getPredictedAction(openLog.timestamp, currentTime) === 'checkout_suggested' : false
-          return (
+        {step === 'checkedIn' && (
           <Card>
             <CardContent className="p-4 space-y-3">
             {openLog && (
@@ -789,8 +789,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             )}
             </CardContent>
           </Card>
-          )
-        })()}
+        )}
 
         {/* Step: Quest scan */}
         {step === 'questScan' && (

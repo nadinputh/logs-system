@@ -1,18 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTeamPermission } from "@/lib/middleware/auth";
-import { subscribeToLogEvents } from "@/lib/realtime/logEvents";
+import { connectDB } from "@/lib/db";
+import { Log } from "@/lib/models/Log";
+import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const encoder = new TextEncoder();
-
-function encodeEvent(event: string, data: unknown) {
-  return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-function encodeComment(comment: string) {
-  return encoder.encode(`: ${comment}\n\n`);
+function buildLogEvent(log: any) {
+  return {
+    type: "log.created" as const,
+    logId: String(log._id),
+    action: log.action as "in" | "out",
+    locationId: String(log.locationId),
+    locationType: log.locationType,
+    relatedLogId: log.relatedLogId ? String(log.relatedLogId) : undefined,
+    timestamp:
+      log.timestamp instanceof Date
+        ? log.timestamp.toISOString()
+        : String(log.timestamp),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -25,69 +32,42 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  await connectDB();
+
   const teamId = auth.teamId;
-  const userId = (auth.session?.user as any)?.id;
-  const role = (auth.session?.user as any)?.role;
+  const userId = (auth.session?.user as any)?.id as string | undefined;
+  const role = (auth.session?.user as any)?.role as string | undefined;
 
-  let cleanup = () => {};
+  return createSseStream(req, (send) => {
+    let since = new Date();
+    send(encodeComment("connected"));
 
-  const stream = new ReadableStream({
-    start(controller) {
-      let closed = false;
+    const heartbeat = setInterval(
+      () => send(encodeComment("keep-alive")),
+      25_000,
+    );
 
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        cleanup();
-        try {
-          controller.close();
-        } catch {}
+    const poll = async () => {
+      const query: Record<string, unknown> = {
+        teamId,
+        timestamp: { $gt: since },
       };
+      if (role !== "admin" && userId) query.userId = userId;
 
-      const send = (chunk: Uint8Array) => {
-        if (closed) return;
-        try {
-          controller.enqueue(chunk);
-        } catch {
-          close();
-        }
-      };
+      const logs = await Log.find(query).sort({ timestamp: 1 }).lean();
+      for (const log of logs) {
+        if (log.timestamp > since) since = log.timestamp;
+        send(encodeEvent("log.created", buildLogEvent(log)));
+      }
+    };
 
-      const heartbeat = setInterval(() => {
-        send(encodeComment("keep-alive"));
-      }, 25_000);
+    const pollInterval = setInterval(() => {
+      poll().catch(() => {});
+    }, 3_000);
 
-      const unsubscribe = subscribeToLogEvents(teamId, (event) => {
-        if (role !== "admin" && event.userId !== userId) return;
-
-        const {
-          teamId: _teamId,
-          sessionToken: _sessionToken,
-          userId: _userId,
-          ...payload
-        } = event;
-        send(encodeEvent("log.created", payload));
-      });
-
-      cleanup = () => {
-        clearInterval(heartbeat);
-        unsubscribe();
-      };
-
-      send(encodeComment("connected"));
-      req.signal.addEventListener("abort", close, { once: true });
-    },
-    cancel() {
-      cleanup();
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
+    return () => {
+      clearInterval(heartbeat);
+      clearInterval(pollInterval);
+    };
   });
 }

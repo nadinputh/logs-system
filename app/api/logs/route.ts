@@ -7,20 +7,13 @@ import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { resolveLocationLabels } from "@/lib/locationLabels";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
+import { getClientIp } from "@/lib/server/getClientIp";
 import {
   requireTeamAccess,
   requireTeamPermission,
 } from "@/lib/middleware/auth";
 
 export const runtime = "nodejs";
-
-function getClientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
 
 export async function GET(req: NextRequest) {
   const auth = await requireTeamPermission("logs.read");

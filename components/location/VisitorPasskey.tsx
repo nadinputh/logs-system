@@ -102,7 +102,7 @@ export default function VisitorPasskey({
     return () => { cancelled = true }
   }, [sessionToken, locationId, locationType])
 
-  const authenticate = useCallback(async () => {
+  const authenticate = useCallback(async (): Promise<boolean> => {
     setLoading(true)
     try {
       const { startAuthentication } = await import('@simplewebauthn/browser')
@@ -144,8 +144,10 @@ export default function VisitorPasskey({
       const logId = data.log?._id ?? data.log?.id ?? ''
       if (!logId) throw new Error('Passkey verified, but no log was recorded. Please try again.')
       onAuthenticated?.(logId, data.log)
+      return true
     } catch (err: any) {
       if (err.name !== 'NotAllowedError') toast.error(err.message ?? 'Biometric check-in failed')
+      return false
     } finally {
       setLoading(false)
     }
@@ -187,8 +189,12 @@ export default function VisitorPasskey({
         throw new Error(d.error ?? 'Registration failed')
       }
       setHasPasskey(true)
-      onRegistered?.()
-      if (!registerOnly) await authenticate()
+      if (registerOnly) {
+        onRegistered?.()
+      } else {
+        const success = await authenticate()
+        if (success) onRegistered?.()
+      }
     } catch (err: any) {
       if (err.name !== 'NotAllowedError') toast.error(err.message ?? 'Biometric registration failed')
     } finally {

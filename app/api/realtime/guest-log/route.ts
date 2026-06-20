@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { Log } from "@/lib/models/Log";
 import { findOwnedLocationById } from "@/lib/locationOwnership";
-import { subscribeToLogEvents } from "@/lib/realtime/logEvents";
+import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const encoder = new TextEncoder();
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function encodeEvent(event: string, data: unknown) {
-  return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-function encodeComment(comment: string) {
-  return encoder.encode(`: ${comment}\n\n`);
+function buildLogEvent(log: any) {
+  return {
+    type: "log.created" as const,
+    logId: String(log._id),
+    action: log.action as "in" | "out",
+    locationId: String(log.locationId),
+    locationType: log.locationType,
+    relatedLogId: log.relatedLogId ? String(log.relatedLogId) : undefined,
+    timestamp:
+      log.timestamp instanceof Date
+        ? log.timestamp.toISOString()
+        : String(log.timestamp),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -27,6 +36,10 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  if (!UUID_RE.test(sessionToken)) {
+    return NextResponse.json({ error: "Invalid sessionToken" }, { status: 400 });
+  }
+
   await connectDB();
 
   const location = await findOwnedLocationById(locationId);
@@ -34,71 +47,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
 
-  const teamId = location.teamId.toString();
-  let cleanup = () => {};
+  return createSseStream(req, (send) => {
+    let since = new Date();
+    send(encodeComment("connected"));
 
-  const stream = new ReadableStream({
-    start(controller) {
-      let closed = false;
+    const heartbeat = setInterval(
+      () => send(encodeComment("keep-alive")),
+      25_000,
+    );
 
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        cleanup();
-        try {
-          controller.close();
-        } catch {}
-      };
+    const poll = async () => {
+      const logs = await Log.find({
+        locationId,
+        sessionToken,
+        timestamp: { $gt: since },
+      })
+        .sort({ timestamp: 1 })
+        .lean();
 
-      const send = (chunk: Uint8Array) => {
-        if (closed) return;
-        try {
-          controller.enqueue(chunk);
-        } catch {
-          close();
-        }
-      };
+      for (const log of logs) {
+        if (log.timestamp > since) since = log.timestamp;
+        send(encodeEvent("log.created", buildLogEvent(log)));
+      }
+    };
 
-      const heartbeat = setInterval(() => {
-        send(encodeComment("keep-alive"));
-      }, 25_000);
+    const pollInterval = setInterval(() => {
+      poll().catch(() => {});
+    }, 3_000);
 
-      const unsubscribe = subscribeToLogEvents(teamId, (event) => {
-        if (
-          event.locationId !== locationId ||
-          event.sessionToken !== sessionToken
-        ) {
-          return;
-        }
-
-        const {
-          teamId: _teamId,
-          sessionToken: _sessionToken,
-          userId: _userId,
-          ...payload
-        } = event;
-        send(encodeEvent("log.created", payload));
-      });
-
-      cleanup = () => {
-        clearInterval(heartbeat);
-        unsubscribe();
-      };
-
-      send(encodeComment("connected"));
-      req.signal.addEventListener("abort", close, { once: true });
-    },
-    cancel() {
-      cleanup();
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
+    return () => {
+      clearInterval(heartbeat);
+      clearInterval(pollInterval);
+    };
   });
 }

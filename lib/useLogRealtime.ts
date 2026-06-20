@@ -38,6 +38,10 @@ export function useLogRealtime(
 
     source.addEventListener("log.created", handleLogCreated as EventListener);
 
+    source.onerror = () => {
+      source.close();
+    };
+
     return () => {
       source.removeEventListener(
         "log.created",
