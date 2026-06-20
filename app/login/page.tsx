@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { startAuthentication } from '@simplewebauthn/browser'
+import { MapPinned, Radio, ScrollText, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -121,13 +122,13 @@ export default function LoginPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { icon: 'Secure', label: 'Passkey Auth' },
-                { icon: 'Fence', label: 'Geo-fencing' },
-                { icon: 'Audit', label: 'Audit Ledger' },
-                { icon: 'Live', label: 'Real-time' },
+                { Icon: ShieldCheck, label: 'Passkey Auth' },
+                { Icon: MapPinned, label: 'Geo-fencing' },
+                { Icon: ScrollText, label: 'Audit Ledger' },
+                { Icon: Radio, label: 'Real-time' },
               ].map(f => (
                 <div key={f.label} className="flex items-center gap-2.5 bg-white/10 rounded-xl px-4 py-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-white/85">{f.icon}</span>
+                  <f.Icon className="w-3.5 h-3.5 text-white/85 shrink-0" strokeWidth={2.25} />
                   <span className="text-sm font-medium">{f.label}</span>
                 </div>
               ))}
@@ -141,7 +142,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right — auth form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 bg-background">
+      <div className="w-full lg:w-1/2 flex items-start lg:items-center justify-center p-6 pt-10 sm:pt-12 lg:p-6 bg-background">
         <div className="w-full max-w-sm space-y-8">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5">
