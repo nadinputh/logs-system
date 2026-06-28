@@ -51,11 +51,11 @@ export default function ProfilePage() {
         <Card className="overflow-hidden">
           <CardContent className="p-4 flex flex-col items-center gap-4">
             {error ? (
-              <div className="w-full bg-red-50 border border-red-200/60 rounded-xl px-4 py-3 text-center">
+              <div className="w-full bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-center">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             ) : qrToken ? (
-              <div className="rounded-[1.75rem] border border-border/60 bg-white p-3 shadow-sm shadow-slate-200/70">
+              <div className="rounded-[1.75rem] border border-border/60 bg-white p-3 shadow-sm shadow-black/10">
                 <RoundedQRCode value={qrToken} size={240} />
               </div>
             ) : (

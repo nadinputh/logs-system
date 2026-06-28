@@ -63,7 +63,7 @@ export default function QRCodeDisplay({ url, label, sublabel, exportTitle = 'QR 
 
   return (
     <div className="flex w-full max-w-[17.625rem] flex-col items-center gap-4">
-      <div className="rounded-[2rem] border border-border/60 bg-white p-3 shadow-sm shadow-slate-200/70 print:p-2 print:shadow-none">
+      <div className="rounded-[2rem] border border-border/60 bg-white p-3 shadow-sm shadow-black/10 print:p-2 print:shadow-none">
         <RoundedQRCode value={url} size={256} className="print:!h-48 print:!w-48" />
       </div>
       <div className="text-center">

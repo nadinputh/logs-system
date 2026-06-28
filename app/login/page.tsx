@@ -5,6 +5,8 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { startAuthentication } from '@simplewebauthn/browser'
 import { MapPinned, Radio, ScrollText, ShieldCheck } from 'lucide-react'
+import { LogoMark } from '@/components/Logo'
+import { ParticleField } from '@/components/ParticleField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -90,25 +92,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="relative min-h-screen flex">
+      {/* Interactive physics dot field (antigravity-style) — shared with landing/scan */}
+      <ParticleField className="fixed inset-0 z-0" />
+
       {/* Left — branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-sky-700 via-cyan-700 to-teal-700" />
-        {/* Subtle grid overlay */}
-        <div className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        />
+      <div className="hidden lg:flex lg:w-1/2 relative z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-sky-700 via-cyan-700 to-teal-700 dark:from-slate-950 dark:via-cyan-950 dark:to-slate-900" />
+        {/* White interactive dot field — same animation as the right side */}
+        <ParticleField tone="onDark" className="absolute inset-0" />
         <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <LogoMark className="w-6 h-6 text-white" />
             </div>
-            <span className="text-lg font-bold tracking-tight">LogsSystem</span>
+            <span className="text-lg font-bold tracking-tight">Kamnotheat</span>
           </div>
 
           <div className="space-y-6">
@@ -136,23 +134,20 @@ export default function LoginPage() {
           </div>
 
           <p className="text-white/40 text-sm">
-            © {new Date().getFullYear()} LogsSystem. Enterprise grade.
+            © {new Date().getFullYear()} Kamnotheat. Enterprise grade.
           </p>
         </div>
       </div>
 
       {/* Right — auth form */}
-      <div className="w-full lg:w-1/2 flex items-start lg:items-center justify-center p-6 pt-10 sm:pt-12 lg:p-6 bg-background">
+      <div className="relative z-10 w-full lg:w-1/2 flex items-start lg:items-center justify-center p-6 pt-10 sm:pt-12 lg:p-6">
         <div className="w-full max-w-sm space-y-8">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <LogoMark className="w-[18px] h-[18px] text-white" />
             </div>
-            <span className="font-bold text-foreground">LogsSystem</span>
+            <span className="font-bold text-foreground">Kamnotheat</span>
           </div>
 
           <div>
@@ -191,11 +186,11 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5">
+              <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
                 <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-sm text-red-600">{error}</p>
+                <p className="text-sm text-red-500">{error}</p>
               </div>
             )}
 

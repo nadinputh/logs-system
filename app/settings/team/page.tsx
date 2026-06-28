@@ -100,16 +100,16 @@ const AUDIT_ACTION_OPTIONS: Array<{ value: 'all' | TeamAuditAction; label: strin
 function roleBadgeClass(role: TeamRole) {
   switch (role) {
     case 'owner':
-      return 'bg-amber-100 text-amber-800 border-amber-200'
+      return 'bg-amber-500/10 text-amber-500 border-amber-500/20'
     case 'admin':
-      return 'bg-cyan-100 text-cyan-800 border-cyan-200'
+      return 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20'
     case 'manager':
-      return 'bg-sky-100 text-sky-800 border-sky-200'
+      return 'bg-sky-500/10 text-sky-500 border-sky-500/20'
     case 'auditor':
-      return 'bg-slate-100 text-slate-700 border-slate-200'
+      return 'bg-default text-muted-foreground border-border'
     case 'member':
     default:
-      return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
   }
 }
 
@@ -708,7 +708,7 @@ export default function TeamSettingsPage() {
               {teams.map((team) => (
                 <div
                   key={team.id}
-                  className={`rounded-xl border px-3 py-3 ${team.isActive ? 'border-cyan-300 bg-cyan-50/50' : 'border-border bg-background'}`}
+                  className={`rounded-xl border px-3 py-3 ${team.isActive ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-border bg-background'}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -721,7 +721,7 @@ export default function TeamSettingsPage() {
                   </div>
                   <div className="mt-3">
                     {team.isActive ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-500">
                         Active
                       </span>
                     ) : (
@@ -832,7 +832,7 @@ export default function TeamSettingsPage() {
                         {new Date(event.createdAt).toLocaleString()}
                       </p>
                     </div>
-                    <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                    <span className="inline-flex rounded-full border border-border bg-default px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                       {event.action}
                     </span>
                   </div>

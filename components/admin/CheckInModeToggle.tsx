@@ -48,7 +48,7 @@ export default function CheckInModeToggle({ locationId, value, onChange }: Props
         onClick={() => update('click')}
         disabled={saving}
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
-          mode === 'click' ? 'bg-white shadow-sm text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+          mode === 'click' ? 'bg-surface shadow-sm text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
         }`}
         title="Visitors can check in with a tap"
       >

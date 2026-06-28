@@ -8,6 +8,8 @@ import { Avatar, Chip, Dropdown, Separator } from '@heroui/react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import type { LucideIcon } from 'lucide-react'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { LogoTile } from '@/components/Logo'
 import {
   Building2,
   ChevronDown,
@@ -17,7 +19,6 @@ import {
   Home,
   Layers3,
   LogOut,
-  MapPin,
   Menu,
   ShieldCheck,
   Sparkles,
@@ -81,14 +82,14 @@ function navigationClass(active: boolean) {
     'group inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-accent/30 [&_svg]:text-current',
     active
       ? 'bg-accent/10 text-accent ring-1 ring-accent/15'
-      : 'text-slate-500 hover:bg-accent/10 hover:text-accent hover:ring-1 hover:ring-accent/10 data-[hovered]:bg-accent/10 data-[hovered]:text-accent data-[hovered]:ring-1 data-[hovered]:ring-accent/10',
+      : 'text-muted-foreground hover:bg-accent/10 hover:text-accent hover:ring-1 hover:ring-accent/10 data-[hovered]:bg-accent/10 data-[hovered]:text-accent data-[hovered]:ring-1 data-[hovered]:ring-accent/10',
   ].join(' ')
 }
 
 function menuItemClass(active: boolean) {
   return [
     'group rounded-xl px-3 py-2 outline-none transition-colors focus:bg-accent/10 focus:text-accent [&_svg]:text-current',
-    active ? 'bg-accent/10 text-accent ring-1 ring-accent/15' : 'text-slate-600 hover:bg-accent/10 hover:text-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent',
+    active ? 'bg-accent/10 text-accent ring-1 ring-accent/15' : 'text-foreground hover:bg-accent/10 hover:text-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent',
   ].join(' ')
 }
 
@@ -97,7 +98,7 @@ function iconTileClass(active: boolean) {
     'flex size-8 shrink-0 items-center justify-center rounded-xl ring-1 transition-colors',
     active
       ? 'bg-accent/10 text-accent ring-accent/15'
-      : 'bg-slate-50/80 text-slate-400 ring-slate-200/70 group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15',
+      : 'bg-default/50 text-muted-foreground ring-border/50 group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15',
   ].join(' ')
 }
 
@@ -266,7 +267,7 @@ function RolePill({ isAdmin, label, className = '' }: { isAdmin: boolean; label:
       color={isAdmin ? 'accent' : 'default'}
       size="sm"
       variant="soft"
-      className={`border ${isAdmin ? 'border-accent/20 bg-accent/10' : 'border-slate-200 bg-slate-50'} font-semibold ${className}`}
+      className={`border ${isAdmin ? 'border-accent/20 bg-accent/10' : 'border-border bg-default'} font-semibold ${className}`}
     >
       {label}
     </Chip>
@@ -299,7 +300,7 @@ function DropdownNavigationItem({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{item.label}</span>
-          <span className={`block truncate text-xs ${active ? 'text-accent/75' : 'text-slate-400 group-hover:text-slate-500 group-data-[hovered]:text-slate-500'}`}>{item.description}</span>
+          <span className={`block truncate text-xs ${active ? 'text-accent/75' : 'text-muted-foreground group-hover:text-foreground/70 group-data-[hovered]:text-foreground/70'}`}>{item.description}</span>
         </span>
       </div>
     </Dropdown.Item>
@@ -402,18 +403,15 @@ export default function NavBar() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-3 sm:px-6">
         <Link href="/dashboard" className="group flex min-w-0 shrink-0 items-center gap-3 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
-          <span className="relative flex size-10 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/20 transition-transform group-hover:scale-[1.03]">
-            <MapPin className="size-5" strokeWidth={2.5} />
-            <span className="absolute inset-x-1 bottom-1 h-px bg-white/50" />
-          </span>
+          <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
           <span className="hidden min-w-0 sm:block">
-            <span className="block truncate text-sm font-bold tracking-tight text-foreground">Location Manager</span>
-            <span className="block truncate text-[11px] font-medium text-muted-foreground">Check-ins, quests, access</span>
+            <span className="block truncate text-sm font-bold tracking-tight text-foreground">Kamnotheat</span>
+            <span className="block truncate text-[11px] font-medium text-muted-foreground">Secure check-in logging</span>
           </span>
         </Link>
 
         <div className="hidden min-w-0 flex-1 items-center justify-center xl:flex">
-          <div className="flex items-center gap-1 rounded-full border border-slate-200/80 bg-white/70 p-1 shadow-sm shadow-slate-200/50">
+          <div className="flex items-center gap-1 rounded-full border border-border/80 bg-overlay/70 p-1 shadow-sm shadow-black/5">
             {primaryItems.map((item) => {
               const active = isRouteActive(pathname, item.href)
 
@@ -427,7 +425,7 @@ export default function NavBar() {
 
             {isAdmin && (
               <>
-                <span aria-hidden="true" className="mx-1 h-5 w-px self-center rounded-full bg-slate-200/90" />
+                <span aria-hidden="true" className="mx-1 h-5 w-px self-center rounded-full bg-border/70" />
                 <div {...locationDropdown.triggerProps}>
                   <Dropdown isOpen={locationDropdown.isOpen} onOpenChange={locationDropdown.onOpenChange}>
                     <Dropdown.Trigger {...locationDropdown.triggerButtonProps} className={`${navigationClass(isLocationActive)} pr-2`} aria-label="Open location management menu">
@@ -473,9 +471,10 @@ export default function NavBar() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <ThemeToggle />
           <div {...accountDropdown.triggerProps}>
             <Dropdown isOpen={accountDropdown.isOpen} onOpenChange={accountDropdown.onOpenChange}>
-              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-10 items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 py-1 pl-1 pr-3 text-sm font-medium text-slate-500 shadow-sm shadow-slate-200/50 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label="Open account menu">
+              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-10 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted-foreground shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label="Open account menu">
                 <Avatar color="accent" size="sm" variant="soft" className="shadow-sm shadow-accent/20">
                   <Avatar.Fallback>{initials}</Avatar.Fallback>
                 </Avatar>
@@ -496,7 +495,7 @@ export default function NavBar() {
                         </div>
                         <p className="truncate text-xs text-muted-foreground">{userEmail || 'Signed in'}</p>
                         {activeTeam && (
-                          <p className="truncate text-[11px] text-cyan-700">Team: {activeTeam.name}</p>
+                          <p className="truncate text-[11px] text-accent/80">Team: {activeTeam.name}</p>
                         )}
                       </div>
                     </div>
@@ -559,7 +558,7 @@ export default function NavBar() {
 
           <div {...menuDropdown.triggerProps}>
             <Dropdown isOpen={menuDropdown.isOpen} onOpenChange={menuDropdown.onOpenChange}>
-              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm shadow-slate-200/50 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label="Open navigation menu">
+              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-10 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted-foreground shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label="Open navigation menu">
                 <Menu className="size-5" strokeWidth={2.4} />
               </Dropdown.Trigger>
               {menuDropdown.isOpen && (
@@ -597,10 +596,10 @@ export default function NavBar() {
                         id="mobile-account"
                         textValue="Account"
                         onAction={() => undefined}
-                        className="group rounded-xl px-3 py-2 text-slate-600 outline-none hover:bg-accent/10 hover:text-accent focus:bg-accent/10 focus:text-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:hidden [&_svg]:text-current"
+                        className="group rounded-xl px-3 py-2 text-foreground outline-none hover:bg-accent/10 hover:text-accent focus:bg-accent/10 focus:text-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:hidden [&_svg]:text-current"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-slate-50/80 text-slate-400 ring-1 ring-slate-200/70 transition-colors group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15">
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-default/50 text-muted-foreground ring-1 ring-border/50 transition-colors group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15">
                             <UserRound className="size-4" strokeWidth={2.2} />
                           </span>
                           <span className="min-w-0 flex-1">
@@ -610,7 +609,7 @@ export default function NavBar() {
                               <RolePill isAdmin={isAdmin} label={roleLabel} className="shrink-0" />
                             </span>
                             {activeTeam && (
-                              <span className="block truncate text-[11px] text-cyan-700">Team: {activeTeam.name}</span>
+                              <span className="block truncate text-[11px] text-accent/80">Team: {activeTeam.name}</span>
                             )}
                           </span>
                         </div>

@@ -1,8 +1,12 @@
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 /** @type {import('next').NextConfig} */
 const appPort = process.env.PORT || '4000'
 const appUrl = process.env.NEXTAUTH_URL || `http://localhost:${appPort}`
 
 const nextConfig = {
+  outputFileTracingRoot: dirname(fileURLToPath(import.meta.url)),
   env: {
     NEXT_PUBLIC_APP_PORT: appPort,
     NEXT_PUBLIC_APP_URL: appUrl,

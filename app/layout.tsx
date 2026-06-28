@@ -11,8 +11,8 @@ const inter = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'Location Manager',
-  description: 'QR-based building check-in and quest card system',
+  title: 'Kamnotheat',
+  description: 'Secure check-in logging — passkeys, QR, and an immutable audit ledger',
   manifest: '/manifest.json',
 }
 
@@ -24,7 +24,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground">
         <Providers>
           {children}

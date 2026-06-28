@@ -89,7 +89,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
       {passkeys.map((pk) => (
         <div key={pk._id} className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
               <KeyRound className="w-4 h-4 text-sky-500" />
             </div>
             <div>
@@ -104,12 +104,12 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
           </div>
           <div className="flex items-center gap-2">
             {pk.backedUp && (
-              <span className="inline-flex items-center text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Backed up</span>
+              <span className="inline-flex items-center text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Backed up</span>
             )}
             <Button
               variant="ghost"
               size="icon"
-              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+              className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
               aria-label="Remove passkey"
               onClick={() => setPasskeyToDelete(pk)}
             >
@@ -122,7 +122,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
       <Dialog open={Boolean(passkeyToDelete)} onOpenChange={(open) => !open && setPasskeyToDelete(null)}>
         <DialogContent size="xs">
           <DialogHeader>
-            <DialogIcon className="size-12 rounded-full bg-red-50 text-red-500">
+            <DialogIcon className="size-12 rounded-full bg-red-500/10 text-red-500">
               <Trash2 className="size-5" aria-hidden />
             </DialogIcon>
             <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">Remove passkey?</DialogTitle>

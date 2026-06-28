@@ -85,7 +85,7 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="sm" className="overflow-hidden bg-white [&>div]:flex [&>div]:max-h-[calc(100dvh-2rem)] [&>div]:min-h-0 [&>div]:flex-col">
+      <DialogContent size="sm" className="overflow-hidden bg-overlay [&>div]:flex [&>div]:max-h-[calc(100dvh-2rem)] [&>div]:min-h-0 [&>div]:flex-col">
         <div className="p-5 pb-4 sm:p-6 sm:pb-4">
           <div className="mx-auto w-full max-w-[17.625rem]">
             <div className="flex items-start gap-3">
@@ -206,9 +206,9 @@ export default function AdminLogsPage() {
   }
 
   const locationTypeColors: Record<string, string> = {
-    room: 'text-sky-600 bg-sky-50',
-    floor: 'text-cyan-600 bg-cyan-50',
-    building: 'text-amber-600 bg-amber-50',
+    room: 'text-sky-500 bg-sky-500/10',
+    floor: 'text-cyan-500 bg-cyan-500/10',
+    building: 'text-amber-500 bg-amber-500/10',
   }
 
   return (
@@ -344,7 +344,7 @@ export default function AdminLogsPage() {
                     </TableCell>
                     <TableCell>
                       {isIn ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                           In
                         </span>
@@ -410,7 +410,7 @@ export default function AdminLogsPage() {
           }
         }}
       >
-        <DialogContent size="sm" className="bg-white">
+        <DialogContent size="sm" className="bg-overlay">
           <DialogHeader className="px-5 pt-5 sm:px-6 sm:pt-6">
             <DialogTitle className="text-base font-semibold text-foreground">Manual checkout</DialogTitle>
           </DialogHeader>

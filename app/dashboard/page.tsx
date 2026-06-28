@@ -224,7 +224,7 @@ function TopLocationsChart({
                       <span className="rounded-full bg-muted px-2.5 py-1 text-foreground">
                         Total {item.count}
                       </span>
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
+                      <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-500">
                         Still IN {item.stillIn}
                       </span>
                     </div>
@@ -293,7 +293,7 @@ const quickActions = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
       </svg>
     ),
-    color: 'text-sky-600 bg-sky-50',
+    color: 'text-sky-500 bg-sky-500/10',
   },
   {
     href: '/admin/logs',
@@ -304,7 +304,7 @@ const quickActions = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
       </svg>
     ),
-    color: 'text-cyan-600 bg-cyan-50',
+    color: 'text-cyan-500 bg-cyan-500/10',
   },
   {
     href: '/admin/quests',
@@ -315,7 +315,7 @@ const quickActions = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
       </svg>
     ),
-    color: 'text-amber-600 bg-amber-50',
+    color: 'text-amber-500 bg-amber-500/10',
   },
 ]
 
@@ -384,7 +384,7 @@ export default function DashboardPage() {
             label="Check-ins Today"
             value={stats.totalToday}
             loading={loading}
-            accent="bg-sky-50 text-sky-600"
+            accent="bg-sky-500/10 text-sky-500"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -395,7 +395,7 @@ export default function DashboardPage() {
             label="Currently Checked In"
             value={stats.currentlyIn}
             loading={loading}
-            accent="bg-emerald-50 text-emerald-600"
+            accent="bg-emerald-500/10 text-emerald-500"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -403,7 +403,7 @@ export default function DashboardPage() {
             }
             badge={
               !loading && stats.currentlyIn > 0 ? (
-                <span className="flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                <span className="flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                   Live
                 </span>
@@ -414,7 +414,7 @@ export default function DashboardPage() {
             label="Total All-Time Logs"
             value={stats.totalAll}
             loading={loading}
-            accent="bg-cyan-50 text-cyan-600"
+            accent="bg-cyan-500/10 text-cyan-500"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />

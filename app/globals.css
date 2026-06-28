@@ -10,6 +10,11 @@
     --default: oklch(96.5% 0.001 286.375);
     --default-hover: oklch(95% 0.002 286.375);
   }
+  .dark,
+  [data-theme="dark"] {
+    --default: oklch(27.4% 0.006 286.033);
+    --default-hover: oklch(30% 0.006 286.033);
+  }
 }
 
 @layer utilities {
@@ -45,6 +50,11 @@
   }
   .glass {
     background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .dark .glass {
+    background: rgba(15, 15, 30, 0.8);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }

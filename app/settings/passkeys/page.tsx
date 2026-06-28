@@ -55,8 +55,8 @@ export default async function PasskeysSettingsPage() {
               <span
                 className={
                   u?.role === 'admin'
-                    ? 'inline-flex items-center text-[11px] font-medium text-cyan-700 bg-cyan-50 border border-cyan-200/60 px-2 py-0.5 rounded-full'
-                    : 'inline-flex items-center text-[11px] font-medium text-slate-700 bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-full'
+                    ? 'inline-flex items-center text-[11px] font-medium text-cyan-500 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full'
+                    : 'inline-flex items-center text-[11px] font-medium text-muted-foreground bg-default border border-border px-2 py-0.5 rounded-full'
                 }
               >
                 {u?.role === 'admin' ? 'Admin' : 'Staff'}
@@ -76,7 +76,7 @@ export default async function PasskeysSettingsPage() {
       <Card className="overflow-hidden">
         <CardContent className="p-4">
           <div className="mb-4 flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
               <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>

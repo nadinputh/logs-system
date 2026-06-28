@@ -80,10 +80,10 @@ function RoomsContent() {
   }
 
   const typeColors: Record<string, string> = {
-    office: 'text-blue-600 bg-blue-50',
-    lab: 'text-emerald-600 bg-emerald-50',
-    meeting: 'text-cyan-600 bg-cyan-50',
-    storage: 'text-amber-600 bg-amber-50',
+    office: 'text-blue-500 bg-blue-500/10',
+    lab: 'text-emerald-500 bg-emerald-500/10',
+    meeting: 'text-cyan-500 bg-cyan-500/10',
+    storage: 'text-amber-500 bg-amber-500/10',
   }
 
   return (
@@ -182,8 +182,8 @@ function RoomsContent() {
           </Table>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-3">
+              <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
               </svg>
             </div>
