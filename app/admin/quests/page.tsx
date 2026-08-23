@@ -96,7 +96,7 @@ export default function AdminQuestsPage() {
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
-            <p className="text-sm text-muted-foreground mt-0.5">{quests.length} quest{quests.length !== 1 ? 's' : ''} issued</p>
+            <p className="text-sm text-muted mt-0.5">{quests.length} quest{quests.length !== 1 ? 's' : ''} issued</p>
           )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -221,7 +221,7 @@ export default function AdminQuestsPage() {
               </svg>
             </div>
             <p className="font-medium text-foreground text-sm">No quests yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Issue a quest to get started</p>
+            <p className="text-xs text-muted mt-1">Issue a quest to get started</p>
           </div>
         ) : (
           <Table aria-label="Quest cards table">
@@ -251,7 +251,7 @@ export default function AdminQuestsPage() {
                     </span>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    <span className="text-sm text-muted-foreground">{q.steps.length} step{q.steps.length !== 1 ? 's' : ''}</span>
+                    <span className="text-sm text-muted">{q.steps.length} step{q.steps.length !== 1 ? 's' : ''}</span>
                   </TableCell>
                   <TableCell>
                     {q.isActive ? (
@@ -260,7 +260,7 @@ export default function AdminQuestsPage() {
                         Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center text-xs font-medium text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">Inactive</span>
+                      <span className="inline-flex items-center text-xs font-medium text-muted bg-muted px-2.5 py-0.5 rounded-full">Inactive</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">

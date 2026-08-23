@@ -82,7 +82,7 @@ function navigationClass(active: boolean) {
     'group inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-accent/30 [&_svg]:text-current',
     active
       ? 'bg-accent/10 text-accent ring-1 ring-accent/15'
-      : 'text-muted-foreground hover:bg-accent/10 hover:text-accent hover:ring-1 hover:ring-accent/10 data-[hovered]:bg-accent/10 data-[hovered]:text-accent data-[hovered]:ring-1 data-[hovered]:ring-accent/10',
+      : 'text-muted hover:bg-accent/10 hover:text-accent hover:ring-1 hover:ring-accent/10 data-[hovered]:bg-accent/10 data-[hovered]:text-accent data-[hovered]:ring-1 data-[hovered]:ring-accent/10',
   ].join(' ')
 }
 
@@ -98,7 +98,7 @@ function iconTileClass(active: boolean) {
     'flex size-8 shrink-0 items-center justify-center rounded-xl ring-1 transition-colors',
     active
       ? 'bg-accent/10 text-accent ring-accent/15'
-      : 'bg-default/50 text-muted-foreground ring-border/50 group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15',
+      : 'bg-default/50 text-muted ring-border/50 group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15',
   ].join(' ')
 }
 
@@ -184,9 +184,13 @@ function useHoverDropdown(
   useEffect(() => {
     if (!isOpen) return undefined
 
-    function handlePointerMove(event: MouseEvent | PointerEvent) {
-      updatePointerPosition(event)
+    // Batch the getBoundingClientRect reads to one per frame: pointermove fires
+    // far faster than 60fps, and a single pointermove covers mouse/pen/touch, so
+    // the old duplicate mousemove listener just doubled the layout work.
+    let frame = 0
 
+    function evaluate() {
+      frame = 0
       if (isPointerInsideDropdown()) {
         clearCloseTimer()
       } else {
@@ -194,12 +198,17 @@ function useHoverDropdown(
       }
     }
 
+    function handlePointerMove(event: MouseEvent | PointerEvent) {
+      updatePointerPosition(event)
+      if (frame) return
+      frame = requestAnimationFrame(evaluate)
+    }
+
     window.addEventListener('pointermove', handlePointerMove, true)
-    window.addEventListener('mousemove', handlePointerMove, true)
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove, true)
-      window.removeEventListener('mousemove', handlePointerMove, true)
+      if (frame) cancelAnimationFrame(frame)
       clearCloseTimer()
     }
   }, [isOpen])
@@ -300,20 +309,26 @@ function DropdownNavigationItem({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{item.label}</span>
-          <span className={`block truncate text-xs ${active ? 'text-accent/75' : 'text-muted-foreground group-hover:text-foreground/70 group-data-[hovered]:text-foreground/70'}`}>{item.description}</span>
+          <span className={`block truncate text-xs ${active ? 'text-accent/75' : 'text-muted group-hover:text-foreground/70 group-data-[hovered]:text-foreground/70'}`}>{item.description}</span>
         </span>
       </div>
     </Dropdown.Item>
   )
 }
 
+// Source of truth for management UI is the *team* role, not the global User.role.
+const TEAM_ROLE_RANK: Record<TeamSummary['role'], number> = {
+  auditor: 0,
+  member: 1,
+  manager: 2,
+  admin: 3,
+  owner: 4,
+}
+
 export default function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
   const { data: session, update } = useSession()
-  const userRole = (session?.user as { role?: string } | undefined)?.role ?? 'staff'
-  const roleLabel = userRole.charAt(0).toUpperCase() + userRole.slice(1)
-  const isAdmin = userRole === 'admin'
   const userEmail = session?.user?.email ?? ''
   const userName = (session?.user?.name ?? userEmail) || 'Account'
   const initials = userEmail ? userEmail[0].toUpperCase() : 'LM'
@@ -325,10 +340,15 @@ export default function NavBar() {
   const locationDropdown = useHoverDropdown('locations', openDropdown, setOpenDropdown)
   const accountDropdown = useHoverDropdown('account', openDropdown, setOpenDropdown)
   const menuDropdown = useHoverDropdown('menu', openDropdown, setOpenDropdown)
+  const activeTeam = teams.find((team) => team.isActive) ?? null
+  // Management affordances follow the team role (TeamMember.role): a self-signup
+  // owner is the admin of their own workspace even though their global role is 'staff'.
+  const teamRole = activeTeam?.role ?? null
+  const roleLabel = teamRole ? teamRole.charAt(0).toUpperCase() + teamRole.slice(1) : 'Member'
+  const isAdmin = teamRole ? TEAM_ROLE_RANK[teamRole] >= TEAM_ROLE_RANK.manager : false
   const mobileMenuItems = isAdmin
     ? [...primaryItems, ...locationItems, ...adminItems]
     : [...primaryItems]
-  const activeTeam = teams.find((team) => team.isActive) ?? null
 
   useEffect(() => {
     if (!session?.user) return
@@ -406,7 +426,7 @@ export default function NavBar() {
           <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
           <span className="hidden min-w-0 sm:block">
             <span className="block truncate text-sm font-bold tracking-tight text-foreground">Kamnotheat</span>
-            <span className="block truncate text-[11px] font-medium text-muted-foreground">Secure check-in logging</span>
+            <span className="block truncate text-xs font-medium text-muted">Secure check-in logging</span>
           </span>
         </Link>
 
@@ -437,7 +457,7 @@ export default function NavBar() {
                       <Dropdown.Popover placement="bottom start" className="w-64 rounded-2xl border border-border/70 bg-overlay p-2 shadow-xl shadow-slate-900/10">
                         <div {...locationDropdown.popoverProps}>
                           <div className="px-3 pb-2 pt-1">
-                            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Locations</p>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-muted">Locations</p>
                           </div>
                           <Dropdown.Menu aria-label="Location management navigation" className="space-y-1">
                             {locationItems.map((item) => (
@@ -474,7 +494,7 @@ export default function NavBar() {
           <ThemeToggle />
           <div {...accountDropdown.triggerProps}>
             <Dropdown isOpen={accountDropdown.isOpen} onOpenChange={accountDropdown.onOpenChange}>
-              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-10 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted-foreground shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label="Open account menu">
+              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-10 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label="Open account menu">
                 <Avatar color="accent" size="sm" variant="soft" className="shadow-sm shadow-accent/20">
                   <Avatar.Fallback>{initials}</Avatar.Fallback>
                 </Avatar>
@@ -493,9 +513,9 @@ export default function NavBar() {
                           <p className="truncate text-sm font-semibold text-foreground">{userName}</p>
                           <RolePill isAdmin={isAdmin} label={roleLabel} className="shrink-0" />
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">{userEmail || 'Signed in'}</p>
+                        <p className="truncate text-xs text-muted">{userEmail || 'Signed in'}</p>
                         {activeTeam && (
-                          <p className="truncate text-[11px] text-accent/80">Team: {activeTeam.name}</p>
+                          <p className="truncate text-xs text-accent/80">Team: {activeTeam.name}</p>
                         )}
                       </div>
                     </div>
@@ -512,7 +532,7 @@ export default function NavBar() {
                       {teams.length > 1 && (
                         <>
                           <div className="px-3 pb-1 pt-2">
-                            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Switch Team</p>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-muted">Switch Team</p>
                           </div>
                           {teams.map((team) => (
                             <Dropdown.Item
@@ -525,11 +545,11 @@ export default function NavBar() {
                               <div className="flex items-center justify-between gap-3 text-sm">
                                 <span className="truncate font-semibold text-foreground">{team.name}</span>
                                 {team.isActive ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                                     Active
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">
+                                  <span className="text-xs text-muted">
                                     {switchingTeamId === team.id ? 'Switching...' : 'Switch'}
                                   </span>
                                 )}
@@ -558,7 +578,7 @@ export default function NavBar() {
 
           <div {...menuDropdown.triggerProps}>
             <Dropdown isOpen={menuDropdown.isOpen} onOpenChange={menuDropdown.onOpenChange}>
-              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-10 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted-foreground shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label="Open navigation menu">
+              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-10 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label="Open navigation menu">
                 <Menu className="size-5" strokeWidth={2.4} />
               </Dropdown.Trigger>
               {menuDropdown.isOpen && (
@@ -567,7 +587,7 @@ export default function NavBar() {
                     <div className="flex items-center justify-between px-3 pb-2 pt-1">
                       <div>
                         <p className="text-sm font-bold text-foreground">Menu</p>
-                        <p className="text-xs text-muted-foreground">Navigation and account</p>
+                        <p className="text-xs text-muted">Navigation and account</p>
                       </div>
                       {isAdmin && <RolePill isAdmin={isAdmin} label={roleLabel} />}
                     </div>
@@ -599,17 +619,17 @@ export default function NavBar() {
                         className="group rounded-xl px-3 py-2 text-foreground outline-none hover:bg-accent/10 hover:text-accent focus:bg-accent/10 focus:text-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:hidden [&_svg]:text-current"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-default/50 text-muted-foreground ring-1 ring-border/50 transition-colors group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15">
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-default/50 text-muted ring-1 ring-border/50 transition-colors group-hover:bg-accent/10 group-hover:text-accent group-hover:ring-accent/15 group-data-[hovered]:bg-accent/10 group-data-[hovered]:text-accent group-data-[hovered]:ring-accent/15">
                             <UserRound className="size-4" strokeWidth={2.2} />
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold">{userName}</span>
                             <span className="mt-1 flex items-center gap-2">
-                              <span className="truncate text-xs text-muted-foreground">{userEmail || 'Signed in'}</span>
+                              <span className="truncate text-xs text-muted">{userEmail || 'Signed in'}</span>
                               <RolePill isAdmin={isAdmin} label={roleLabel} className="shrink-0" />
                             </span>
                             {activeTeam && (
-                              <span className="block truncate text-[11px] text-accent/80">Team: {activeTeam.name}</span>
+                              <span className="block truncate text-xs text-accent/80">Team: {activeTeam.name}</span>
                             )}
                           </span>
                         </div>

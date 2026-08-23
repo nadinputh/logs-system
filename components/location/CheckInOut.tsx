@@ -393,7 +393,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             </svg>
           </div>
           <h2 className="font-bold text-foreground">Location not found</h2>
-          <p className="text-sm text-muted-foreground mt-1.5">This QR code may be invalid or expired.</p>
+          <p className="text-sm text-muted mt-1.5">This QR code may be invalid or expired.</p>
           </CardContent>
         </Card>
       </div>
@@ -454,12 +454,12 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                   )}
                 </div>
                 <h2 className="text-lg font-bold text-foreground leading-tight">{location.name}</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">{locationLabel}</p>
+                <p className="text-sm text-muted mt-0.5">{locationLabel}</p>
                 {location.description && (
-                  <p className="text-xs text-muted-foreground mt-1.5">{location.description}</p>
+                  <p className="text-xs text-muted mt-1.5">{location.description}</p>
                 )}
                 {(location as any).capacity && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted mt-1">
                     <span className="font-medium">Capacity:</span> {(location as any).capacity}
                   </p>
                 )}
@@ -481,7 +481,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">Who are you?</h3>
-              <p className="text-sm text-muted-foreground mt-0.5">Enter your name to check in</p>
+              <p className="text-sm text-muted mt-0.5">Enter your name to check in</p>
             </div>
             <form onSubmit={handleIdentityStep1} className="space-y-3.5">
               <div className="space-y-1.5">
@@ -523,7 +523,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">A couple more details</h3>
-              <p className="text-sm text-muted-foreground mt-0.5">Optional — you can skip these</p>
+              <p className="text-sm text-muted mt-0.5">Optional — you can skip these</p>
             </div>
             <div className="space-y-3.5">
               <div className="space-y-1.5">
@@ -583,9 +583,9 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{name}</p>
-                {contact && <p className="text-xs text-muted-foreground truncate">{contact}</p>}
+                {contact && <p className="text-xs text-muted truncate">{contact}</p>}
                 {(gender || purpose) && (
-                  <p className="text-xs text-muted-foreground/70 truncate">
+                  <p className="text-xs text-muted/70 truncate">
                     {[purpose, gender && ({ male: 'Male', female: 'Female', non_binary: 'Non-binary', prefer_not_to_say: 'Prefer not to say' } as Record<string,string>)[gender]].filter(Boolean).join(' · ')}
                   </p>
                 )}
@@ -618,7 +618,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               </Button>
             )}
             {!passkeyRequired && (
-              <div className="flex items-center gap-3 text-xs text-muted-foreground/60">
+              <div className="flex items-center gap-3 text-xs text-muted/60">
                 <div className="flex-1 h-px bg-border" />
                 <span>or use biometrics</span>
                 <div className="flex-1 h-px bg-border" />
@@ -664,7 +664,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">Optional Selfie</h3>
-              <p className="text-sm text-muted-foreground mt-0.5">Take a photo or skip</p>
+              <p className="text-sm text-muted mt-0.5">Take a photo or skip</p>
             </div>
             <SelfieCapture
               onCapture={(url) => {
@@ -730,7 +730,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             {/* Offer to save passkey only if location is click-mode and passkey not yet registered */}
             {location.checkInMode !== 'passkey' && !checkedInViaPasskey && !visitorPasskeyRegistered && (
               <>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground/60">
+                <div className="flex items-center gap-3 text-xs text-muted/60">
                   <div className="flex-1 h-px bg-border" />
                   <span>save for next time</span>
                   <div className="flex-1 h-px bg-border" />
@@ -764,7 +764,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
 
             {!questRecorded && (
               <>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground/60">
+                <div className="flex items-center gap-3 text-xs text-muted/60">
                   <div className="flex-1 h-px bg-border" />
                   <span>quest</span>
                   <div className="flex-1 h-px bg-border" />
@@ -797,7 +797,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             <CardContent className="p-4">
             <div className="mb-4">
               <h3 className="font-semibold text-foreground">Scan Quest Card</h3>
-              <p className="text-sm text-muted-foreground mt-0.5">Point camera at your quest card QR code</p>
+              <p className="text-sm text-muted mt-0.5">Point camera at your quest card QR code</p>
             </div>
             <QRScanner onResult={handleQuestCardScanned} redirectOnScan={false} />
             <Button
@@ -822,10 +822,10 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               </svg>
             </div>
             <h3 className="font-bold text-foreground text-lg">All done!</h3>
-            <p className="text-sm text-muted-foreground mt-1.5">
+            <p className="text-sm text-muted mt-1.5">
               You've checked out of <span className="font-medium text-foreground">{location.name}</span>
             </p>
-            <p className="text-sm text-muted-foreground mt-1">Thanks for visiting. See you soon! 👋</p>
+            <p className="text-sm text-muted mt-1">Thanks for visiting. See you soon! 👋</p>
             </CardContent>
           </Card>
         )}

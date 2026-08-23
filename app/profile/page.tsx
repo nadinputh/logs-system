@@ -44,7 +44,7 @@ export default function ProfilePage() {
             <UserRound className="size-6 text-white" />
           </div>
           <h1 className="text-xl font-bold text-foreground">Your Personal QR</h1>
-          <p className="text-sm text-muted-foreground mt-1">Show this to a terminal scanner to check in</p>
+          <p className="text-sm text-muted mt-1">Show this to a terminal scanner to check in</p>
         </div>
 
         {/* QR card */}
@@ -65,8 +65,8 @@ export default function ProfilePage() {
             {/* Countdown + refresh */}
             <div className="flex items-center gap-3 w-full">
               <div className="flex-1 bg-muted/50 rounded-xl px-3.5 py-2.5 text-center">
-                <Clock3 className="mx-auto mb-1 size-4 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Expires in</p>
+                <Clock3 className="mx-auto mb-1 size-4 text-muted" />
+                <p className="text-xs text-muted">Expires in</p>
                 <p className="text-lg font-bold text-foreground tabular-nums">{countdown}s</p>
               </div>
               <Button
@@ -81,7 +81,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <p className="text-xs text-center text-muted-foreground/60">
+        <p className="text-xs text-center text-muted/60">
           This QR refreshes automatically every 25 seconds
         </p>
       </div>

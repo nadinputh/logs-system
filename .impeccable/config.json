@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#000",
+        "createdAt": "2026-08-22T14:59:52.749Z",
+        "reason": "Not a colour: #000 is the opaque stop of a mask-image alpha channel in .ledger-field, never painted"
+      },
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "app/globals.css"
+        ],
+        "createdAt": "2026-08-22T14:59:52.777Z",
+        "reason": "DESIGN.md commits the Split-Clause Headline Rule as the project's visual world; stops deepened to 5.44:1 light / 4.9:1 dark, above the 3:1 large-text floor"
+      }
+    ]
+  }
+}

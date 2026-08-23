@@ -65,7 +65,7 @@ function durationLabel(entry: LogEntry) {
 function DetailItem({ label, value }: { label: string; value?: string | boolean | null }) {
   return (
     <div className="min-w-0 rounded-xl bg-muted/40 px-3 py-2">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium text-muted">{label}</p>
       <p className="mt-1 break-words text-sm leading-5 text-foreground">{formatValue(value)}</p>
     </div>
   )
@@ -94,7 +94,7 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
               </div>
               <div className="min-w-0">
                 <DialogTitle className="text-base font-semibold text-foreground">Guest Details</DialogTitle>
-                <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
                   <MapPin className="size-3.5 shrink-0" aria-hidden />
                   <span className="truncate">{log.locationName ?? 'Unknown location'}</span>
                 </p>
@@ -220,7 +220,7 @@ export default function AdminLogsPage() {
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
-            <p className="text-sm text-muted-foreground mt-0.5">{logs.length} entries total</p>
+            <p className="text-sm text-muted mt-0.5">{logs.length} entries total</p>
           )}
         </div>
         <Button
@@ -239,7 +239,7 @@ export default function AdminLogsPage() {
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <Input
@@ -293,12 +293,12 @@ export default function AdminLogsPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-muted/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
             </div>
             <p className="font-medium text-foreground text-sm">{search ? 'No matching logs' : 'No logs yet'}</p>
-            <p className="text-xs text-muted-foreground mt-1">{search ? 'Try a different search term' : 'Logs will appear here as visitors check in'}</p>
+            <p className="text-xs text-muted mt-1">{search ? 'Try a different search term' : 'Logs will appear here as visitors check in'}</p>
           </div>
         ) : (
           <Table aria-label="Admin logs table">
@@ -314,7 +314,7 @@ export default function AdminLogsPage() {
             <TableBody>
               {filtered.map(l => {
                 const typeKey = l.locationType?.toLowerCase() ?? ''
-                const typeBadge = locationTypeColors[typeKey] ?? 'text-muted-foreground bg-muted'
+                const typeBadge = locationTypeColors[typeKey] ?? 'text-muted bg-muted'
                 const isIn = !l.checkoutAt
                 return (
                   <TableRow key={l._id}>
@@ -325,16 +325,16 @@ export default function AdminLogsPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="font-medium text-sm text-foreground">{l.visitorName ?? 'Unknown visitor'}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px] md:hidden">{l.locationPath ?? l.locationName ?? 'Unknown location'}</p>
+                          <p className="text-xs text-muted mt-0.5 truncate max-w-[200px] md:hidden">{l.locationPath ?? l.locationName ?? 'Unknown location'}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <p className="text-sm text-foreground truncate max-w-[260px]" title={l.locationPath ?? undefined}>
-                        {l.locationName ?? <span className="text-muted-foreground/60">Unknown</span>}
+                        {l.locationName ?? <span className="text-muted/60">Unknown</span>}
                       </p>
                       {l.locationPath && l.locationPath !== l.locationName && (
-                        <p className="text-xs text-muted-foreground truncate max-w-[260px]">{l.locationPath}</p>
+                        <p className="text-xs text-muted truncate max-w-[260px]">{l.locationPath}</p>
                       )}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
@@ -349,16 +349,16 @@ export default function AdminLogsPage() {
                           In
                         </span>
                       ) : (
-                        <span className="inline-flex items-center text-xs font-medium text-muted-foreground bg-muted px-2.5 py-0.5 rounded-full">
+                        <span className="inline-flex items-center text-xs font-medium text-muted bg-muted px-2.5 py-0.5 rounded-full">
                           Out
                         </span>
                       )}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <p className="text-xs text-muted-foreground">{new Date(l.timestamp).toLocaleString()}</p>
+                      <p className="text-xs text-muted">{new Date(l.timestamp).toLocaleString()}</p>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted">
                         {l.checkoutAt ? new Date(l.checkoutAt).toLocaleString() : '—'}
                       </p>
                     </TableCell>
@@ -416,7 +416,7 @@ export default function AdminLogsPage() {
           </DialogHeader>
           <DialogBody className="px-5 pb-2 pt-0 sm:px-6">
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted">
                 This will append a checkout log for {manualCheckoutLog?.visitorName ?? 'this visitor'} and record the reason in the audit ledger.
               </p>
               <Textarea

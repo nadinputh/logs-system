@@ -95,7 +95,7 @@ function RoomsContent() {
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-24" />
           ) : (
-            <p className="text-sm text-muted-foreground mt-0.5">{filtered.length} room{filtered.length !== 1 ? 's' : ''}</p>
+            <p className="text-sm text-muted mt-0.5">{filtered.length} room{filtered.length !== 1 ? 's' : ''}</p>
           )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -188,7 +188,7 @@ function RoomsContent() {
               </svg>
             </div>
             <p className="font-medium text-foreground text-sm">No rooms yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Add a room to enable QR-based check-ins</p>
+            <p className="text-xs text-muted mt-1">Add a room to enable QR-based check-ins</p>
           </div>
         ) : (
           <Table aria-label="Rooms table">
@@ -202,22 +202,22 @@ function RoomsContent() {
             <TableBody>
               {filtered.map(r => {
                 const typeKey = r.type?.toLowerCase() ?? ''
-                const badgeColor = typeColors[typeKey] ?? 'text-muted-foreground bg-muted'
+                const badgeColor = typeColors[typeKey] ?? 'text-muted bg-muted'
                 return (
                   <TableRow key={r._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <span className="text-xs font-bold text-muted-foreground">{r.number}</span>
+                          <span className="text-xs font-bold text-muted">{r.number}</span>
                         </div>
                         <div>
                           <p className="font-semibold text-sm text-foreground">{r.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">{getFloorName(r.floorId)}</p>
+                          <p className="text-xs text-muted mt-0.5 sm:hidden">{getFloorName(r.floorId)}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <p className="text-sm text-muted-foreground">{getFloorName(r.floorId)}</p>
+                      <p className="text-sm text-muted">{getFloorName(r.floorId)}</p>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       {r.type ? (
@@ -225,7 +225,7 @@ function RoomsContent() {
                           {r.type}
                         </span>
                       ) : (
-                        <span className="text-sm text-muted-foreground/50">—</span>
+                        <span className="text-sm text-muted/50">—</span>
                       )}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">

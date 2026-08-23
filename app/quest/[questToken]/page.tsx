@@ -35,7 +35,7 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
             </svg>
           </div>
           <h2 className="font-bold text-foreground">Quest not found</h2>
-          <p className="text-sm text-muted-foreground mt-1.5">This quest card QR may be invalid.</p>
+          <p className="text-sm text-muted mt-1.5">This quest card QR may be invalid.</p>
           </CardContent>
         </Card>
       </div>
@@ -69,7 +69,7 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
                   )}
                 </div>
                 <h2 className="text-lg font-bold text-foreground leading-tight">{card.title}</h2>
-                {card.description && <p className="text-sm text-muted-foreground">{card.description}</p>}
+                {card.description && <p className="text-sm text-muted">{card.description}</p>}
               </div>
               <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shrink-0 shadow-sm">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,7 +81,7 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
             {/* Progress bar */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Progress</span>
+                <span className="text-muted">Progress</span>
                 <span className="font-semibold text-foreground">{completedCount}/{totalSteps}</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -101,13 +101,13 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
                     done ? 'bg-emerald-50 border-emerald-200/60' : 'bg-muted/30 border-border/40'
                   }`}>
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
-                      done ? 'bg-emerald-500 text-white' : 'bg-muted-foreground/20 text-muted-foreground'
+                      done ? 'bg-emerald-500 text-white' : 'bg-muted-foreground/20 text-muted'
                     }`}>
                       {done ? '✓' : step.order + 1}
                     </span>
                     <div>
                       <p className="text-sm font-medium capitalize text-foreground">{step.locationType} visit</p>
-                      {step.challenge && <p className="text-xs text-muted-foreground italic mt-0.5">{step.challenge}</p>}
+                      {step.challenge && <p className="text-xs text-muted italic mt-0.5">{step.challenge}</p>}
                     </div>
                   </li>
                 )
@@ -119,7 +119,7 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
         {/* Scan CTA */}
         <Card>
           <CardContent className="p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">At a location? Scan it now to record your visit.</p>
+          <p className="text-sm text-muted">At a location? Scan it now to record your visit.</p>
           <Link
             href="/scan"
             className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
