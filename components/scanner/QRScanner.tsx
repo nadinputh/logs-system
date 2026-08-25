@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Camera, CameraOff, Loader2, ShieldAlert, X } from 'lucide-react'
+import { Camera, CameraOff, Loader2, ShieldAlert, Smartphone, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 /**
@@ -61,8 +61,7 @@ function describeFailure(err: unknown): Failure {
   if (/NotFoundError|DevicesNotFoundError|no camera|device not found|not found/i.test(raw)) {
     return {
       title: 'No camera found',
-      detail:
-        'This device has no camera available. Use the QR code on your phone instead, or ask a host to check you in.',
+      detail: 'This device has no camera available to open.',
       retryable: false,
     }
   }
@@ -77,7 +76,7 @@ function describeFailure(err: unknown): Failure {
   if (/OverconstrainedError|ConstraintNotSatisfiedError/i.test(raw)) {
     return {
       title: "This camera can't be used",
-      detail: 'No rear-facing camera is available on this device. Try a phone instead.',
+      detail: 'No rear-facing camera is available on this device.',
       retryable: false,
     }
   }
@@ -87,7 +86,7 @@ function describeFailure(err: unknown): Failure {
     return {
       title: "This browser can't use the camera",
       detail:
-        'If you opened this from inside another app, tap its menu and choose "Open in browser", then try again.',
+        'If you opened this from inside another app, tap its menu and choose "Open in browser" and load this page there.',
       retryable: false,
     }
   }
@@ -178,7 +177,7 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
       setFailure({
         title: 'The camera needs a secure connection',
         detail:
-          'Browsers only allow camera access over HTTPS. Open this page on its https:// address, then try again.',
+          'Browsers only allow camera access over HTTPS. Open this page on its https:// address to use the scanner.',
         retryable: false,
       })
       return
@@ -186,6 +185,11 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
 
     try {
       const { Html5Qrcode } = await import('html5-qrcode')
+      if (!mounted.current) return
+      // Wait for the viewfinder to actually be laid out before the library
+      // measures it. The dynamic import usually covers this, but a frame is
+      // cheap and makes the ordering explicit rather than incidental.
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
       if (!mounted.current) return
       const scanner = new Html5Qrcode(DIV_ID)
       scannerRef.current = scanner
@@ -197,7 +201,9 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
         {
           fps: 10,
           qrbox: (w: number, h: number) => {
-            const edge = Math.floor(Math.min(w, h) * 0.7)
+            // The library throws below 50px. Clamp rather than let a bad
+            // measurement take the whole scanner down.
+            const edge = Math.max(50, Math.floor(Math.min(w, h) * 0.7))
             return { width: edge, height: edge }
           },
         },
@@ -224,21 +230,34 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
     }
   }, [handleDecoded])
 
+  // A failure the visitor cannot clear by trying again. The UI must route
+  // around it rather than leaving a disabled control as the last thing on screen.
+  const deadEnd = !!failure && !failure.retryable
+
   return (
     <div className="space-y-4">
+      {/* Heading navigation previously landed on "What happens" — the explainer —
+          because the task itself had no accessible name. */}
+      <h2 className="sr-only">Scan the QR code</h2>
+      {/* Mounted and laid out from 'starting', not 'scanning'. html5-qrcode
+          measures this container the instant start() runs; if it is still
+          display:none it reads 0, writes an inline width:0px onto the <video>,
+          and hands qrbox a 0x0 decode region — a live camera with no picture. */}
       <div
         className={
-          phase === 'scanning'
-            ? 'overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-black'
-            : 'hidden'
+          phase === 'idle'
+            ? 'hidden'
+            : 'aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-black'
         }
       >
-        <div id={DIV_ID} className="w-full [&_video]:block [&_video]:w-full" />
+        <div id={DIV_ID} className="size-full" />
       </div>
 
       {/* Idle placeholder: gives the panel a stable height so starting the camera
-          does not shove the rest of the page down. */}
-      {phase !== 'scanning' && (
+          does not shove the rest of the page down. Withdrawn on a dead end —
+          promising a preview is a lie once the control that would start it is
+          gone, and the space belongs to the routes that still work. */}
+      {phase === 'idle' && !deadEnd && (
         <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[var(--panel-border)] px-6 text-center">
           <Camera className="size-7 text-muted" strokeWidth={1.8} />
           <p className="text-sm text-muted">
@@ -252,15 +271,17 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
           <X className="size-4" strokeWidth={2.4} />
           Stop scanner
         </Button>
+      ) : deadEnd ? (
+        /* A cause retrying cannot fix does not get a button that will fail
+           again. The control is replaced by the routes that still work —
+           never a dimmed pill sitting above copy that says "try again". */
+        null
       ) : (
         <Button
-          className="press w-full disabled:cursor-not-allowed disabled:opacity-45"
+          className="press w-full"
           size="lg"
           onPress={start}
           isLoading={phase === 'starting'}
-          // A cause we know retrying cannot fix (no camera, insecure origin,
-          // unsupported browser) must not offer a button that will fail again.
-          isDisabled={failure ? !failure.retryable : false}
         >
           {phase === 'starting' ? (
             <>
@@ -270,21 +291,24 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
           ) : (
             <>
               <Camera className="size-4" strokeWidth={2.4} />
-              {failure?.retryable ? 'Try again' : 'Start scanner'}
+              {failure ? 'Try again' : 'Start scanner'}
             </>
           )}
         </Button>
       )}
 
-      {/* One live region carries every status change, so a screen reader hears
-          the camera start, stop, and fail. */}
+      {/* Progress is polite; a failure that ends the task is not. Announcing a
+          dead camera at the same priority as "scanner started" means it queues
+          behind other speech and can be missed entirely. */}
       <div aria-live="polite" role="status">
         {phase === 'scanning' && (
           <p className="text-center text-sm text-muted">
             Point the camera at the QR code. It reads the moment it is in frame.
           </p>
         )}
+      </div>
 
+      <div role="alert" className="space-y-4">
         {failure && (
           <div className="flex items-start gap-3 rounded-2xl border border-[var(--status-danger)]/25 bg-[var(--status-danger)]/[0.08] p-4 text-left">
             {failure.retryable ? (
@@ -304,6 +328,51 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
             </div>
           </div>
         )}
+      </div>
+
+      {/* The other ways in.
+          Deliberately always visible, not revealed only after a failure: a
+          screen-reader user cannot aim a camera and will never trigger the
+          failure that would disclose an alternative. Both routes work with no
+          account, no new endpoint, and no code printed on the poster — the
+          phone's own camera opens the same link the in-app scanner reads, and
+          a person at reception is the fallback a physical door already has. */}
+      <div
+        className={
+          deadEnd
+            ? 'rounded-2xl border border-[var(--panel-border)] bg-[var(--accent)]/[0.06] p-4'
+            : 'border-t border-[var(--panel-border)] pt-4'
+        }
+      >
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+          {deadEnd ? 'Two other ways in' : 'Not working?'}
+        </h3>
+        <ul className="mt-3 space-y-3">
+          <li className="flex items-start gap-3">
+            <Smartphone
+              className="mt-0.5 size-4 shrink-0 text-[var(--accent)]"
+              strokeWidth={2.3}
+            />
+            <p className="text-sm text-muted">
+              <span className="font-semibold text-foreground">
+                Use your phone&apos;s own camera app.
+              </span>{' '}
+              Point it at the same QR code — it opens the identical link without
+              needing this page.
+            </p>
+          </li>
+          <li className="flex items-start gap-3">
+            <UserRound
+              className="mt-0.5 size-4 shrink-0 text-[var(--accent)]"
+              strokeWidth={2.3}
+            />
+            <p className="text-sm text-muted">
+              <span className="font-semibold text-foreground">Ask at reception.</span>{' '}
+              A host can check you in if the code is damaged, missing, or your
+              camera will not open.
+            </p>
+          </li>
+        </ul>
       </div>
     </div>
   )

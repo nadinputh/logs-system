@@ -3,8 +3,7 @@ import Link from 'next/link'
 import QRScanner from '@/components/scanner/QRScanner'
 import { ParticleField } from '@/components/ParticleField'
 import { LogoTile } from '@/components/Logo'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowRight, Camera, ScanLine, ShieldCheck } from 'lucide-react'
+import { Camera, ScanLine, ShieldCheck } from 'lucide-react'
 
 /**
  * The visitor's door. An Operate surface, not a Persuade one: someone is standing
@@ -39,8 +38,11 @@ const steps = [
   },
   {
     Icon: ShieldCheck,
-    title: 'Confirm and you are logged',
-    text: 'Your entry is written once, with the time set by the server.',
+    title: 'Give your name and confirm',
+    // Was "Confirm and you are logged", which skipped the form entirely. The
+    // next screen requires a full name; contact, purpose, gender and a photo
+    // are each optional (verified in components/location/CheckInOut.tsx).
+    text: 'Only your name is required. Your entry is then written once, timed by the server.',
   },
 ]
 
@@ -61,83 +63,91 @@ export default function ScanPage() {
           Skip to content
         </a>
 
-        <header className="sticky top-0 z-40 border-b border-[var(--panel-border)] bg-background/70 backdrop-blur-xl">
-          <nav aria-label="Primary" className="shell flex h-16 items-center gap-3 sm:h-[4.5rem]">
+        {/* No ThemeToggle, no Sign in. Both served staff on the one surface whose
+            user is a stranger here for twenty seconds — and "Sign in" was the
+            highest-contrast control on the page at load, on a page whose visitor
+            has no account. Dark mode still follows the OS through next-themes;
+            the staff route lives at the foot of the page where it belongs. The
+            wordmark is no longer hidden on phones: this page asks for a camera,
+            so it has to say who is asking. */}
+        <header className="border-b border-[var(--panel-border)]">
+          <nav aria-label="Primary" className="shell flex h-16 items-center sm:h-[4.5rem]">
             <Link
               href="/landing"
               aria-label="Kamnotheat — home"
               className="group flex items-center gap-3 rounded-2xl"
             >
               <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
-              <span className="hidden sm:block">
+              <span>
                 <span className="block text-sm font-bold tracking-tight">Kamnotheat</span>
                 <span className="block text-xs text-muted">Secure check-in logging</span>
               </span>
             </Link>
-            <div className="ml-auto flex items-center gap-2">
-              <ThemeToggle />
-              <Link
-                href="/login"
-                className="press inline-flex h-11 items-center gap-2 rounded-full border border-border bg-overlay/80 px-4 text-sm font-semibold shadow-sm hover:bg-accent/10 hover:text-[var(--accent)]"
-              >
-                Sign in
-                <ArrowRight className="size-4" strokeWidth={2.4} />
-              </Link>
-            </div>
           </nav>
         </header>
 
-        <main id="main" className="shell pb-24 pt-12 sm:pt-16">
-          <div className="max-w-[44ch]">
-            <h1 className="text-balance text-[clamp(2rem,4.5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em]">
+        <main id="main" className="shell pb-20 pt-8 sm:pt-12">
+          <div className="mx-auto w-full max-w-[34rem]">
+            <h1 className="text-balance text-[clamp(1.75rem,4vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.02em]">
               Scan to <span className="gradient-text">check in</span>
             </h1>
-            <p className="mt-4 text-pretty text-lg text-muted">
-              Point your camera at the QR code posted at your location. Your entry is
-              recorded once and cannot be edited afterwards.
+            {/* Both halves in one line, above the fold: what is permanent *and*
+                what it contains. The previous lede repeated step 1 verbatim and
+                pushed the task off screen. */}
+            <p className="mt-3 text-pretty text-muted">
+              Recorded once and never edited — the time, the code you scan, and your name.
             </p>
-          </div>
 
-          <div className="mt-10 grid gap-10 lg:mt-14 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] lg:gap-16">
-            {/* The task */}
-            <div className="glass shadow-panel rounded-3xl p-5 sm:p-6">
+            {/* The task, as high as the page can put it. */}
+            <div className="glass shadow-panel mt-6 rounded-3xl p-5 sm:p-6">
               <QRScanner />
             </div>
 
-            {/* What to expect, as a sequence rather than three identical cards */}
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
-                What happens
+            <div className="mt-6 rounded-2xl border border-[var(--panel-border)] p-4">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                What gets recorded
               </h2>
-              <ol className="mt-7 space-y-7">
-                {steps.map(({ Icon, title, text }, i) => (
-                  <li key={title} className="flex items-start gap-4">
-                    <span className="glass inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-[var(--accent)]">
-                      <Icon className="size-[18px]" strokeWidth={2.2} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="flex items-baseline gap-2">
-                        <span className="tabular text-xs font-semibold text-muted">
-                          {i + 1}
-                        </span>
-                        <span className="font-semibold tracking-tight">{title}</span>
-                      </span>
-                      <span className="mt-1 block text-sm text-muted">{text}</span>
-                    </span>
-                  </li>
-                ))}
-              </ol>
-
-              <p className="mt-10 border-t border-[var(--panel-border)] pt-6 text-sm text-muted">
-                Staff or admin?{' '}
-                <Link
-                  href="/login"
-                  className="font-semibold text-[var(--accent)] hover:underline"
-                >
-                  Open the console
-                </Link>
+              <p className="mt-2.5 text-sm text-muted">
+                The time, the code you scan, and{' '}
+                <span className="font-semibold text-foreground">your name</span>. Your IP
+                address, browser, and a random ID for this browser are stored alongside it.
+                Contact details, purpose and a photo are optional — you can skip all three.
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                The camera feed never leaves your device; only the code is read. Entries are
+                readable by this organisation&apos;s staff.
               </p>
             </div>
+
+            <h2 className="mt-10 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+              What happens
+            </h2>
+            <ol className="mt-4 space-y-5">
+              {steps.map(({ Icon, title, text }, i) => (
+                <li key={title} className="flex items-start gap-3.5">
+                  <span className="glass inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-[var(--accent)]">
+                    <Icon className="size-4" strokeWidth={2.2} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex items-baseline gap-2">
+                      <span className="tabular text-xs font-semibold text-muted">{i + 1}</span>
+                      <span className="font-semibold tracking-tight">{title}</span>
+                    </span>
+                    <span className="mt-0.5 block text-sm text-muted">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <p className="mt-10 border-t border-[var(--panel-border)] pt-5 text-sm text-muted">
+              Staff or admin?{' '}
+              <Link
+                href="/login"
+                className="font-semibold text-[var(--accent)] hover:underline"
+              >
+                Open the console
+              </Link>
+            </p>
           </div>
         </main>
       </div>
