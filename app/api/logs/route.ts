@@ -12,6 +12,8 @@ import {
   requireTeamAccess,
   requireTeamPermission,
 } from "@/lib/middleware/auth";
+import { hasMinimumTeamRole } from "@/lib/teamPermissions";
+import { TeamRole } from "@/lib/models/TeamMember";
 
 export const runtime = "nodejs";
 
@@ -29,12 +31,15 @@ export async function GET(req: NextRequest) {
   }
 
   const userId = (auth.session.user as any).id;
-  const role = (auth.session.user as any).role;
+  // Team admins/owners see the whole team's check-ins; members see only their own.
+  const canViewTeam = hasMinimumTeamRole(
+    ((auth.membership as any)?.role as TeamRole) ?? "member",
+    "admin",
+  );
 
-  const query =
-    role === "admin"
-      ? { teamId: auth.teamId, action: "in" as const }
-      : { teamId: auth.teamId, userId, action: "in" as const };
+  const query = canViewTeam
+    ? { teamId: auth.teamId, action: "in" as const }
+    : { teamId: auth.teamId, userId, action: "in" as const };
   const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1");
   const limit = 50;
 

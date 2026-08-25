@@ -82,7 +82,7 @@ function FloorsContent() {
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted mt-0.5">
               {filtered.length} floor{filtered.length !== 1 ? 's' : ''}
               {buildingFilter && buildings.length > 0 && ` in ${getBuildingName(buildingFilter)}`}
             </p>
@@ -176,7 +176,7 @@ function FloorsContent() {
               </svg>
             </div>
             <p className="font-medium text-foreground text-sm">No floors yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Add a floor to begin organising rooms</p>
+            <p className="text-xs text-muted mt-1">Add a floor to begin organising rooms</p>
           </div>
         ) : (
           <Table aria-label="Floors table">
@@ -196,12 +196,12 @@ function FloorsContent() {
                       </div>
                       <div>
                         <p className="font-semibold text-sm text-foreground">{f.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">{getBuildingName(f.buildingId)}</p>
+                        <p className="text-xs text-muted mt-0.5 sm:hidden">{getBuildingName(f.buildingId)}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <p className="text-sm text-muted-foreground">{getBuildingName(f.buildingId)}</p>
+                    <p className="text-sm text-muted">{getBuildingName(f.buildingId)}</p>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <CheckInModeToggle locationId={f._id} value={f.checkInMode ?? 'click'} />

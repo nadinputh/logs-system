@@ -3,9 +3,10 @@ import mongoose, { Schema, Document, Model, Types } from "mongoose";
 export interface IUser extends Document {
   name: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
   role: "admin" | "staff";
   activeTeamId?: Types.ObjectId;
+  emailVerified?: Date | null;
   createdAt: Date;
 }
 
@@ -19,9 +20,10 @@ const UserSchema = new Schema<IUser>(
       lowercase: true,
       trim: true,
     },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String }, // absent until set (admin-created accounts use a set-password link)
     role: { type: String, enum: ["admin", "staff"], default: "staff" },
     activeTeamId: { type: Schema.Types.ObjectId, ref: "Team" },
+    emailVerified: { type: Date, default: null }, // null until email is verified; login is blocked while null
   },
   { timestamps: true },
 );

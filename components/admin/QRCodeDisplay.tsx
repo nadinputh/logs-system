@@ -68,8 +68,8 @@ export default function QRCodeDisplay({ url, label, sublabel, exportTitle = 'QR 
       </div>
       <div className="text-center">
         <p className="text-base font-semibold text-foreground">{label}</p>
-        {sublabel && <p className="mt-0.5 text-sm text-muted-foreground">{sublabel}</p>}
-        <p className="mt-2 max-w-full break-all rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{url}</p>
+        {sublabel && <p className="mt-0.5 text-sm text-muted">{sublabel}</p>}
+        <p className="mt-2 max-w-full break-all rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted">{url}</p>
       </div>
       <Button
         ref={downloadButtonRef}

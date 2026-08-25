@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTeamPermission } from "@/lib/middleware/auth";
+import { hasMinimumTeamRole } from "@/lib/teamPermissions";
+import { TeamRole } from "@/lib/models/TeamMember";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
@@ -36,7 +38,11 @@ export async function GET(req: NextRequest) {
 
   const teamId = auth.teamId;
   const userId = (auth.session?.user as any)?.id as string | undefined;
-  const role = (auth.session?.user as any)?.role as string | undefined;
+  // Team admins/owners stream every member's events; members see only their own.
+  const canViewTeam = hasMinimumTeamRole(
+    ((auth.membership as any)?.role as TeamRole) ?? "member",
+    "admin",
+  );
 
   return createSseStream(req, (send) => {
     let since = new Date();
@@ -52,7 +58,7 @@ export async function GET(req: NextRequest) {
         teamId,
         timestamp: { $gt: since },
       };
-      if (role !== "admin" && userId) query.userId = userId;
+      if (!canViewTeam && userId) query.userId = userId;
 
       const logs = await Log.find(query).sort({ timestamp: 1 }).lean();
       for (const log of logs) {

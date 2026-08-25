@@ -26,7 +26,7 @@ export default async function PasskeysSettingsPage() {
     <div className="p-6 sm:p-8 max-w-2xl mx-auto space-y-6">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-foreground transition-colors"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -36,7 +36,7 @@ export default async function PasskeysSettingsPage() {
 
       <div>
         <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
+        <p className="text-sm text-muted mt-0.5">
           Manage your account security and sign-in methods.
         </p>
       </div>
@@ -50,19 +50,19 @@ export default async function PasskeysSettingsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-base font-semibold text-foreground truncate">{u?.name}</p>
-            <p className="text-sm text-muted-foreground truncate">{u?.email}</p>
+            <p className="text-sm text-muted truncate">{u?.email}</p>
             <div className="mt-1.5 flex items-center gap-2">
               <span
                 className={
                   u?.role === 'admin'
-                    ? 'inline-flex items-center text-[11px] font-medium text-cyan-500 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full'
-                    : 'inline-flex items-center text-[11px] font-medium text-muted-foreground bg-default border border-border px-2 py-0.5 rounded-full'
+                    ? 'inline-flex items-center text-xs font-medium text-cyan-500 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full'
+                    : 'inline-flex items-center text-xs font-medium text-muted bg-default border border-border px-2 py-0.5 rounded-full'
                 }
               >
                 {u?.role === 'admin' ? 'Admin' : 'Staff'}
               </span>
               {u?.createdAt && (
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted">
                   Member since {new Date(u.createdAt).toLocaleDateString()}
                 </span>
               )}
@@ -83,7 +83,7 @@ export default async function PasskeysSettingsPage() {
             </div>
             <div className="min-w-0">
               <h2 className="font-semibold text-foreground text-sm">Passkeys</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Use your device biometrics or PIN to verify your identity — no password needed.
               </p>
             </div>

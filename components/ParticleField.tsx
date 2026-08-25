@@ -3,16 +3,28 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * ParticleField — an antigravity.google-style interactive dot grid.
+ * ParticleField — the locating field.
  *
- * Physics per dot (real-world model):
- *   • Cursor repulsion with inverse-distance falloff inside a radius.
- *   • Spring-back to the home position (Hooke's law: F = -k · displacement).
- *   • Velocity damping (friction) so motion settles smoothly.
- * Dots gain radius + glow toward the accent colour as they're displaced ("energy").
+ * A calm grid of survey points. Move a cursor through it and the points nearest
+ * the probe displace and warm toward the accent, falling off at a soft radius —
+ * the same shape as the geofence check the engine runs on every check-in
+ * (`geofence_status`: is this point inside the boundary?). The field is the
+ * product's central question rendered as atmosphere.
  *
- * Rendered to a single <canvas>; pointer-events are disabled so it never blocks UI.
- * Honours prefers-reduced-motion (renders a static grid) and theme (dark/light).
+ * Physics per point:
+ *   • Probe displacement with a smooth radial falloff.
+ *   • Spring-back toward home (Hooke: F = -k·displacement).
+ *   • Velocity damping so motion settles rather than oscillates.
+ *
+ * Cost discipline — this used to be the most expensive thing on the page:
+ *   • Glow is a pre-rendered sprite, not `ctx.shadowBlur` (which forces a
+ *     separate blur raster per fill and was ~156 of them per frame).
+ *   • Resting points batch into one Path2D fill.
+ *   • The loop only runs while the canvas is on screen, the tab is visible, and
+ *     the device actually has a fine pointer. Touch devices paint one static
+ *     frame and never start a loop.
+ *   • DPR capped at 1.5 — this is a low-contrast dot field, not an image.
+ *   • Honours prefers-reduced-motion, and keeps listening for changes to it.
  */
 
 type Dot = {
@@ -24,20 +36,25 @@ type Dot = {
   vy: number
 }
 
-// Physics constants
-const SPACING = 34 // px between dots
-const REPEL_RADIUS = 240 // px — cursor influence radius (larger = wider hover effect)
-const REPEL_STRENGTH = 4.6 // peak impulse (px/frame) at contact
-const SPRING = 0.05 // Hooke stiffness pulling back home
-const DAMPING = 0.86 // velocity retained per frame (friction)
-const MAX_DPR = 2
-// Idle ambient drift — keeps dots gently flowing even when the cursor is still
-const DRIFT_AMP = 7 // px — how far a dot floats from home
-const DRIFT_SPEED = 0.00055 // time scale (per ms) — lower = slower
-const DRIFT_FREQ = 0.013 // spatial scale — makes neighbours move as a wave
+const SPACING = 40 // px between points
+const PROBE_RADIUS = 230 // px — how far the cursor reaches
+const PROBE_STRENGTH = 4.4 // peak impulse (px/frame) at contact
+const SPRING = 0.05 // stiffness pulling back home
+const DAMPING = 0.86 // velocity retained per frame
+const MAX_DPR = 1.5
+const DRIFT_AMP = 7 // px — idle float from home
+const DRIFT_SPEED = 0.00055 // per ms — lower is slower
+const DRIFT_FREQ = 0.013 // spatial scale, so neighbours move as a wave
+const GLOW_SPRITE = 40 // px — pre-rendered glow diameter
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
+}
+
+/** Smooth 0..1 falloff. Gives the probe a legible edge instead of a linear ramp. */
+function falloff(t: number) {
+  const u = 1 - t
+  return u * u * (3 - 2 * u)
 }
 
 export function ParticleField({
@@ -58,15 +75,50 @@ export function ParticleField({
     const canvas = el
     const ctx = context
 
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const pointerQuery = window.matchMedia('(pointer: fine)')
 
     let width = 0
     let height = 0
     let dpr = 1
     let dots: Dot[] = []
+    // The canvas scrolls with the page, so its offset has to track scroll — but
+    // reading the rect on every pointermove would force layout. Cache it and
+    // recompute lazily, at most once per frame, only when something moved.
     let rectLeft = 0
     let rectTop = 0
-    const mouse = { x: -9999, y: -9999, active: false }
+    let rectDirty = true
+    const mouse = { clientX: -9999, clientY: -9999, active: false }
+
+    function syncRect() {
+      if (!rectDirty) return
+      const r = canvas.getBoundingClientRect()
+      rectLeft = r.left
+      rectTop = r.top
+      rectDirty = false
+    }
+
+    // --- Glow sprite ---------------------------------------------------------
+    // One radial gradient, rasterised once, then blitted per energised point.
+    let glow: HTMLCanvasElement | null = null
+    let glowKey = ''
+    function buildGlow(r: number, g: number, b: number) {
+      const key = `${r},${g},${b}`
+      if (glow && glowKey === key) return
+      const c = document.createElement('canvas')
+      c.width = c.height = GLOW_SPRITE
+      const gctx = c.getContext('2d')
+      if (!gctx) return
+      const half = GLOW_SPRITE / 2
+      const grad = gctx.createRadialGradient(half, half, 0, half, half, half)
+      grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.55)`)
+      grad.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, 0.18)`)
+      grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`)
+      gctx.fillStyle = grad
+      gctx.fillRect(0, 0, GLOW_SPRITE, GLOW_SPRITE)
+      glow = c
+      glowKey = key
+    }
 
     function isDark() {
       return document.documentElement.classList.contains('dark')
@@ -74,10 +126,11 @@ export function ParticleField({
 
     function build() {
       const rect = canvas.getBoundingClientRect()
-      width = rect.width
-      height = rect.height
       rectLeft = rect.left
       rectTop = rect.top
+      rectDirty = false
+      width = rect.width
+      height = rect.height
       dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR)
       canvas.width = Math.floor(width * dpr)
       canvas.height = Math.floor(height * dpr)
@@ -97,43 +150,44 @@ export function ParticleField({
       }
     }
 
-    function draw(now: number) {
+    function draw(now: number, animate: boolean) {
+      syncRect()
+      const mx = mouse.clientX - rectLeft
+      const my = mouse.clientY - rectTop
       const dark = isDark()
       ctx.clearRect(0, 0, width, height)
 
-      // Resting dot colour + accent glow target.
-      // `onDark` renders white dots for use over a coloured/dark surface;
-      // otherwise theme-aware slate dots that glow cyan.
+      // Resting point colour and the accent the probe warms them toward.
+      // `onDark` renders white points for use over a coloured surface.
       const onDark = tone === 'onDark'
       const base = onDark ? [255, 255, 255] : dark ? [148, 163, 184] : [100, 116, 139]
-      const accent = onDark ? [255, 255, 255] : [34, 211, 238]
-      const baseAlpha = onDark ? 0.3 : dark ? 0.22 : 0.16
+      const accent = onDark ? [255, 255, 255] : dark ? [34, 211, 238] : [14, 116, 144]
+      const baseAlpha = onDark ? 0.3 : dark ? 0.22 : 0.2
       const restRadius = 1.15
+      buildGlow(accent[0], accent[1], accent[2])
 
-      // Batch all low-energy dots into one fill for speed.
+      // Batch every low-energy point into a single fill.
       const basePath = new Path2D()
 
       for (const d of dots) {
-        // Idle target: home position + a slow flowing wave so dots keep
-        // moving even while the cursor is still.
+        // Idle target: home plus a slow flowing wave, so the field breathes
+        // even while the cursor is still.
         let tx = d.ox
         let ty = d.oy
-        if (!reduceMotion) {
+        if (animate) {
           tx += Math.sin(now * DRIFT_SPEED + d.ox * DRIFT_FREQ + d.oy * DRIFT_FREQ) * DRIFT_AMP
           ty += Math.cos(now * DRIFT_SPEED + d.oy * DRIFT_FREQ - d.ox * DRIFT_FREQ) * DRIFT_AMP
 
-          // Cursor repulsion (inverse-distance falloff)
           if (mouse.active) {
-            const dx = d.x - mouse.x
-            const dy = d.y - mouse.y
+            const dx = d.x - mx
+            const dy = d.y - my
             const dist = Math.hypot(dx, dy) || 0.0001
-            if (dist < REPEL_RADIUS) {
-              const impulse = (1 - dist / REPEL_RADIUS) * REPEL_STRENGTH
+            if (dist < PROBE_RADIUS) {
+              const impulse = falloff(dist / PROBE_RADIUS) * PROBE_STRENGTH
               d.vx += (dx / dist) * impulse
               d.vy += (dy / dist) * impulse
             }
           }
-          // Spring toward the drifting target (Hooke's law) + damping (friction)
           d.vx += (tx - d.x) * SPRING
           d.vy += (ty - d.y) * SPRING
           d.vx *= DAMPING
@@ -142,8 +196,8 @@ export function ParticleField({
           d.y += d.vy
         }
 
-        // Energy from displacement off the drift target (so only the cursor —
-        // not the gentle idle drift — lights dots up).
+        // Energy is displacement off the drift target, so the gentle idle wave
+        // does not light points up — only the probe does.
         const disp = Math.hypot(d.x - tx, d.y - ty)
         const energy = Math.min(disp / 26, 1)
 
@@ -157,65 +211,133 @@ export function ParticleField({
         const r = Math.round(lerp(base[0], accent[0], energy))
         const g = Math.round(lerp(base[1], accent[1], energy))
         const b = Math.round(lerp(base[2], accent[2], energy))
-        const alpha = baseAlpha + energy * 0.7
+
+        if (glow) {
+          // Keep the halo tight enough that the located point stays a point.
+          const size = GLOW_SPRITE * (0.42 + energy * 0.45)
+          ctx.globalAlpha = energy
+          ctx.drawImage(glow, d.x - size / 2, d.y - size / 2, size, size)
+          ctx.globalAlpha = 1
+        }
 
         ctx.beginPath()
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`
-        ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha})`
-        ctx.shadowBlur = energy * 10
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${baseAlpha + energy * 0.7})`
         ctx.arc(d.x, d.y, radius, 0, Math.PI * 2)
         ctx.fill()
       }
 
-      ctx.shadowBlur = 0
       ctx.fillStyle = `rgba(${base[0]}, ${base[1]}, ${base[2]}, ${baseAlpha})`
       ctx.fill(basePath)
     }
 
+    // --- Run gating ----------------------------------------------------------
+    // The loop is only allowed to run when all three are true. Anything else
+    // paints one static frame and stops.
+    let onScreen = true
     let raf = 0
+    let running = false
+
+    function shouldRun() {
+      return onScreen && !document.hidden && pointerQuery.matches && !motionQuery.matches
+    }
+
     function loop(now: number) {
-      draw(now)
+      draw(now, true)
       raf = requestAnimationFrame(loop)
     }
 
+    function start() {
+      if (running || !shouldRun()) return
+      running = true
+      raf = requestAnimationFrame(loop)
+    }
+
+    function stop() {
+      if (!running) return
+      running = false
+      cancelAnimationFrame(raf)
+      // Leave a settled frame behind rather than a half-displaced one.
+      for (const d of dots) {
+        d.x = d.ox
+        d.y = d.oy
+        d.vx = 0
+        d.vy = 0
+      }
+      draw(0, false)
+    }
+
+    function sync() {
+      if (shouldRun()) start()
+      else stop()
+    }
+
     function onPointerMove(e: PointerEvent) {
-      mouse.x = e.clientX - rectLeft
-      mouse.y = e.clientY - rectTop
+      // Store client coords only; they are resolved against the cached rect at
+      // draw time, so moving the mouse never forces a layout read.
+      mouse.clientX = e.clientX
+      mouse.clientY = e.clientY
       mouse.active = true
     }
     function release() {
       mouse.active = false
-      mouse.x = -9999
-      mouse.y = -9999
+      mouse.clientX = -9999
+      mouse.clientY = -9999
     }
+    function onScroll() {
+      rectDirty = true
+    }
+
+    let resizeTimer = 0
     function onResize() {
-      build()
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(() => {
+        rectDirty = true
+        build()
+        if (!running) draw(0, false)
+      }, 120)
     }
 
     build()
+    draw(0, false)
 
-    if (reduceMotion) {
-      draw(0)
-    } else {
-      window.addEventListener('pointermove', onPointerMove, { passive: true })
-      window.addEventListener('blur', release)
-      document.addEventListener('mouseleave', release)
-      raf = requestAnimationFrame(loop)
-    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting
+        sync()
+      },
+      { rootMargin: '120px' },
+    )
+    io.observe(canvas)
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('blur', release)
+    document.addEventListener('mouseleave', release)
+    document.addEventListener('visibilitychange', sync)
+    motionQuery.addEventListener('change', sync)
+    pointerQuery.addEventListener('change', sync)
     window.addEventListener('resize', onResize)
+
+    sync()
 
     return () => {
       cancelAnimationFrame(raf)
+      io.disconnect()
+      window.clearTimeout(resizeTimer)
       window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('scroll', onScroll)
       window.removeEventListener('blur', release)
       document.removeEventListener('mouseleave', release)
+      document.removeEventListener('visibilitychange', sync)
+      motionQuery.removeEventListener('change', sync)
+      pointerQuery.removeEventListener('change', sync)
       window.removeEventListener('resize', onResize)
     }
   }, [tone])
 
   // `block h-full w-full` forces the canvas to fill its box — a <canvas> is a
   // replaced element with an intrinsic 300×150 size, so `inset-0` alone won't
-  // stretch it (and the physics grid is sized from getBoundingClientRect()).
+  // stretch it (and the grid is sized from getBoundingClientRect()).
   return (
     <canvas
       ref={canvasRef}

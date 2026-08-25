@@ -67,7 +67,7 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
       <div className="w-full max-w-sm print-area">
         <Link
           href={backHref}
-          className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground print:hidden"
+          className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-muted/60 hover:text-foreground print:hidden"
         >
           <ArrowLeft className="size-3.5" />
           {backLabel}
@@ -81,7 +81,7 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
                 </div>
                 <div className="min-w-0">
                   <p className="text-base font-semibold text-foreground">Location QR Code</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
                     <MapPin className="size-3.5" />
                     Scan to check in / out
                   </p>

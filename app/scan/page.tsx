@@ -1,151 +1,163 @@
-'use client'
-
+import type { Metadata } from 'next'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
-import { motion, type Variants } from 'framer-motion'
+import QRScanner from '@/components/scanner/QRScanner'
 import { ParticleField } from '@/components/ParticleField'
 import { LogoTile } from '@/components/Logo'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import {
-  ArrowRight,
-  Camera,
-  QrCode,
-  ScanLine,
-  ShieldCheck,
-} from 'lucide-react'
+import { Camera, ScanLine, ShieldCheck } from 'lucide-react'
 
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.55, ease: [0.21, 0.47, 0.32, 0.98] },
-  },
+/**
+ * The visitor's door. An Operate surface, not a Persuade one: someone is standing
+ * at a reader with a phone, trying to get in. The task outranks expression.
+ *
+ * A server component — the scanner is the only client island, and because
+ * html5-qrcode is imported inside the tap handler, the idle state paints from
+ * HTML instead of waiting behind a `dynamic(ssr:false)` spinner.
+ *
+ * Width is deliberately not the landing's. This is the fallback surface — most
+ * phones open the door's QR from the native camera and land straight on
+ * /scan/[locationId] — so it is one centred column at every size rather than a
+ * two-column composition built to fill a front door's width.
+ */
+
+export const metadata: Metadata = {
+  title: 'Scan to check in — Kamnotheat',
+  description:
+    'Point your camera at the QR code posted at your location to record your entry.',
+  robots: { index: false },
 }
-
-const stagger: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } },
-}
-
-const QRScanner = dynamic(() => import('@/components/scanner/QRScanner'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-64 items-center justify-center">
-      <svg className="size-6 animate-spin text-accent" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
-    </div>
-  ),
-})
 
 const steps = [
-  { Icon: Camera, title: 'Point your camera', text: 'Aim at the QR code posted at your location.' },
-  { Icon: ScanLine, title: 'Auto-detect', text: 'The scanner reads the code the moment it’s in frame.' },
-  { Icon: ShieldCheck, title: 'Confirm & log', text: 'Verify your identity and your entry is recorded.' },
+  {
+    Icon: Camera,
+    title: 'Point your camera',
+    text: 'Aim at the QR code posted at your door, kiosk, or terminal.',
+  },
+  {
+    Icon: ScanLine,
+    title: 'It reads itself',
+    text: 'No button to press — the code is picked up the moment it is in frame.',
+  },
+  {
+    Icon: ShieldCheck,
+    title: 'Confirm over a few short screens',
+    // Verified against components/location/CheckInOut.tsx: identity (name and
+    // contact) -> identity step 2 (purpose, gender) -> checkin -> an optional
+    // selfie. "Confirm and you are logged" skipped all of it; "give your name
+    // and confirm" then understated it. This names the real shape.
+    text: 'Your name is the only required field — the details and photo that follow are skippable. Your entry is written once, timed by the server.',
+  },
 ]
 
 export default function ScanPage() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      {/* Ambient gradient blobs — matches the landing page */}
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-32 top-[-10%] size-[34rem] rounded-full bg-sky-500/20 blur-3xl" />
-        <div className="absolute -right-32 top-[5%] size-[30rem] rounded-full bg-teal-500/20 blur-3xl" />
-        <div className="absolute bottom-[-20%] left-1/3 size-[26rem] rounded-full bg-cyan-400/15 blur-3xl" />
+    <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
+      {/* The same two atmosphere layers as the landing. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+        <div className="ambient-wash absolute inset-0" />
+        <ParticleField className="absolute inset-0" />
       </div>
 
-      {/* Interactive physics dot field (antigravity-style) */}
-      <ParticleField className="fixed inset-0 z-0" />
-
-
-      {/* Header */}
-      <header className="relative z-10 border-b border-white/20 bg-background/10 backdrop-blur-3xl">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-        <div className="mx-auto flex h-16 max-w-5xl items-center gap-3 px-4 sm:px-6">
-          <Link href="/landing" className="group flex items-center gap-3">
-            <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
-            <span className="hidden sm:block">
-              <span className="block text-sm font-bold tracking-tight">Kamnotheat</span>
-              <span className="block text-[11px] font-medium text-muted-foreground">Secure check-in logging</span>
-            </span>
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            <ThemeToggle />
-            <Link
-              href="/login"
-              className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-overlay/80 px-4 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-accent/10 hover:text-accent"
-            >
-              Sign in
-              <ArrowRight className="size-4" strokeWidth={2.4} />
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Body */}
-      <main className="relative z-10 mx-auto flex max-w-lg flex-col items-center px-4 pb-20 pt-12 sm:px-6 sm:pt-16">
-        <motion.div variants={stagger} initial="hidden" animate="show" className="w-full text-center">
-          <motion.div variants={fadeUp}>
-            <span className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-accent">
-              <QrCode className="size-3.5" strokeWidth={2.5} />
-              Check in
-            </span>
-          </motion.div>
-
-          <motion.h1
-            variants={fadeUp}
-            className="mt-5 text-balance text-3xl font-extrabold leading-[1.1] tracking-tight sm:text-4xl"
-          >
-            Scan to <span className="gradient-text">check in</span>
-          </motion.h1>
-
-          <motion.p variants={fadeUp} className="mx-auto mt-3 max-w-sm text-balance text-muted-foreground">
-            Point your camera at the QR code posted at your location to record your
-            entry instantly.
-          </motion.p>
-
-          {/* Scanner card */}
-          <motion.div
-            variants={fadeUp}
-            className="mt-8 overflow-hidden rounded-3xl border border-white/20 bg-background/25 p-5 shadow-xl shadow-black/5 backdrop-blur-sm sm:p-6"
-          >
-            <QRScanner />
-          </motion.div>
-        </motion.div>
-
-        {/* How it works */}
-        <motion.ol
-          variants={stagger}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: '-40px' }}
-          className="mt-10 grid w-full gap-3 sm:grid-cols-3"
+      <div className="relative z-10">
+        <a
+          href="#main"
+          className="glass sr-only rounded-full px-4 py-2 text-sm font-semibold focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
         >
-          {steps.map((s, i) => (
-            <motion.li
-              key={s.title}
-              variants={fadeUp}
-              className="relative rounded-2xl border border-white/20 bg-background/25 p-4 backdrop-blur-sm"
-            >
-              <span className="absolute right-3 top-3 text-3xl font-black text-accent/10">{i + 1}</span>
-              <span className="inline-flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/15 to-teal-500/15 text-accent ring-1 ring-accent/15">
-                <s.Icon className="size-5" strokeWidth={2.2} />
-              </span>
-              <h3 className="mt-3 text-sm font-bold">{s.title}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.text}</p>
-            </motion.li>
-          ))}
-        </motion.ol>
+          Skip to content
+        </a>
 
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          Staff or admin?{' '}
-          <Link href="/login" className="font-semibold text-accent hover:underline">
-            Open the console
-          </Link>
-        </p>
-      </main>
+        {/* No ThemeToggle, no Sign in. Both served staff on the one surface whose
+            user is a stranger here for twenty seconds — and "Sign in" was the
+            highest-contrast control on the page at load, on a page whose visitor
+            has no account. Dark mode still follows the OS through next-themes;
+            the staff route lives at the foot of the page where it belongs. The
+            wordmark is no longer hidden on phones: this page asks for a camera,
+            so it has to say who is asking. */}
+        <header className="border-b border-[var(--panel-border)]">
+          <nav aria-label="Primary" className="shell flex h-16 items-center sm:h-[4.5rem]">
+            <Link
+              href="/landing"
+              aria-label="Kamnotheat — home"
+              className="group flex items-center gap-3 rounded-2xl"
+            >
+              <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
+              <span>
+                <span className="block text-sm font-bold tracking-tight">Kamnotheat</span>
+                <span className="block text-xs text-muted">Secure check-in logging</span>
+              </span>
+            </Link>
+          </nav>
+        </header>
+
+        <main id="main" className="shell pb-20 pt-8 sm:pt-12 [@media(max-height:540px)]:pt-3">
+          <div className="mx-auto w-full max-w-[34rem]">
+            <h1 className="text-balance text-[clamp(1.75rem,4vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.02em]">
+              Scan to <span className="gradient-text">check in</span>
+            </h1>
+            {/* Both halves in one line, above the fold: what is permanent *and*
+                what it contains. The previous lede repeated step 1 verbatim and
+                pushed the task off screen. */}
+            <p className="mt-3 text-pretty text-muted [@media(max-height:540px)]:mt-1.5">
+              Recorded once and never edited — the time, the code you scan, and your name.
+            </p>
+
+            {/* The task, as high as the page can put it. */}
+            <div className="glass shadow-panel mt-6 rounded-3xl p-5 sm:p-6 [@media(max-height:540px)]:mt-3 [@media(max-height:540px)]:p-4">
+              <QRScanner />
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-[var(--panel-border)] p-4">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                What gets recorded
+              </h2>
+              <p className="mt-2.5 text-sm text-muted">
+                The time, the code you scan, and{' '}
+                <span className="font-semibold text-foreground">your name</span>. Your IP
+                address, browser, and a random ID for this browser are stored alongside it.
+                Contact details, purpose and a photo are optional — you can skip all three.
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                The camera feed never leaves your device; only the code is read. Entries are
+                readable by this organisation&apos;s staff.{' '}
+                <span className="font-semibold text-foreground">
+                  You do not need an account.
+                </span>
+              </p>
+            </div>
+
+            <h2 className="mt-10 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+              What happens
+            </h2>
+            <ol className="mt-4 space-y-5">
+              {steps.map(({ Icon, title, text }, i) => (
+                <li key={title} className="flex items-start gap-3.5">
+                  <span className="glass inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-[var(--accent)]">
+                    <Icon className="size-4" strokeWidth={2.2} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex items-baseline gap-2">
+                      <span aria-hidden className="tabular text-xs font-semibold text-muted">
+                        {i + 1}
+                      </span>
+                      <span className="font-semibold tracking-tight">{title}</span>
+                    </span>
+                    <span className="mt-0.5 block text-sm text-muted">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+
+            <p className="mt-10 border-t border-[var(--panel-border)] pt-5 text-sm text-muted">
+              Staff or admin?{' '}
+              <Link
+                href="/login"
+                className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
+              >
+                Open the console
+              </Link>
+            </p>
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

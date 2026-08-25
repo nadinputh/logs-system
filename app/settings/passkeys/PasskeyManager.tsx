@@ -77,7 +77,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted">
           {passkeys.length === 0 ? 'No passkeys registered yet.' : `${passkeys.length} passkey${passkeys.length !== 1 ? 's' : ''} registered`}
         </p>
         <Button onClick={handleRegister} disabled={loading} size="sm">
@@ -96,7 +96,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
               <p className="text-sm font-medium text-foreground">
                 {pk.deviceType === 'multiDevice' ? 'Synced passkey' : 'Device-bound passkey'}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted">
                 Added {new Date(pk.createdAt).toLocaleDateString()} · Last used{' '}
                 {new Date(pk.lastUsedAt).toLocaleDateString()}
               </p>
@@ -127,7 +127,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
             </DialogIcon>
             <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">Remove passkey?</DialogTitle>
           </DialogHeader>
-          <DialogBody className="mt-3 text-sm leading-6 text-muted-foreground">
+          <DialogBody className="mt-3 text-sm leading-6 text-muted">
             This will remove the selected {passkeyToDelete?.deviceType === 'multiDevice' ? 'synced' : 'device-bound'} passkey from your account. You can register it again later if this device is still available.
           </DialogBody>
           <DialogFooter className="mt-5 gap-2">

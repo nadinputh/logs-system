@@ -79,7 +79,7 @@ export default function TerminalPage() {
             </svg>
           </div>
           <h1 className="text-xl font-bold text-foreground">Terminal</h1>
-          <p className="text-sm text-muted-foreground mt-1">Fixed scanner for personal QR check-in</p>
+          <p className="text-sm text-muted mt-1">Fixed scanner for personal QR check-in</p>
         </div>
 
         {/* Config card */}
@@ -140,7 +140,7 @@ export default function TerminalPage() {
           <CardContent className="p-4 space-y-3">
             <div>
               <h2 className="font-semibold text-foreground text-sm">Scan User QR</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Ask the visitor to show their profile QR code</p>
+              <p className="text-xs text-muted mt-0.5">Ask the visitor to show their profile QR code</p>
             </div>
             {scanning ? (
               <>
@@ -165,7 +165,7 @@ export default function TerminalPage() {
               </Button>
             )}
             {lastResult && (
-              <p className="text-sm text-center text-muted-foreground">{lastResult}</p>
+              <p className="text-sm text-center text-muted">{lastResult}</p>
             )}
           </CardContent>
         </Card>

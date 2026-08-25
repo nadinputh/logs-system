@@ -65,7 +65,7 @@ export default function AdminBuildingsPage() {
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-32" />
           ) : (
-            <p className="text-sm text-muted-foreground mt-0.5">{buildings.length} location{buildings.length !== 1 ? 's' : ''} registered</p>
+            <p className="text-sm text-muted mt-0.5">{buildings.length} location{buildings.length !== 1 ? 's' : ''} registered</p>
           )}
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -144,7 +144,7 @@ export default function AdminBuildingsPage() {
               </svg>
             </div>
             <p className="font-medium text-foreground text-sm">No buildings yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Click "Add Building" to get started</p>
+            <p className="text-xs text-muted mt-1">Click "Add Building" to get started</p>
           </div>
         ) : (
           <Table aria-label="Buildings table">
@@ -166,13 +166,13 @@ export default function AdminBuildingsPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-sm text-foreground">{b.name}</p>
-                        {b.description && <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">{b.description}</p>}
-                        <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">{b.address}</p>
+                        {b.description && <p className="text-xs text-muted mt-0.5 truncate max-w-[200px]">{b.description}</p>}
+                        <p className="text-xs text-muted mt-0.5 sm:hidden">{b.address}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <p className="text-sm text-muted-foreground">{b.address}</p>
+                    <p className="text-sm text-muted">{b.address}</p>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <CheckInModeToggle locationId={b._id} value={b.checkInMode ?? 'click'} />

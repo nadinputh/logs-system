@@ -50,7 +50,7 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
       <div className="mx-auto w-full max-w-5xl space-y-4">
         <Link
           href="/admin/quests"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
           Back to quests
@@ -66,7 +66,7 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                   </div>
                   <div className="min-w-0">
                     <p className="text-base font-semibold text-foreground">Quest Card QR</p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
                       <Sparkles className="size-3.5 shrink-0" />
                       Give this to participants
                     </p>
@@ -98,12 +98,12 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                       {questTypeLabel}
                     </span>
                   </div>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
                     <MapPin className="size-3.5 shrink-0" />
                     {quest.title}
                   </p>
                   {quest.description && (
-                    <p className="mt-1 text-sm text-muted-foreground">{quest.description}</p>
+                    <p className="mt-1 text-sm text-muted">{quest.description}</p>
                   )}
                 </div>
               </div>
@@ -116,12 +116,12 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground" title={step.locationPath ?? undefined}>
-                        {step.locationName ?? <span className="text-muted-foreground italic">Unknown location</span>}
+                        {step.locationName ?? <span className="text-muted italic">Unknown location</span>}
                       </p>
-                      <p className="text-xs text-muted-foreground capitalize">
+                      <p className="text-xs text-muted capitalize">
                         {step.locationType}{step.locationPath && step.locationPath !== step.locationName ? ` · ${step.locationPath}` : ''}
                       </p>
-                      {step.challenge && <p className="mt-0.5 text-xs text-muted-foreground italic">{step.challenge}</p>}
+                      {step.challenge && <p className="mt-0.5 text-xs text-muted italic">{step.challenge}</p>}
                     </div>
                   </li>
                 ))}

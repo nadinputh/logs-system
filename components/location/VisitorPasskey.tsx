@@ -229,7 +229,7 @@ export default function VisitorPasskey({
         <Fingerprint className="w-4 h-4 mr-2" />
         {label}
       </Button>
-      <p className="text-[11px] text-center text-muted-foreground">
+      <p className="text-xs text-center text-muted">
         Uses Face ID, Touch ID, or device PIN
       </p>
     </div>

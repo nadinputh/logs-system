@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/sonner'
+import { AddUserDirect } from './AddUserDirect'
 
 type TeamRole = 'owner' | 'admin' | 'manager' | 'member' | 'auditor'
 type TeamStatus = 'active' | 'suspended'
@@ -106,7 +107,7 @@ function roleBadgeClass(role: TeamRole) {
     case 'manager':
       return 'bg-sky-500/10 text-sky-500 border-sky-500/20'
     case 'auditor':
-      return 'bg-default text-muted-foreground border-border'
+      return 'bg-default text-muted border-border'
     case 'member':
     default:
       return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
@@ -662,7 +663,7 @@ export default function TeamSettingsPage() {
     <div className="mx-auto max-w-6xl space-y-6 p-6 sm:p-8">
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -672,7 +673,7 @@ export default function TeamSettingsPage() {
 
       <div className="space-y-1">
         <h1 className="text-2xl font-bold text-foreground">Team & Access</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted">
           Switch active team, manage members, and control invite access for locations, guests, and logs.
         </p>
       </div>
@@ -682,7 +683,7 @@ export default function TeamSettingsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">Active team context</p>
-              <p className="text-xs text-muted-foreground">Your APIs and dashboards use this team by default.</p>
+              <p className="text-xs text-muted">Your APIs and dashboards use this team by default.</p>
             </div>
             {nextPath && (
               <Button
@@ -696,11 +697,11 @@ export default function TeamSettingsPage() {
           </div>
 
           {loadingTeams ? (
-            <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
               Loading teams...
             </div>
           ) : teams.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               No teams yet. Create your first team below.
             </div>
           ) : (
@@ -713,15 +714,15 @@ export default function TeamSettingsPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">{team.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{team.slug}</p>
+                      <p className="truncate text-xs text-muted">{team.slug}</p>
                     </div>
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${roleBadgeClass(team.role)}`}>
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(team.role)}`}>
                       {team.role}
                     </span>
                   </div>
                   <div className="mt-3">
                     {team.isActive ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-500">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500">
                         Active
                       </span>
                     ) : (
@@ -747,7 +748,7 @@ export default function TeamSettingsPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-foreground">Team Audit Trail</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted">
                 Immutable timeline for role changes, ownership transfers, and member removals.
               </p>
             </div>
@@ -806,19 +807,19 @@ export default function TeamSettingsPage() {
           </div>
 
           {!activeTeam ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               Select an active team first.
             </div>
           ) : !canViewAudit ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               You need team admin or owner role to view team audit events.
             </div>
           ) : loadingAudit ? (
-            <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
               Loading audit events...
             </div>
           ) : auditEvents.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               No audit events yet for this team.
             </div>
           ) : (
@@ -828,16 +829,16 @@ export default function TeamSettingsPage() {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-semibold text-foreground">{describeAuditAction(event.action)}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted">
                         {new Date(event.createdAt).toLocaleString()}
                       </p>
                     </div>
-                    <span className="inline-flex rounded-full border border-border bg-default px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    <span className="inline-flex rounded-full border border-border bg-default px-2 py-0.5 text-xs font-medium text-muted">
                       {event.action}
                     </span>
                   </div>
 
-                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <div className="mt-2 space-y-1 text-xs text-muted">
                     <p>
                       <span className="font-semibold text-foreground">Actor:</span> {displayActor(event.actor)}
                     </p>
@@ -867,7 +868,7 @@ export default function TeamSettingsPage() {
                     {loadingMoreAudit ? 'Loading more...' : 'Load more'}
                   </Button>
                 ) : (
-                  <p className="text-xs text-muted-foreground">End of audit history.</p>
+                  <p className="text-xs text-muted">End of audit history.</p>
                 )}
               </div>
             </div>
@@ -879,7 +880,7 @@ export default function TeamSettingsPage() {
         <CardContent className="space-y-4 p-4">
           <div>
             <p className="text-sm font-semibold text-foreground">Create team</p>
-            <p className="text-xs text-muted-foreground">Add a new tenant and become its owner.</p>
+            <p className="text-xs text-muted">Add a new tenant and become its owner.</p>
           </div>
           <form className="flex flex-col gap-3 sm:flex-row" onSubmit={createTeam}>
             <Input
@@ -900,7 +901,7 @@ export default function TeamSettingsPage() {
         <CardContent className="space-y-4 p-4">
           <div>
             <p className="text-sm font-semibold text-foreground">Members</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted">
               {activeTeam
                 ? `Viewing ${activeTeam.name}. You are ${activeTeam.role}.`
                 : 'Select a team to view members.'}
@@ -908,22 +909,22 @@ export default function TeamSettingsPage() {
           </div>
 
           {loadingMembers ? (
-            <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
               Loading members...
             </div>
           ) : !activeTeam ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               No active team selected.
             </div>
           ) : members.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               No members found for this team.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2">
                 <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr className="text-left text-xs uppercase tracking-wide text-muted">
                     <th className="px-2">Member</th>
                     <th className="px-2">Role</th>
                     <th className="px-2">Status</th>
@@ -940,7 +941,7 @@ export default function TeamSettingsPage() {
                       <tr key={member.userId} className="rounded-xl border border-border bg-background">
                         <td className="px-2 py-2">
                           <p className="text-sm font-medium text-foreground">{member.name ?? 'Unnamed user'}</p>
-                          <p className="text-xs text-muted-foreground">{member.email ?? 'No email'}</p>
+                          <p className="text-xs text-muted">{member.email ?? 'No email'}</p>
                         </td>
                         <td className="px-2 py-2">
                           {isEditable ? (
@@ -967,7 +968,7 @@ export default function TeamSettingsPage() {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${roleBadgeClass(member.teamRole)}`}>
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(member.teamRole)}`}>
                               {member.teamRole}
                             </span>
                           )}
@@ -992,7 +993,7 @@ export default function TeamSettingsPage() {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <span className="text-sm text-muted-foreground">{member.status}</span>
+                            <span className="text-sm text-muted">{member.status}</span>
                           )}
                         </td>
                         <td className="px-2 py-2">
@@ -1016,7 +1017,7 @@ export default function TeamSettingsPage() {
                               </Button>
                             </div>
                           ) : (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-muted">
                               {member.isSelf ? 'Current user' : 'No permission'}
                             </span>
                           )}
@@ -1035,21 +1036,21 @@ export default function TeamSettingsPage() {
         <CardContent className="space-y-4 p-4">
           <div>
             <p className="text-sm font-semibold text-foreground">Ownership Transfer</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted">
               Move resource ownership of this team to another active member.
             </p>
           </div>
 
           {!activeTeam ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               Select an active team first.
             </div>
           ) : !isOwner ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               Only current team owner can transfer ownership.
             </div>
           ) : ownershipCandidates.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               Add another active member before transferring ownership.
             </div>
           ) : (
@@ -1093,15 +1094,15 @@ export default function TeamSettingsPage() {
         <CardContent className="space-y-4 p-4">
           <div>
             <p className="text-sm font-semibold text-foreground">Invites</p>
-            <p className="text-xs text-muted-foreground">Invite users by email to this team.</p>
+            <p className="text-xs text-muted">Invite users by email to this team.</p>
           </div>
 
           {!activeTeam ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               Select an active team to manage invites.
             </div>
           ) : !canManageInvites ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               You need team admin or owner role to manage invites.
             </div>
           ) : (
@@ -1146,11 +1147,11 @@ export default function TeamSettingsPage() {
               </form>
 
               {loadingInvites ? (
-                <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
                   Loading invites...
                 </div>
               ) : invites.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
                   No pending invites.
                 </div>
               ) : (
@@ -1162,14 +1163,21 @@ export default function TeamSettingsPage() {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{invite.email}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted">
                           role {invite.role} | expires {new Date(invite.expiresAt).toLocaleString()}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <code className="max-w-[220px] truncate rounded bg-muted px-2 py-1 text-[11px] text-muted-foreground">
-                          /api/teams/invites/{invite.token}/accept
-                        </code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard?.writeText(`${window.location.origin}/invite/${invite.token}`)
+                            toast.success('Invite link copied')
+                          }}
+                          className="max-w-[220px] truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground"
+                        >
+                          /invite/{invite.token}
+                        </button>
                         <Button
                           size="sm"
                           variant="destructive"
@@ -1187,6 +1195,13 @@ export default function TeamSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {activeTeam && (
+        <AddUserDirect
+          canManage={Boolean(activeTeam.canManageMembers)}
+          isOwner={activeTeam.role === 'owner'}
+        />
+      )}
     </div>
   )
 }

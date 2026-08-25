@@ -40,6 +40,7 @@ interface DashboardMetrics {
   hourlyToday: HourlyPoint[]
   locationTypeBreakdown: LocationTypePoint[]
   topLocations: TopLocationPoint[]
+  canManage: boolean
 }
 
 const emptyStats: Stats = { totalToday: 0, currentlyIn: 0, totalAll: 0, checkedOut: 0 }
@@ -50,6 +51,7 @@ const emptyMetrics: DashboardMetrics = {
   hourlyToday: [],
   locationTypeBreakdown: [],
   topLocations: [],
+  canManage: false,
 }
 
 const typeAccents: Record<string, string> = {
@@ -64,6 +66,38 @@ function maxCount(items: CountPoint[]) {
 
 function hasCounts(items: CountPoint[]) {
   return items.some(item => item.count > 0)
+}
+
+// Screen-reader alternative for the visual charts: the bars are aria-hidden, so
+// this carries the full dataset as a proper table for assistive tech.
+function ChartDataTable({
+  caption,
+  rows,
+  valueHeading = 'Logs',
+}: {
+  caption: string
+  rows: { label: string; count: number }[]
+  valueHeading?: string
+}) {
+  return (
+    <table className="sr-only">
+      <caption>{caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Label</th>
+          <th scope="col">{valueHeading}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(row => (
+          <tr key={row.label}>
+            <th scope="row">{row.label}</th>
+            <td>{row.count}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 }
 
 function VerticalBarChart({
@@ -87,35 +121,37 @@ function VerticalBarChart({
       <CardContent className="p-5 space-y-5">
         <div>
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+          <p className="text-xs text-muted mt-1">{subtitle}</p>
         </div>
         {loading ? (
-          <div className="h-44 rounded-xl bg-muted animate-pulse" />
+          <div className="h-44 rounded-xl bg-muted animate-pulse motion-reduce:animate-none" />
         ) : hasData ? (
-          <div className="overflow-x-auto pb-1">
-            <div className={`${compact ? 'min-w-[560px]' : 'min-w-[360px]'} h-44 flex items-end gap-2`}>
-              {data.map(item => {
-                const height = item.count === 0 ? 0 : Math.max(8, Math.round((item.count / max) * 100))
-                return (
-                  <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                    <div className="flex h-32 w-full items-end rounded-lg bg-muted/60 px-1.5">
-                      <div
-                        className="w-full rounded-md bg-gradient-to-t from-sky-600 to-cyan-400 transition-all"
-                        style={{ height: `${height}%` }}
-                        aria-label={`${item.label}: ${item.count} logs`}
-                        title={`${item.label}: ${item.count} logs`}
-                      />
+          <>
+            <div className="overflow-x-auto pb-1" aria-hidden="true">
+              <div className={`${compact ? 'min-w-[560px]' : 'min-w-[360px]'} h-44 flex items-end gap-2`}>
+                {data.map(item => {
+                  const height = item.count === 0 ? 0 : Math.max(8, Math.round((item.count / max) * 100))
+                  return (
+                    <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                      <div className="flex h-32 w-full items-end rounded-lg bg-muted/60 px-1.5">
+                        <div
+                          className="w-full rounded-md bg-gradient-to-t from-sky-600 to-cyan-400 transition-all"
+                          style={{ height: `${height}%` }}
+                          title={`${item.label}: ${item.count} logs`}
+                        />
+                      </div>
+                      <p className="h-8 text-center text-xs leading-4 text-muted">
+                        {item.label}
+                      </p>
                     </div>
-                    <p className="h-8 text-center text-[11px] leading-4 text-muted-foreground">
-                      {item.label}
-                    </p>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
+            <ChartDataTable caption={`${title} — ${subtitle}`} rows={data} />
+          </>
         ) : (
-          <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+          <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted">
             No log data yet
           </div>
         )}
@@ -145,14 +181,14 @@ function ProgressBreakdown({
       <CardContent className="p-5 space-y-5">
         <div>
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+          <p className="text-xs text-muted mt-1">{subtitle}</p>
         </div>
         {loading ? (
           <div className="space-y-4">
             {[0, 1, 2].map(item => (
               <div key={item} className="space-y-2">
-                <div className="h-4 w-32 rounded bg-muted animate-pulse" />
-                <div className="h-3 rounded-full bg-muted animate-pulse" />
+                <div className="h-4 w-32 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                <div className="h-3 rounded-full bg-muted animate-pulse motion-reduce:animate-none" />
               </div>
             ))}
           </div>
@@ -167,7 +203,7 @@ function ProgressBreakdown({
                     <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
                     <p className="text-sm font-semibold text-foreground">{item.count}</p>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
                     <div className={`h-full rounded-full ${accent}`} style={{ width: `${width}%` }} />
                   </div>
                 </div>
@@ -175,7 +211,7 @@ function ProgressBreakdown({
             })}
           </div>
         ) : (
-          <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+          <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted">
             No log data yet
           </div>
         )}
@@ -192,24 +228,24 @@ function TopLocationsChart({
   loading: boolean
 }) {
   const items = locations.map(location => ({ ...location, label: location.name }))
+  const max = maxCount(items)
 
   return (
     <Card>
       <CardContent className="p-5 space-y-5">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Top Locations</h3>
-          <p className="text-xs text-muted-foreground mt-1">Most visited places in the last 30 days</p>
+          <p className="text-xs text-muted mt-1">Most visited places in the last 30 days</p>
         </div>
         {loading ? (
           <div className="space-y-4">
             {[0, 1, 2, 3].map(item => (
-              <div key={item} className="h-12 rounded-xl bg-muted animate-pulse" />
+              <div key={item} className="h-12 rounded-xl bg-muted animate-pulse motion-reduce:animate-none" />
             ))}
           </div>
         ) : locations.length ? (
           <div className="space-y-4">
             {items.map((item, index) => {
-              const max = maxCount(items)
               const width = Math.max(4, Math.round((item.count / max) * 100))
               return (
                 <div key={item.locationId} className="space-y-2">
@@ -218,18 +254,18 @@ function TopLocationsChart({
                       <p className="truncate text-sm font-medium text-foreground">
                         {index + 1}. {item.name}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">{item.path ?? item.locationType}</p>
+                      <p className="truncate text-xs text-muted">{item.path ?? item.locationType}</p>
                     </div>
                     <div className="flex shrink-0 flex-wrap justify-end gap-2 text-xs font-semibold">
                       <span className="rounded-full bg-muted px-2.5 py-1 text-foreground">
                         Total {item.count}
                       </span>
-                      <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-500">
+                      <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-700 dark:text-emerald-300">
                         Still IN {item.stillIn}
                       </span>
                     </div>
                   </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
                     <div className="h-full rounded-full bg-emerald-500" style={{ width: `${width}%` }} />
                   </div>
                 </div>
@@ -237,7 +273,7 @@ function TopLocationsChart({
             })}
           </div>
         ) : (
-          <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+          <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted">
             No location activity yet
           </div>
         )}
@@ -272,11 +308,11 @@ function StatCard({
         </div>
         <div>
           {loading ? (
-            <div className="h-8 w-16 bg-muted rounded-lg animate-pulse" />
+            <div className="h-8 w-16 bg-muted rounded-lg animate-pulse motion-reduce:animate-none" />
           ) : (
             <p className="text-3xl font-bold text-foreground tracking-tight">{value}</p>
           )}
-          <p className="text-sm text-muted-foreground mt-1 font-medium">{label}</p>
+          <p className="text-sm text-muted mt-1 font-medium">{label}</p>
         </div>
       </CardContent>
     </Card>
@@ -323,7 +359,9 @@ export default function DashboardPage() {
   const { data: session } = useSession()
   const [metrics, setMetrics] = useState<DashboardMetrics>(emptyMetrics)
   const [loading, setLoading] = useState(true)
-  const isAdmin = (session?.user as any)?.role === 'admin'
+  // Quick Actions are team-management shortcuts — gate on the team role the
+  // metrics endpoint resolves (manager+), not the global User.role.
+  const isAdmin = metrics.canManage
 
   const refreshMetrics = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -357,15 +395,18 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            {greeting}, {firstName} 👋
+            {greeting}, {firstName}{' '}
+            <span role="img" aria-label="waving hand">
+              👋
+            </span>
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
         <Link
           href="/logs"
-          className="flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent/80 transition-colors"
+          className="flex items-center gap-1.5 rounded-full px-2 py-1.5 -mx-2 -my-1.5 text-sm font-medium text-accent outline-none transition-colors hover:text-accent/80 focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           View my logs
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -376,10 +417,10 @@ export default function DashboardPage() {
 
       {/* Stats */}
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70 mb-4">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted mb-4">
           Today's Overview
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" aria-live="polite" aria-busy={loading}>
           <StatCard
             label="Check-ins Today"
             value={stats.totalToday}
@@ -403,8 +444,8 @@ export default function DashboardPage() {
             }
             badge={
               !loading && stats.currentlyIn > 0 ? (
-                <span className="flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse motion-reduce:animate-none" />
                   Live
                 </span>
               ) : undefined
@@ -426,7 +467,7 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70 mb-4">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted mb-4">
           Log Analytics
         </h2>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -466,14 +507,14 @@ export default function DashboardPage() {
       {/* Quick Actions (admin only) */}
       {isAdmin && (
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70 mb-4">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted mb-4">
             Quick Actions
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {quickActions.map(action => (
               <Card key={action.href}>
                 <CardContent className="p-4">
-                  <Link href={action.href} className="group flex items-start gap-4">
+                  <Link href={action.href} className="group flex items-start gap-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${action.color}`}>
                       {action.icon}
                     </div>
@@ -481,9 +522,9 @@ export default function DashboardPage() {
                       <p className="font-semibold text-sm text-foreground group-hover:text-accent transition-colors">
                         {action.label}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{action.description}</p>
+                      <p className="text-xs text-muted mt-0.5">{action.description}</p>
                     </div>
-                    <svg className="w-4 h-4 text-muted-foreground/40 group-hover:text-accent/60 transition-colors ml-auto shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-muted/40 group-hover:text-accent/60 transition-colors ml-auto shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </Link>
