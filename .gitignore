@@ -39,6 +39,9 @@ next-env.d.ts
 atlas-credentials.env
 *credentials*.env
 
+# agent tool state — machine-local, contains absolute home paths
+.codex/
+
 # impeccable local state (shared config and briefs are tracked)
 .impeccable/config.local.json
 .impeccable/hook.cache.json

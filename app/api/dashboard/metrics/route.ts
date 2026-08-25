@@ -4,6 +4,8 @@ import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { LocationType, resolveLocationLabels } from "@/lib/locationLabels";
 import { requireTeamPermission } from "@/lib/middleware/auth";
+import { hasMinimumTeamRole } from "@/lib/teamPermissions";
+import { TeamRole } from "@/lib/models/TeamMember";
 
 export const runtime = "nodejs";
 
@@ -43,14 +45,18 @@ export async function GET(_req: NextRequest) {
 
   await connectDB();
 
-  const role = (auth.session.user as any).role;
   const userId = (auth.session.user as any).id;
+  const teamRole = ((auth.membership as any)?.role as TeamRole) ?? "member";
+  // Team admins/owners see workspace-wide metrics; everyone else sees their own.
+  const canViewTeam = hasMinimumTeamRole(teamRole, "admin");
+  // Manager+ get the management Quick Actions (locations, quests, all-logs pages).
+  const canManage = hasMinimumTeamRole(teamRole, "manager");
   const scopedMatch: Record<string, unknown> = {
     teamId: new Types.ObjectId(auth.teamId),
     action: "in",
   };
 
-  if (role !== "admin") {
+  if (!canViewTeam) {
     if (!Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ error: "Invalid user" }, { status: 400 });
     }
@@ -230,5 +236,7 @@ export async function GET(_req: NextRequest) {
     hourlyToday,
     locationTypeBreakdown,
     topLocations,
+    canManage,
+    canViewTeam,
   });
 }

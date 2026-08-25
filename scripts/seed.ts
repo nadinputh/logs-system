@@ -46,9 +46,18 @@ async function seed() {
       email: "admin@example.com",
       passwordHash,
       role: "admin",
+      emailVerified: new Date(),
     });
     console.log("Admin user created: admin@example.com / admin123");
   } else {
+    // Ensure the seeded admin can sign in under the email-verification guard.
+    if (!admin.emailVerified) {
+      await User.updateOne(
+        { _id: admin._id },
+        { emailVerified: new Date() },
+      );
+      console.log("Admin email marked verified.");
+    }
     console.log("Admin user already exists.");
   }
 

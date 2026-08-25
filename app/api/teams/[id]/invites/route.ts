@@ -4,8 +4,11 @@ import { v4 as uuidv4 } from "uuid";
 import { connectDB } from "@/lib/db";
 import { TeamInvite } from "@/lib/models/TeamInvite";
 import { TeamMember } from "@/lib/models/TeamMember";
+import { Team } from "@/lib/models/Team";
 import { User } from "@/lib/models/User";
 import { requireTeamPermission } from "@/lib/middleware/auth";
+import { inviteLink } from "@/lib/verification";
+import { sendInviteEmail } from "@/lib/email/send";
 
 export const runtime = "nodejs";
 
@@ -120,6 +123,19 @@ export async function POST(
       setDefaultsOnInsert: true,
     },
   ).lean<any>();
+
+  // Email the invite link (best-effort — copy-link is still returned below).
+  try {
+    const team = await Team.findById(auth.teamId).select("name").lean<any>();
+    await sendInviteEmail(
+      email,
+      inviteLink(invite.token),
+      team?.name ?? "a team",
+      invite.role,
+    );
+  } catch (err) {
+    console.error("Failed to send invite email:", err);
+  }
 
   return NextResponse.json(
     {

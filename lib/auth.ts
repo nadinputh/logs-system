@@ -21,12 +21,14 @@ export const authOptions: NextAuthOptions = {
         const user = await User.findOne({
           email: credentials.email.toLowerCase(),
         });
-        if (!user) return null;
+        if (!user || !user.passwordHash) return null;
         const valid = await bcrypt.compare(
           credentials.password,
           user.passwordHash,
         );
         if (!valid) return null;
+        // Block sign-in until the email has been verified (set-password / verify link).
+        if (!user.emailVerified) throw new Error("EMAIL_NOT_VERIFIED");
         return {
           id: user._id.toString(),
           name: user.name,
