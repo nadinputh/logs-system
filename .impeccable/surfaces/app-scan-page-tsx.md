@@ -145,3 +145,79 @@ permanent and what it contains.
 Measured after: `Start scanner` is the largest interactive element (13,552px²) and the only
 filled one; tab order is skip → logo → **Start scanner** → console, moving the task from
 the 5th stop to the 3rd.
+
+## Post-critique P1s (2026-08-25, re-critique scored 30/40, up from 23/40)
+
+**Landscape.** The viewfinder and placeholder are capped at `min(45vh,20rem)` and collapse
+to a 112px strip below 540px viewport height; short viewports also tighten top padding and
+card padding. CTA now clears the fold at 844x390 (was 264px below it). Still 13px short at
+740x360 — an old phone in landscape — where the page scrolls normally.
+
+**`starting` had no exit.** `scanner.start()` is now raced against a 10s watchdog resolving
+to a retryable "The camera did not open". Verified: fires at exactly 10s with an enabled
+"Try again".
+
+**Focus recovery.** Removing the control on a dead end dropped focus to `<body>`. The
+failure notice now takes `tabIndex={-1}` and receives focus. Verified.
+
+### A regression this pass caused and fixed
+The watchdog's cleanup called `scannerRef.current?.stop().catch(...)`. `stop()` throws
+*synchronously* when the scanner never started, so the trailing `.catch()` never saw it; the
+exception escaped the catch block before `setFailure` ran and **silently broke every failure
+path** — the alert stayed empty for all six causes. Now wrapped in try/catch. Caught only by
+instrumenting the live page; typecheck and the detector both passed while it was broken.
+
+### Blocked on facts the owner holds
+- **Retention period.** Requested, but no policy number exists to write. "Never edited" with
+  no expiry reads as a threat; the sentence cannot be written without the real figure.
+- **Organisation name.** The page can only say "this organisation's staff". Naming the
+  building's owner needs a field on Team (or equivalent) plus a public read path — a schema
+  change, not copy.
+- **"You do not need an account"** shipped; it needed no new facts.
+
+## Polish — the primary CTA (2026-08-25)
+
+The scan CTA rendered flat `#0e7490`, weight 500, 40px desktop — against DESIGN.md's
+135deg sky→teal gradient, cyan Signal-glow, weight 600, 48px. The Cyan-Shadow Rule and the
+Two-Weight Rule were both broken on the page's single most important control.
+
+**Classified as a one-off implementation, not a local defect.** DESIGN.md documents a
+gradient primary; the Button adapter renders HeroUI's flat accent; four surfaces were
+hand-applying `.gradient-cta` plus a height utility to rebuild the treatment at each call
+site. That is exactly how it drifted on the one page nobody re-checked.
+
+**Fixed at the system level, scoped:** the adapter gained a named `variant="brand"` that
+owns the treatment. `default` still maps to HeroUI's flat primary, so the console's ~26
+primary buttons are untouched — a fix to `default` would have restyled surfaces outside
+this request. Scan, login and register now declare `variant="brand"` instead of
+reconstructing it; three hand-patches removed.
+
+Verified identical across all three: h=48, weight 600, `linear-gradient(135deg, #0369a1,
+#0f766e)`, `rgba(6,182,212,0.22) 0 18px 40px -16px`, pill radius. White label 5.93:1 on the
+start stop, 5.47:1 on the end. Focus ring survives (2px solid accent, 2px offset).
+
+The two remaining `.gradient-cta` uses on the landing page are `<Link>` elements, not
+Buttons, at intentionally different sizes (h-11 nav chrome, h-12 hero). Both already match
+the spec; the adapter cannot serve an anchor, so they stay as they are.
+
+## Final polish (2026-08-25)
+
+- **Step 3, third attempt, now verified.** The flow is `identity` -> `identity` step 2 ->
+  `checkin` -> optional `selfie`. "Confirm and you are logged" skipped it; "Give your name
+  and confirm" understated it. Now "Confirm over a few short screens / Your name is the only
+  required field — the details and photo that follow are skippable."
+- **`<ol>` double-numbering.** The manual `{i+1}` is `aria-hidden`; the list already conveys
+  position, so screen readers no longer hear "list item 1 of 3 ... 1, Point your camera".
+- **"Open the console" touch target: 119x17 -> 119x44**, via `py-3 -my-3` so the sentence
+  does not move.
+- **Detector is clean repo-wide.** The nine `text-[11px]` off-ramp sizes across
+  settings/passkeys, settings/team and VisitorPasskey are on the documented 12px step.
+
+### Flagged, not fixed: console brand-colour contrast
+Raw `text-cyan-500` / `text-sky-500` on their own `/10` washes measure **2.05:1 and 2.31:1**
+in light mode — failing 4.5:1 for text and 3.0:1 for icons. Ten occurrences across
+`app/dashboard`, `app/logs`, `app/settings/team`, `app/settings/passkeys` and
+`components/location/VisitorPasskey.tsx`. `--accent` on the same wash gives 4.52:1.
+Not swapped, for two reasons: those surfaces have not been audited, and on the dashboard
+sky vs cyan may be distinguishing two metrics — collapsing both to one token would remove
+information. This wants its own pass.

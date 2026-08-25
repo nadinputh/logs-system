@@ -55,14 +55,14 @@ export default async function PasskeysSettingsPage() {
               <span
                 className={
                   u?.role === 'admin'
-                    ? 'inline-flex items-center text-[11px] font-medium text-cyan-500 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full'
-                    : 'inline-flex items-center text-[11px] font-medium text-muted bg-default border border-border px-2 py-0.5 rounded-full'
+                    ? 'inline-flex items-center text-xs font-medium text-cyan-500 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full'
+                    : 'inline-flex items-center text-xs font-medium text-muted bg-default border border-border px-2 py-0.5 rounded-full'
                 }
               >
                 {u?.role === 'admin' ? 'Admin' : 'Staff'}
               </span>
               {u?.createdAt && (
-                <span className="text-[11px] text-muted">
+                <span className="text-xs text-muted">
                   Member since {new Date(u.createdAt).toLocaleDateString()}
                 </span>
               )}

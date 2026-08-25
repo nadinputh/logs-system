@@ -12,7 +12,16 @@ type HeroUIButtonVariant =
 
 export interface ButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "value"> {
-  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link"
+  /**
+   * `brand` is DESIGN.md's documented primary button — the 135deg sky→teal
+   * gradient, white label, cyan Signal-glow, 48px, weight 600. It exists as a
+   * named variant because four surfaces were hand-applying `.gradient-cta` and
+   * a height utility to reconstruct it at each call site, which is how the
+   * treatment drifted (flat fill, weight 500, 40px) on the one page nobody
+   * re-checked. `default` deliberately still maps to HeroUI's flat primary so
+   * the console's ~26 primary buttons are unaffected by this.
+   */
+  variant?: "default" | "brand" | "outline" | "secondary" | "ghost" | "destructive" | "link"
   size?: "xs" | "sm" | "default" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg"
   isLoading?: boolean
   onPress?: React.ComponentProps<typeof HeroUIButton>["onPress"]
@@ -68,10 +77,19 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       case "link":
         heroUIVariant = "tertiary"
         break
+      case "brand":
       case "default":
       default:
         heroUIVariant = "primary"
     }
+
+    // DESIGN.md: "The brand gradient made tactile" — Cyan-Shadow Rule (a
+    // brand-bearing surface glows, it does not float on neutral grey) and the
+    // Two-Weight Rule (600 for labels; 500 is off the ramp).
+    const brandClasses =
+      variant === "brand"
+        ? "gradient-cta shadow-signal press h-12 rounded-full px-7 text-sm font-semibold text-white"
+        : ""
 
     const sizeMap: Record<NonNullable<ButtonProps["size"]>, "sm" | "md" | "lg"> = {
       xs: "sm",
@@ -95,7 +113,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         isDisabled={isDisabledFinal}
         isIconOnly={isIconOnly}
         onPress={handlePress}
-        className={className}
+        className={[brandClasses, className].filter(Boolean).join(" ")}
         {...(props as any)}
       >
         {children}

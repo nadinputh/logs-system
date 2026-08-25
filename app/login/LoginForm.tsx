@@ -168,7 +168,8 @@ export function LoginForm() {
           type="submit"
           isLoading={loading}
           isDisabled={busy}
-          className="gradient-cta press w-full text-white"
+          variant="brand"
+          className="w-full"
         >
           {loading ? (
             <>

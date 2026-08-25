@@ -716,13 +716,13 @@ export default function TeamSettingsPage() {
                       <p className="truncate text-sm font-semibold text-foreground">{team.name}</p>
                       <p className="truncate text-xs text-muted">{team.slug}</p>
                     </div>
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${roleBadgeClass(team.role)}`}>
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(team.role)}`}>
                       {team.role}
                     </span>
                   </div>
                   <div className="mt-3">
                     {team.isActive ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-500">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500">
                         Active
                       </span>
                     ) : (
@@ -833,7 +833,7 @@ export default function TeamSettingsPage() {
                         {new Date(event.createdAt).toLocaleString()}
                       </p>
                     </div>
-                    <span className="inline-flex rounded-full border border-border bg-default px-2 py-0.5 text-[11px] font-medium text-muted">
+                    <span className="inline-flex rounded-full border border-border bg-default px-2 py-0.5 text-xs font-medium text-muted">
                       {event.action}
                     </span>
                   </div>
@@ -968,7 +968,7 @@ export default function TeamSettingsPage() {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${roleBadgeClass(member.teamRole)}`}>
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(member.teamRole)}`}>
                               {member.teamRole}
                             </span>
                           )}
@@ -1174,7 +1174,7 @@ export default function TeamSettingsPage() {
                             void navigator.clipboard?.writeText(`${window.location.origin}/invite/${invite.token}`)
                             toast.success('Invite link copied')
                           }}
-                          className="max-w-[220px] truncate rounded bg-muted px-2 py-1 text-[11px] text-muted hover:text-foreground"
+                          className="max-w-[220px] truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground"
                         >
                           /invite/{invite.token}
                         </button>

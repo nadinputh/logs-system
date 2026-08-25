@@ -80,6 +80,14 @@ function describeFailure(err: unknown): Failure {
       retryable: false,
     }
   }
+  if (/KamnotheatTimeout|camera-timeout/.test(raw)) {
+    return {
+      title: 'The camera did not open',
+      detail:
+        'It may be in use by another app. Close anything else using the camera, then try again.',
+      retryable: true,
+    }
+  }
   // Common when a link is opened inside an app's built-in browser, which is
   // exactly how a visitor often arrives at a QR link.
   if (/NotSupportedError|not supported|undefined is not an object/i.test(raw)) {
@@ -183,6 +191,17 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
       return
     }
 
+    // iOS can leave getUserMedia pending indefinitely when another app holds the
+    // camera. Without this the visitor sits on a disabled "Starting camera…"
+    // forever — the one state on a recovery-shaped page with no recovery.
+    let watchdog: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      watchdog = setTimeout(
+        () => reject(Object.assign(new Error('camera-timeout'), { name: 'KamnotheatTimeout' })),
+        10_000,
+      )
+    })
+
     try {
       const { Html5Qrcode } = await import('html5-qrcode')
       if (!mounted.current) return
@@ -194,7 +213,9 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
       const scanner = new Html5Qrcode(DIV_ID)
       scannerRef.current = scanner
 
-      await scanner.start(
+      await Promise.race([
+        timeout,
+        scanner.start(
         { facingMode: 'environment' },
         // A ratio-based box adapts to the actual video size; a fixed 250px box
         // overflows the frame on small phones.
@@ -215,13 +236,26 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
           handleDecoded(decodedText)
         },
         undefined,
-      )
+        ),
+      ])
+      clearTimeout(watchdog)
       if (!mounted.current) {
         scanner.stop().catch(() => {})
         return
       }
       setPhase('scanning')
     } catch (err) {
+      clearTimeout(watchdog)
+      // The camera may still open after the race is lost, so it must not be left
+      // running behind a page that has given up on it. stop() *throws
+      // synchronously* when the scanner never started, which a trailing .catch()
+      // does not intercept — that escaping exception previously skipped
+      // setFailure entirely and broke every failure path.
+      try {
+        void scannerRef.current?.stop()?.catch(() => {})
+      } catch {
+        /* never started */
+      }
       scannerRef.current = null
       busy.current = false
       if (!mounted.current) return
@@ -230,9 +264,18 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
     }
   }, [handleDecoded])
 
+  const failureRef = useRef<HTMLDivElement>(null)
+
   // A failure the visitor cannot clear by trying again. The UI must route
   // around it rather than leaving a disabled control as the last thing on screen.
   const deadEnd = !!failure && !failure.retryable
+
+  // When the dead-end path removes the control, focus falls to <body> and a
+  // keyboard user loses their place. Send it to the failure instead, which is
+  // both the explanation and the anchor for the routes that follow.
+  useEffect(() => {
+    if (deadEnd) failureRef.current?.focus()
+  }, [deadEnd])
 
   return (
     <div className="space-y-4">
@@ -247,10 +290,10 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
         className={
           phase === 'idle'
             ? 'hidden'
-            : 'aspect-[4/3] w-full overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-black'
+            : 'aspect-[4/3] max-h-[min(45vh,20rem)] w-full overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-black [@media(max-height:540px)]:aspect-auto [@media(max-height:540px)]:h-28'
         }
       >
-        <div id={DIV_ID} className="size-full" />
+        <div id={DIV_ID} className="size-full [&_video]:size-full [&_video]:object-cover" />
       </div>
 
       {/* Idle placeholder: gives the panel a stable height so starting the camera
@@ -258,7 +301,7 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
           promising a preview is a lie once the control that would start it is
           gone, and the space belongs to the routes that still work. */}
       {phase === 'idle' && !deadEnd && (
-        <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[var(--panel-border)] px-6 text-center">
+        <div className="flex aspect-[4/3] max-h-[min(45vh,20rem)] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[var(--panel-border)] px-6 text-center [@media(max-height:540px)]:aspect-auto [@media(max-height:540px)]:h-28">
           <Camera className="size-7 text-muted" strokeWidth={1.8} />
           <p className="text-sm text-muted">
             The camera preview appears here once you start the scanner.
@@ -278,8 +321,8 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
         null
       ) : (
         <Button
-          className="press w-full"
-          size="lg"
+          variant="brand"
+          className="w-full"
           onPress={start}
           isLoading={phase === 'starting'}
         >
@@ -310,7 +353,11 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
 
       <div role="alert" className="space-y-4">
         {failure && (
-          <div className="flex items-start gap-3 rounded-2xl border border-[var(--status-danger)]/25 bg-[var(--status-danger)]/[0.08] p-4 text-left">
+          <div
+            ref={failureRef}
+            tabIndex={-1}
+            className="flex items-start gap-3 rounded-2xl border border-[var(--status-danger)]/25 bg-[var(--status-danger)]/[0.08] p-4 text-left outline-none"
+          >
             {failure.retryable ? (
               <ShieldAlert
                 className="mt-0.5 size-5 shrink-0 text-[var(--status-danger)]"

@@ -164,7 +164,7 @@ export function RegisterForm() {
           {error && <FormNotice tone="danger" title={error} />}
         </div>
 
-        <Button type="submit" isLoading={loading} className="gradient-cta press w-full text-white">
+        <Button type="submit" variant="brand" isLoading={loading} className="w-full">
           {loading ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />

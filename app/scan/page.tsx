@@ -13,9 +13,10 @@ import { Camera, ScanLine, ShieldCheck } from 'lucide-react'
  * html5-qrcode is imported inside the tap handler, the idle state paints from
  * HTML instead of waiting behind a `dynamic(ssr:false)` spinner.
  *
- * Width is deliberately not the landing's. A camera viewfinder does not want
- * 1440px; the shell aligns the spine with the landing, and the desktop width is
- * spent on supporting content beside the task rather than on stretching it.
+ * Width is deliberately not the landing's. This is the fallback surface — most
+ * phones open the door's QR from the native camera and land straight on
+ * /scan/[locationId] — so it is one centred column at every size rather than a
+ * two-column composition built to fill a front door's width.
  */
 
 export const metadata: Metadata = {
@@ -38,11 +39,12 @@ const steps = [
   },
   {
     Icon: ShieldCheck,
-    title: 'Give your name and confirm',
-    // Was "Confirm and you are logged", which skipped the form entirely. The
-    // next screen requires a full name; contact, purpose, gender and a photo
-    // are each optional (verified in components/location/CheckInOut.tsx).
-    text: 'Only your name is required. Your entry is then written once, timed by the server.',
+    title: 'Confirm over a few short screens',
+    // Verified against components/location/CheckInOut.tsx: identity (name and
+    // contact) -> identity step 2 (purpose, gender) -> checkin -> an optional
+    // selfie. "Confirm and you are logged" skipped all of it; "give your name
+    // and confirm" then understated it. This names the real shape.
+    text: 'Your name is the only required field — the details and photo that follow are skippable. Your entry is written once, timed by the server.',
   },
 ]
 
@@ -86,7 +88,7 @@ export default function ScanPage() {
           </nav>
         </header>
 
-        <main id="main" className="shell pb-20 pt-8 sm:pt-12">
+        <main id="main" className="shell pb-20 pt-8 sm:pt-12 [@media(max-height:540px)]:pt-3">
           <div className="mx-auto w-full max-w-[34rem]">
             <h1 className="text-balance text-[clamp(1.75rem,4vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.02em]">
               Scan to <span className="gradient-text">check in</span>
@@ -94,12 +96,12 @@ export default function ScanPage() {
             {/* Both halves in one line, above the fold: what is permanent *and*
                 what it contains. The previous lede repeated step 1 verbatim and
                 pushed the task off screen. */}
-            <p className="mt-3 text-pretty text-muted">
+            <p className="mt-3 text-pretty text-muted [@media(max-height:540px)]:mt-1.5">
               Recorded once and never edited — the time, the code you scan, and your name.
             </p>
 
             {/* The task, as high as the page can put it. */}
-            <div className="glass shadow-panel mt-6 rounded-3xl p-5 sm:p-6">
+            <div className="glass shadow-panel mt-6 rounded-3xl p-5 sm:p-6 [@media(max-height:540px)]:mt-3 [@media(max-height:540px)]:p-4">
               <QRScanner />
             </div>
 
@@ -115,7 +117,10 @@ export default function ScanPage() {
               </p>
               <p className="mt-2 text-sm text-muted">
                 The camera feed never leaves your device; only the code is read. Entries are
-                readable by this organisation&apos;s staff.
+                readable by this organisation&apos;s staff.{' '}
+                <span className="font-semibold text-foreground">
+                  You do not need an account.
+                </span>
               </p>
             </div>
 
@@ -130,7 +135,9 @@ export default function ScanPage() {
                   </span>
                   <span className="min-w-0">
                     <span className="flex items-baseline gap-2">
-                      <span className="tabular text-xs font-semibold text-muted">{i + 1}</span>
+                      <span aria-hidden className="tabular text-xs font-semibold text-muted">
+                        {i + 1}
+                      </span>
                       <span className="font-semibold tracking-tight">{title}</span>
                     </span>
                     <span className="mt-0.5 block text-sm text-muted">{text}</span>
@@ -143,7 +150,7 @@ export default function ScanPage() {
               Staff or admin?{' '}
               <Link
                 href="/login"
-                className="font-semibold text-[var(--accent)] hover:underline"
+                className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
               >
                 Open the console
               </Link>
