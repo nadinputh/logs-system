@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn, useSession } from 'next-auth/react'
-import { LogoMark } from '@/components/Logo'
-import { ParticleField } from '@/components/ParticleField'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -87,50 +87,66 @@ export default function InvitePage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-6">
-      <ParticleField className="fixed inset-0 z-0" />
-      <div className="relative z-10 w-full max-w-sm space-y-6">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-            <LogoMark className="w-[18px] h-[18px] text-white" />
-          </div>
-          <span className="font-bold text-foreground">Kamnotheat</span>
-        </div>
-
-        {!invite && <p className="text-sm text-muted">Loading invite…</p>}
+    <AuthLayout
+      headline={
+        <>
+          Join the team,
+          <br />
+          <span className="gradient-text">keep the ledger whole.</span>
+        </>
+      }
+      subhead="An invite links your account to a team and its locations. Accepting is all that is left."
+    >
+      <div className="auth-stack" aria-live="polite">
+        {!invite && <h1 className="text-2xl font-bold tracking-tight">Loading invite…</h1>}
 
         {invite && !invite.valid && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-foreground">Invite unavailable</h2>
+          <>
+            <h1 className="text-2xl font-bold tracking-tight">Invite unavailable</h1>
             <p className="text-sm text-muted">{invite.error}</p>
-            <Link href="/login" className="text-sm font-medium text-accent hover:underline">Go to sign in</Link>
-          </div>
+            <Link
+              href="/login"
+              className="inline-block py-3 -my-3 text-sm font-semibold text-[var(--accent)] hover:underline"
+            >
+              Go to sign in
+            </Link>
+          </>
         )}
 
         {invite?.valid && (
           <>
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Join {invite.teamName}</h2>
+              <h1 className="text-2xl font-bold tracking-tight">Join {invite.teamName}</h1>
               <p className="mt-1.5 text-sm text-muted">
-                Invited as <span className="font-medium text-foreground">{invite.role}</span> · {invite.email}
+                Invited as <span className="font-semibold text-foreground">{invite.role}</span> · {invite.email}
               </p>
             </div>
 
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
-                <p className="text-sm text-red-500">{error}</p>
-              </div>
-            )}
+            <div className="empty:hidden">
+              {error && <FormNotice tone="danger" title={error} />}
+            </div>
 
             {invite.hasAccount ? (
               sessionStatus === 'authenticated' ? (
-                <Button className="w-full" disabled={busy} onClick={acceptAsCurrentUser}>
+                <Button
+                  size="touch"
+                  variant="brand"
+                  className="w-full"
+                  isLoading={busy}
+                  loadingBehavior="busy"
+                  onClick={acceptAsCurrentUser}
+                >
                   {busy ? 'Joining…' : `Accept and join ${invite.teamName}`}
                 </Button>
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-muted">You already have an account. Sign in to accept this invite.</p>
-                  <Button className="w-full" onClick={() => router.push(`/login?next=/invite/${params.token}`)}>
+                  <Button
+                    size="touch"
+                    variant="brand"
+                    className="w-full"
+                    onClick={() => router.push(`/login?next=/invite/${params.token}`)}
+                  >
                     Sign in to accept
                   </Button>
                 </div>
@@ -145,7 +161,14 @@ export default function InvitePage() {
                   <Label htmlFor="password">Create a password</Label>
                   <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" />
                 </div>
-                <Button type="submit" className="w-full" disabled={busy}>
+                <Button
+                  size="touch"
+                  variant="brand"
+                  type="submit"
+                  className="w-full"
+                  isLoading={busy}
+                  loadingBehavior="busy"
+                >
                   {busy ? 'Creating…' : 'Create account & join'}
                 </Button>
               </form>
@@ -153,6 +176,6 @@ export default function InvitePage() {
           </>
         )}
       </div>
-    </div>
+    </AuthLayout>
   )
 }

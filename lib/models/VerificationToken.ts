@@ -9,6 +9,8 @@ export interface IVerificationToken extends Document {
   type: VerificationTokenType;
   expiresAt: Date;
   createdAt: Date;
+  /** Set when the token is redeemed. Present = spent, and never valid again. */
+  consumedAt?: Date | null;
 }
 
 const VerificationTokenSchema = new Schema<IVerificationToken>(
@@ -23,6 +25,13 @@ const VerificationTokenSchema = new Schema<IVerificationToken>(
     },
     expiresAt: { type: Date, required: true },
     createdAt: { type: Date, default: Date.now },
+    // Redeeming used to delete the row outright, which made "already redeemed"
+    // indistinguishable from "never existed" — so a refreshed verify tab, or
+    // React StrictMode double-invoking the effect, told a user whose email had
+    // just been verified that their link had expired. Marking it spent keeps
+    // it single-use while preserving that distinction; the TTL index below
+    // still purges it at expiry.
+    consumedAt: { type: Date, default: null },
   },
   { timestamps: false },
 );

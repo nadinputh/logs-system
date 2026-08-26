@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn } from 'next-auth/react'
-import { LogoMark } from '@/components/Logo'
-import { ParticleField } from '@/components/ParticleField'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -54,26 +54,25 @@ export default function SetPasswordPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-6">
-      <ParticleField className="fixed inset-0 z-0" />
-      <div className="relative z-10 w-full max-w-sm space-y-6">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-            <LogoMark className="w-[18px] h-[18px] text-white" />
-          </div>
-          <span className="font-bold text-foreground">Kamnotheat</span>
-        </div>
-
+    <AuthLayout
+      headline={
+        <>
+          Your account is waiting.
+          <br />
+          <span className="gradient-text">Give it a password.</span>
+        </>
+      }
+      subhead="Someone created this account for you. Setting a password activates it and verifies the address in one step."
+    >
+      <div className="auth-stack">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Set your password</h2>
+          <h1 className="text-2xl font-bold tracking-tight">Set your password</h1>
           <p className="mt-1.5 text-sm text-muted">Choose a password to activate your account.</p>
         </div>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-3.5 py-2.5">
-            <p className="text-sm text-red-500">{error}</p>
-          </div>
-        )}
+        <div aria-live="polite" className="empty:hidden">
+          {error && <FormNotice tone="danger" title={error} />}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
@@ -84,15 +83,27 @@ export default function SetPasswordPage() {
             <Label htmlFor="confirm">Confirm password</Label>
             <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} autoComplete="new-password" placeholder="Re-enter password" />
           </div>
-          <Button type="submit" className="w-full" disabled={busy}>
+          <Button
+            size="touch"
+            variant="brand"
+            type="submit"
+            className="w-full"
+            isLoading={busy}
+            loadingBehavior="busy"
+          >
             {busy ? 'Activating…' : 'Set password & sign in'}
           </Button>
         </form>
 
-        <p className="text-sm text-muted text-center">
-          <Link href="/login" className="font-medium text-accent hover:underline">Back to sign in</Link>
+        <p className="text-sm text-muted">
+          <Link
+            href="/login"
+            className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
+          >
+            Back to sign in
+          </Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   )
 }

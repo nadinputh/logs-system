@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { VerificationToken } from "@/lib/models/VerificationToken";
+import { hashToken } from "@/lib/verification";
 
 export const runtime = "nodejs";
 
@@ -22,13 +23,27 @@ export async function POST(req: NextRequest) {
   await connectDB();
 
   const doc = await VerificationToken.findOne({
-    token: parsed.data.token,
+    token: hashToken(parsed.data.token),
     type: "set_password",
     expiresAt: { $gt: new Date() },
+    consumedAt: null,
   });
   if (!doc) {
     return NextResponse.json(
       { code: "INVALID_TOKEN", error: "This link is invalid or has expired." },
+      { status: 400 },
+    );
+  }
+
+  // Claim before writing, so two submissions of the same link cannot both set
+  // a password.
+  const claimed = await VerificationToken.findOneAndUpdate(
+    { _id: doc._id, consumedAt: null },
+    { consumedAt: new Date() },
+  );
+  if (!claimed) {
+    return NextResponse.json(
+      { code: "INVALID_TOKEN", error: "This link has already been used." },
       { status: 400 },
     );
   }
@@ -38,7 +53,6 @@ export async function POST(req: NextRequest) {
     { _id: doc.userId },
     { passwordHash, emailVerified: new Date() },
   );
-  await VerificationToken.deleteOne({ _id: doc._id });
 
   return NextResponse.json({ ok: true, email: doc.email });
 }

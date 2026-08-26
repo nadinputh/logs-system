@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogoMark } from '@/components/Logo'
-import { ParticleField } from '@/components/ParticleField'
+import { AuthLayout } from '@/components/auth/AuthLayout'
 import { Button } from '@/components/ui/button'
 
 export default function VerifyEmailPage() {
@@ -12,8 +11,15 @@ export default function VerifyEmailPage() {
   const router = useRouter()
   const [status, setStatus] = useState<'pending' | 'ok' | 'error'>('pending')
   const [message, setMessage] = useState('')
+  // React StrictMode double-invokes effects in development, and this effect
+  // spends a single-use token — so the second call found it already redeemed and
+  // reported "Link expired" over a verification that had just succeeded. The
+  // server now distinguishes the two, and this stops the second call entirely.
+  const sent = useRef(false)
 
   useEffect(() => {
+    if (sent.current) return
+    sent.current = true
     let active = true
     ;(async () => {
       try {
@@ -43,38 +49,54 @@ export default function VerifyEmailPage() {
   }, [params.token])
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-6">
-      <ParticleField className="fixed inset-0 z-0" />
-      <div className="relative z-10 w-full max-w-sm space-y-6 text-center">
-        <div className="flex items-center justify-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-            <LogoMark className="w-[18px] h-[18px] text-white" />
-          </div>
-          <span className="font-bold text-foreground">Kamnotheat</span>
-        </div>
-
+    <AuthLayout
+      headline={
+        <>
+          One address,
+          <br />
+          <span className="gradient-text">confirmed once.</span>
+        </>
+      }
+      subhead="Verifying your email is what activates the account. The link is single-use and expires an hour after it was sent."
+    >
+      {/* The outcome replaces a line of status text, so it is announced rather
+          than silently swapped. */}
+      <div className="auth-stack" aria-live="polite">
         {status === 'pending' && (
-          <p className="text-sm text-muted">Verifying your email…</p>
+          <>
+            <h1 className="text-2xl font-bold tracking-tight">Verifying your email…</h1>
+            <p className="text-sm text-muted">This only takes a moment.</p>
+          </>
         )}
 
         {status === 'ok' && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-foreground">Email verified</h2>
+          <>
+            <h1 className="text-2xl font-bold tracking-tight">Email verified</h1>
             <p className="text-sm text-muted">Your account is active. You can sign in now.</p>
-            <Button className="w-full" onClick={() => router.push('/login')}>Go to sign in</Button>
-          </div>
+            <Button
+              size="touch"
+              variant="brand"
+              className="w-full"
+              onClick={() => router.push('/login')}
+            >
+              Go to sign in
+            </Button>
+          </>
         )}
 
         {status === 'error' && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-foreground">Link expired</h2>
+          <>
+            <h1 className="text-2xl font-bold tracking-tight">That link did not work</h1>
             <p className="text-sm text-muted">{message}</p>
-            <Link href="/login" className="text-sm font-medium text-accent hover:underline">
+            <Link
+              href="/login"
+              className="inline-block py-3 -my-3 text-sm font-semibold text-[var(--accent)] hover:underline"
+            >
               Back to sign in
             </Link>
-          </div>
+          </>
         )}
       </div>
-    </div>
+    </AuthLayout>
   )
 }

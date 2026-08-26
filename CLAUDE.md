@@ -294,5 +294,24 @@ npm run dev
 | `VAPID_PUBLIC_KEY`                     | Web Push               | Sprint 5 |
 | `VAPID_PRIVATE_KEY`                    | Web Push               | Sprint 5 |
 | `VAPID_SUBJECT`                        | Web Push               | Sprint 5 |
+| `SMTP_HOST`                            | Verification / invite / set-password email | Prod ✅ |
+| `SMTP_PORT`                            | SMTP transport (default 587)              | Optional |
+| `SMTP_SECURE`                          | SMTP transport (`true`, or implied at 465)| Optional |
+| `SMTP_USER`                            | SMTP auth                                 | Prod ✅ |
+| `SMTP_PASS`                            | SMTP auth                                 | Prod ✅ |
+| `EMAIL_FROM`                           | From header (falls back to `SMTP_USER`)   | Optional |
+
+**Email delivery.** `lib/email/send.ts` sends verification, set-password and invite mail.
+If `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are not *all* set, it logs the message to the
+server console instead of sending — which keeps the flows testable in development but means
+a half-configured production deploy silently delivers nothing. Set all three together.
+
+`nodemailer` is loaded lazily at send time through a runtime indirection, and is listed in
+`serverExternalPackages`. That is deliberate: mail is an optional capability, and a static
+import made the package a hard build-time dependency of every route importing the module —
+when it was missing from `node_modules`, registration, resend-verification, admin user
+creation and team invites all returned 500 before running any of their own logic, and in
+dev the whole compilation failed. Callers now log a send failure and continue; the account
+still exists and `POST /api/auth/resend-verification` is the recovery.
 
 """

@@ -7,6 +7,7 @@ import { Team } from "@/lib/models/Team";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { issueVerificationToken, verifyEmailLink } from "@/lib/verification";
 import { sendVerificationEmail } from "@/lib/email/send";
+import { clientKey, rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -17,12 +18,35 @@ const RegisterSchema = z.object({
   teamName: z.string().min(1).max(100),
 });
 
-// Neutral response — identical for new and unverified-existing accounts so the
-// endpoint never reveals whether an unverified email is already registered.
-const NEUTRAL = NextResponse.json(
-  { ok: true, message: "Check your email to verify your account." },
-  { status: 201 },
-);
+/**
+ * Neutral response — identical for new and unverified-existing accounts so the
+ * endpoint never reveals whether an unverified email is already registered.
+ *
+ * It must be built per request. A `Response` body is a stream that can be read
+ * exactly once, so a single module-level instance served the first registration
+ * and then threw `TypeError: Body is unusable` on every one after it — a 500
+ * returned *after* the user, team and membership had all been written, which
+ * the user could never get past by retrying.
+ */
+const neutral = () =>
+  NextResponse.json(
+    { ok: true, message: "Check your email to verify your account." },
+    { status: 201 },
+  );
+
+/**
+ * The notification is not the account. If the mail server is down or
+ * misconfigured, the account still exists and `resend-verification` is the
+ * recovery — so a send failure is logged, not thrown. Throwing here left an
+ * orphaned unverified account behind a 500, and the retry hit the same path.
+ */
+async function trySendVerification(email: string, link: string) {
+  try {
+    await sendVerificationEmail(email, link);
+  } catch (err) {
+    console.error("[register] verification email failed to send:", err);
+  }
+}
 
 function slugify(input: string) {
   return (
@@ -47,7 +71,17 @@ async function uniqueSlug(base: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const parsed = RegisterSchema.safeParse(await req.json());
+  // Each call mints a user AND a team, so an unthrottled endpoint is a way to
+  // fill the database from the open internet.
+  const limited = rateLimit(clientKey(req, "register"), 5, 15 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfter) } },
+    );
+  }
+
+  const parsed = RegisterSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -75,8 +109,8 @@ export async function POST(req: NextRequest) {
     existing.passwordHash = passwordHash;
     await existing.save();
     const token = await issueVerificationToken(existing._id, email, "email_verify");
-    await sendVerificationEmail(email, verifyEmailLink(token));
-    return NEUTRAL;
+    await trySendVerification(email, verifyEmailLink(token));
+    return neutral();
   }
 
   const user = await User.create({
@@ -104,7 +138,7 @@ export async function POST(req: NextRequest) {
   await User.updateOne({ _id: user._id }, { activeTeamId: team._id });
 
   const token = await issueVerificationToken(user._id, email, "email_verify");
-  await sendVerificationEmail(email, verifyEmailLink(token));
+  await trySendVerification(email, verifyEmailLink(token));
 
-  return NEUTRAL;
+  return neutral();
 }
