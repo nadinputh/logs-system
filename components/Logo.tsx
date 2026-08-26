@@ -44,7 +44,7 @@ export function LogoMark({ className, ...props }: SVGProps<SVGSVGElement>) {
 export function LogoTile({ className = 'size-10' }: { className?: string }) {
   return (
     <span
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/25 ${className}`}
+      className={`gradient-primary relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl text-white shadow-lg shadow-cyan-500/25 ${className}`}
     >
       <LogoMark className="h-[58%] w-[58%]" strokeWidth={1.9} />
     </span>

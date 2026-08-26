@@ -18,8 +18,22 @@
     --brand-cyan: #06b6d4;
     --brand-teal: #0d9488;
     /* Deep stops: the only ones that carry white text at >=4.5:1. */
-    --brand-sky-deep: #0369a1;
-    --brand-teal-deep: #0f766e;
+    /* The primary CTA's own stops. Light mode goes deep so a white label clears
+       AA (5.93:1 / 5.47:1). They are named for the control rather than for the
+       ramp because dark mode inverts the whole treatment — see below. */
+    --cta-from: #0369a1;
+    --cta-to: #0f766e;
+
+    /* The brand tile — the logo mark's ground, and the icon tiles that echo it.
+       Deliberately theme-INVARIANT: this is the identity, not a themed surface,
+       and DESIGN.md commits to the mark on a sky→cyan→teal tile in both modes.
+       It must not be built on --brand-sky/--brand-cyan, which brighten in dark
+       for the ambient wash and headline — doing so made .gradient-primary drift
+       away from the logo tile it was imitating, taking its white mark from
+       2.43:1 to 1.81:1 on 13 surfaces while LogoTile itself stayed put. */
+    --mark-from: #0ea5e9;
+    --mark-via: #06b6d4;
+    --mark-to: #0d9488;
 
     /* HeroUI ships a 254deg blue accent. Kamnotheat's signal is cyan, and this
        is the single lever that makes all 154 `*-accent` call sites brand-true.
@@ -43,6 +57,7 @@
        for danger buttons, so it is left alone rather than retuned. */
     --status-danger: #b42318;
     --status-warning: #b45309;
+    --status-success: #047857;
 
     /* HeroUI ships `--field-border: transparent`, so a filled field sat on the
        glass panel at 1.10:1 — the control had no perceivable boundary at all.
@@ -67,8 +82,16 @@
     --brand-sky: #38bdf8;
     --brand-cyan: #22d3ee;
     --brand-teal: #2dd4bf;
-    --brand-sky-deep: #0369a1;
-    --brand-teal-deep: #0f766e;
+    /* Dark mode inverts the CTA rather than dimming it. Holding the deep stops
+       here left the primary control at 3.20:1 against the #0f0f1e vault — the
+       *dimmest* branded object on the page, while the headline and the logo tile
+       both brighten. These are the same stops --headline-from/--headline-to take
+       in dark, so the mark, the headline and the CTA finally rhyme; the label
+       flips to --accent-foreground, which the theme already defines as
+       dark-on-brand for exactly this reason. Measured: label 8.79:1 and
+       10.11:1; presence against the vault 8.85:1 and 10.19:1. */
+    --cta-from: #38bdf8;
+    --cta-to: #2dd4bf;
 
     /* 11.2:1 on the vault ground; pairs with a near-black label, not white. */
     --accent: #22d3ee;
@@ -82,6 +105,7 @@
 
     --status-danger: #f87171;
     --status-warning: #fcd34d;
+    --status-success: #6ee7b7;
 
     --field-border: #6b6b76;
     --field-border-width: 1px;
@@ -168,13 +192,18 @@
   }
 
   .gradient-primary {
-    background: linear-gradient(135deg, var(--brand-sky) 0%, var(--brand-cyan) 100%);
+    background: linear-gradient(
+      135deg,
+      var(--mark-from) 0%,
+      var(--mark-via) 50%,
+      var(--mark-to) 100%
+    );
   }
 
   /* The CTA carries white text, so its stops are the deep pair in both themes
      (5.9:1 and 5.5:1) rather than the bright display ramp. */
   .gradient-cta {
-    background: linear-gradient(135deg, var(--brand-sky-deep) 0%, var(--brand-teal-deep) 100%);
+    background: linear-gradient(135deg, var(--cta-from) 0%, var(--cta-to) 100%);
   }
 
   .gradient-text {
@@ -359,6 +388,20 @@
     }
     .press:active:not(:disabled) {
       transform: none;
+    }
+
+    /* Tailwind's own animations were outside this policy, so the check-in
+       skeletons, the live-occupancy dot and every spinner kept moving for a
+       visitor who asked them not to. Movement goes; meaning stays — the
+       skeletons are still muted placeholder bars, the dot still sits beside the
+       words "Checked In", and the spinner still turns, just slowly enough to
+       read as a state rather than a whirl. Stopping it outright would delete
+       the only signal that a request is in flight. */
+    .animate-pulse {
+      animation: none;
+    }
+    .animate-spin {
+      animation-duration: 2s;
     }
   }
 

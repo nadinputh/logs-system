@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { Camera, CameraOff, Loader2, ShieldAlert, Smartphone, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { describeFailure, resolveDecoded, type Failure } from '@/lib/scanner/decode'
 
 /**
  * QRScanner — the visitor's entry point.
@@ -21,94 +22,35 @@ import { Button } from '@/components/ui/button'
 interface QRScannerProps {
   onResult?: (result: string) => void
   redirectOnScan?: boolean
+  /**
+   * Content for the box that holds the viewfinder's place while idle. Defaults
+   * to a line saying the preview will appear here.
+   *
+   * It is a slot rather than fixed copy because `/scan` puts the visitor's
+   * capture disclosure in it: consent belongs directly above the control that
+   * opens the camera, and this is the only space above that control which costs
+   * no vertical room — the box already exists at exactly the viewfinder's size
+   * so starting the camera does not shift the page. It is also copy the staff
+   * terminal must not show, which is reason enough not to bake it in here.
+   */
+  idlePlaceholder?: ReactNode
 }
 
 type Phase = 'idle' | 'starting' | 'scanning'
 
-type Failure = {
-  title: string
-  detail: string
-  /** Whether retrying can plausibly succeed. */
-  retryable: boolean
-}
-
 const DIV_ID = 'qr-reader'
 
-/** Routes a Kamnotheat QR is allowed to send someone to. */
-const ALLOWED_PREFIXES = ['/scan/', '/quest/', '/terminal']
-
-/**
- * Maps a getUserMedia / html5-qrcode rejection onto a cause the visitor can act
- * on. The browser's own `message` is never shown — "NotAllowedError: Permission
- * denied" tells someone in a lobby nothing about what to do next.
- */
-function describeFailure(err: unknown): Failure {
-  // html5-qrcode rejects with a plain string for most camera failures
-  // (`Error getting userMedia, error = NotFoundError: ...`), so the DOMException
-  // name is only reachable by searching the stringified rejection too. Matching
-  // on `err.name` alone silently collapses every cause into the generic one.
-  const name = (err as { name?: string })?.name ?? ''
-  const raw = [name, (err as { message?: string })?.message ?? '', String(err)].join(' ')
-
-  if (/NotAllowedError|SecurityError|permission|denied|dismissed/i.test(raw)) {
-    return {
-      title: 'Camera access is blocked',
-      detail:
-        'Allow camera access for this site in your browser settings, then try again. On iPhone: Settings → Safari → Camera.',
-      retryable: true,
-    }
-  }
-  if (/NotFoundError|DevicesNotFoundError|no camera|device not found|not found/i.test(raw)) {
-    return {
-      title: 'No camera found',
-      detail: 'This device has no camera available to open.',
-      retryable: false,
-    }
-  }
-  if (/NotReadableError|TrackStartError|AbortError|in use|could not start/i.test(raw)) {
-    return {
-      title: 'The camera is busy',
-      detail:
-        'Another app or tab is already using it. Close the other one, then try again.',
-      retryable: true,
-    }
-  }
-  if (/OverconstrainedError|ConstraintNotSatisfiedError/i.test(raw)) {
-    return {
-      title: "This camera can't be used",
-      detail: 'No rear-facing camera is available on this device.',
-      retryable: false,
-    }
-  }
-  if (/KamnotheatTimeout|camera-timeout/.test(raw)) {
-    return {
-      title: 'The camera did not open',
-      detail:
-        'It may be in use by another app. Close anything else using the camera, then try again.',
-      retryable: true,
-    }
-  }
-  // Common when a link is opened inside an app's built-in browser, which is
-  // exactly how a visitor often arrives at a QR link.
-  if (/NotSupportedError|not supported|undefined is not an object/i.test(raw)) {
-    return {
-      title: "This browser can't use the camera",
-      detail:
-        'If you opened this from inside another app, tap its menu and choose "Open in browser" and load this page there.',
-      retryable: false,
-    }
-  }
-  return {
-    title: "The scanner couldn't start",
-    detail: 'Something went wrong reaching the camera. Try again, or ask a host to check you in.',
-    retryable: true,
-  }
-}
-
-export default function QRScanner({ onResult, redirectOnScan = true }: QRScannerProps) {
+export default function QRScanner({
+  onResult,
+  redirectOnScan = true,
+  idlePlaceholder,
+}: QRScannerProps) {
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>('idle')
   const [failure, setFailure] = useState<Failure | null>(null)
+  /** Read something unusable while the camera is still live. Not a failure. */
+  const [notice, setNotice] = useState<string | null>(null)
+  const rejectedRef = useRef<string | null>(null)
   const scannerRef = useRef<{ stop: () => Promise<void>; clear?: () => void } | null>(null)
   const busy = useRef(false)
   const mounted = useRef(true)
@@ -117,45 +59,45 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
     mounted.current = true
     return () => {
       mounted.current = false
-      scannerRef.current?.stop().catch(() => {})
+      // stop() throws *synchronously* when the scanner never started, and a
+      // trailing .catch() cannot intercept that — the same shape that once
+      // escaped start()'s catch block and silently broke every failure path.
+      try {
+        void scannerRef.current?.stop()?.catch(() => {})
+      } catch {
+        /* never started */
+      }
     }
   }, [])
 
   /**
-   * A decoded QR is untrusted input. Only same-origin URLs pointing at a route
-   * this product actually owns are followed — otherwise any QR sticker in the
-   * world could steer a visitor through the app.
+   * `halt` shuts the camera down. It is called only once the decoded text has
+   * earned it — a caller-owned result, or a route this product owns. A code
+   * this scanner cannot use leaves the camera running and posts a notice.
    */
   const handleDecoded = useCallback(
-    (decodedText: string) => {
+    (decodedText: string, halt: () => void) => {
       if (onResult) {
+        halt()
         onResult(decodedText)
         return
       }
       if (!redirectOnScan) return
 
-      let target: URL
-      try {
-        target = new URL(decodedText, window.location.origin)
-      } catch {
-        setFailure({
-          title: 'That code is not a check-in code',
-          detail: 'Scan the Kamnotheat QR posted at your location.',
-          retryable: true,
-        })
+      const resolved = resolveDecoded(decodedText, window.location.origin)
+      if (resolved.kind === 'foreign') {
+        // Deduped by content: the same sticker decodes ten times a second, and
+        // a live region that re-announces at 10fps is unusable with a screen
+        // reader. The notice stays until the scan ends or a real code is read —
+        // "still looking" keeps it true for as long as it is on screen.
+        if (rejectedRef.current !== decodedText) {
+          rejectedRef.current = decodedText
+          setNotice(resolved.notice)
+        }
         return
       }
-      const sameOrigin = target.origin === window.location.origin
-      const knownRoute = ALLOWED_PREFIXES.some((prefix) => target.pathname.startsWith(prefix))
-      if (!sameOrigin || !knownRoute) {
-        setFailure({
-          title: 'That code is not a check-in code',
-          detail: 'It points somewhere outside Kamnotheat. Scan the QR posted at your location.',
-          retryable: true,
-        })
-        return
-      }
-      router.push(target.pathname + target.search)
+      halt()
+      router.push(resolved.href)
     },
     [onResult, redirectOnScan, router],
   )
@@ -168,13 +110,19 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
     }
     scannerRef.current = null
     busy.current = false
-    if (mounted.current) setPhase('idle')
+    rejectedRef.current = null
+    if (mounted.current) {
+      setPhase('idle')
+      setNotice(null)
+    }
   }, [])
 
   const start = useCallback(async () => {
     if (busy.current) return
     busy.current = true
     setFailure(null)
+    setNotice(null)
+    rejectedRef.current = null
     setPhase('starting')
 
     // getUserMedia is unavailable outside a secure context, which is easy to hit
@@ -229,18 +177,27 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
           },
         },
         (decodedText: string) => {
-          scanner.stop().catch(() => {})
-          scannerRef.current = null
-          busy.current = false
-          if (mounted.current) setPhase('idle')
-          handleDecoded(decodedText)
+          handleDecoded(decodedText, () => {
+            try {
+              void scanner.stop()?.catch(() => {})
+            } catch {
+              /* already stopped */
+            }
+            scannerRef.current = null
+            busy.current = false
+            if (mounted.current) setPhase('idle')
+          })
         },
         undefined,
         ),
       ])
       clearTimeout(watchdog)
       if (!mounted.current) {
-        scanner.stop().catch(() => {})
+        try {
+          void scanner.stop()?.catch(() => {})
+        } catch {
+          /* never started */
+        }
         return
       }
       setPhase('scanning')
@@ -270,9 +227,13 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
   // around it rather than leaving a disabled control as the last thing on screen.
   const deadEnd = !!failure && !failure.retryable
 
-  // When the dead-end path removes the control, focus falls to <body> and a
-  // keyboard user loses their place. Send it to the failure instead, which is
-  // both the explanation and the anchor for the routes that follow.
+  // Deliberately only the dead end. A *retryable* failure needs no move: the
+  // button is no longer disabled while starting, so it never loses focus, and
+  // it is already the control the visitor wants — its label just becomes "Try
+  // again" while role="alert" reads the cause. Sending focus to the notice
+  // instead would park them on static text *after* that button in the DOM,
+  // reachable only by shift-tabbing back. Only the dead end, which removes the
+  // control entirely and would drop focus to <body>, needs the anchor.
   useEffect(() => {
     if (deadEnd) failureRef.current?.focus()
   }, [deadEnd])
@@ -299,18 +260,33 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
       {/* Idle placeholder: gives the panel a stable height so starting the camera
           does not shove the rest of the page down. Withdrawn on a dead end —
           promising a preview is a lie once the control that would start it is
-          gone, and the space belongs to the routes that still work. */}
+          gone, and the space belongs to the routes that still work.
+
+          A filled slot drops the dashed edge: dashed reads "nothing here yet",
+          which stops being true once the box carries real content. It scrolls
+          rather than clips, so a long disclosure stays reachable in the one
+          case it can outgrow the box — a phone held in landscape. */}
       {phase === 'idle' && !deadEnd && (
-        <div className="flex aspect-[4/3] max-h-[min(45vh,20rem)] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[var(--panel-border)] px-6 text-center [@media(max-height:540px)]:aspect-auto [@media(max-height:540px)]:h-28">
-          <Camera className="size-7 text-muted" strokeWidth={1.8} />
-          <p className="text-sm text-muted">
-            The camera preview appears here once you start the scanner.
-          </p>
+        <div
+          className={
+            idlePlaceholder
+              ? 'flex aspect-[4/3] max-h-[min(45vh,20rem)] w-full flex-col justify-center gap-2.5 overflow-y-auto rounded-2xl border border-[var(--panel-border)] bg-muted/40 px-5 py-4 [@media(max-height:540px)]:aspect-auto [@media(max-height:540px)]:h-28 [@media(max-height:540px)]:gap-1.5 [@media(max-height:540px)]:py-3'
+              : 'flex aspect-[4/3] max-h-[min(45vh,20rem)] w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[var(--panel-border)] px-6 text-center [@media(max-height:540px)]:aspect-auto [@media(max-height:540px)]:h-28'
+          }
+        >
+          {idlePlaceholder ?? (
+            <>
+              <Camera className="size-7 text-muted" strokeWidth={1.8} />
+              <p className="text-sm text-muted">
+                The camera preview appears here once you start the scanner.
+              </p>
+            </>
+          )}
         </div>
       )}
 
       {phase === 'scanning' ? (
-        <Button variant="outline" className="press w-full" size="lg" onPress={stop}>
+        <Button variant="outline" className="press h-12 w-full text-sm font-semibold" onPress={stop}>
           <X className="size-4" strokeWidth={2.4} />
           Stop scanner
         </Button>
@@ -325,6 +301,14 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
           className="w-full"
           onPress={start}
           isLoading={phase === 'starting'}
+          // Busy, not disabled. A disabled button renders at
+          // --disabled-opacity, which puts this white label at roughly 1.5:1 on
+          // the brand gradient — the least readable moment on the page is the
+          // one where the visitor is waiting on an OS permission dialog. The
+          // attribute also blurs the element, dropping a keyboard user to
+          // <body> for up to the full watchdog. Re-entry is already guarded by
+          // `busy.current`, so nothing needs the disabled attribute to do it.
+          loadingBehavior="busy"
         >
           {phase === 'starting' ? (
             <>
@@ -342,13 +326,28 @@ export default function QRScanner({ onResult, redirectOnScan = true }: QRScanner
 
       {/* Progress is polite; a failure that ends the task is not. Announcing a
           dead camera at the same priority as "scanner started" means it queues
-          behind other speech and can be missed entirely. */}
+          behind other speech and can be missed entirely.
+
+          'starting' is announced here rather than left to the button label: the
+          button keeps focus now that it is not disabled, and a label change
+          under an already-focused element is not reliably spoken. This window
+          used to be silent for up to the full ten-second watchdog. */}
       <div aria-live="polite" role="status">
-        {phase === 'scanning' && (
+        {phase === 'starting' && (
           <p className="text-center text-sm text-muted">
-            Point the camera at the QR code. It reads the moment it is in frame.
+            Starting the camera. This can take a few seconds.
           </p>
         )}
+        {phase === 'scanning' &&
+          (notice ? (
+            <p className="text-center text-sm font-semibold text-[var(--status-danger)]">
+              {notice}
+            </p>
+          ) : (
+            <p className="text-center text-sm text-muted">
+              Point the camera at the QR code. It reads the moment it is in frame.
+            </p>
+          ))}
       </div>
 
       <div role="alert" className="space-y-4">

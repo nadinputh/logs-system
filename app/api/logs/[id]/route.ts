@@ -4,6 +4,7 @@ import { Log } from "@/lib/models/Log";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
+import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,18 @@ export async function PATCH(
       { error: "sessionToken required" },
       { status: 400 },
     );
+  }
+
+  // Check-out is a write, so it carries the same replay guard as check-in.
+  // The `existing` lookup below is correct in sequence but not atomic: two taps
+  // racing can both read "no check-out yet" and both append an OUT document to
+  // a ledger that cannot delete either one.
+  const idempotencyKey = req.headers.get("idempotency-key");
+  if (idempotencyKey) {
+    const cached = await checkIdempotency(idempotencyKey);
+    if (cached) {
+      return NextResponse.json(cached.body, { status: cached.statusCode });
+    }
   }
 
   await connectDB();
@@ -72,6 +85,10 @@ export async function PATCH(
   });
 
   publishLogCreated(checkoutLog);
+
+  if (idempotencyKey) {
+    await saveIdempotency(idempotencyKey, 201, checkoutLog.toObject());
+  }
 
   return NextResponse.json(checkoutLog, { status: 201 });
 }

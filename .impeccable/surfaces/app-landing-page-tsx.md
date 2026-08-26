@@ -9,8 +9,10 @@ related_targets: ["app/scan/page.tsx"]
 
 ## Mode
 **Persuade.** The visitor decides and acts. Success is the right person through the right
-door: staff/admins → `/login`, one-time visitors → `/scan`. This is an internal tool's
-front door, so "persuade" means *route with conviction*, not sell.
+door: staff/admins → `/login`; one-time visitors → **the QR code at their location**, read
+by their phone's own camera, with `/scan` offered only as the recovery when that fails
+(owner call, 2026-08-26 — see Routing below). This is an internal tool's front door, so
+"persuade" means *route with conviction*, not sell.
 
 ## Visual world
 **Preserved — the Glass Vault** (DESIGN.md, unchanged). Cyan→teal signal, shield mark,
@@ -88,3 +90,26 @@ and scrolling away and back does not retrigger), no layout-driving properties an
 **Reduced motion:** movement goes, meaning stays — rows and chip resolve through
 `fade-only`, the sweep is off, press feedback stops travelling but still confirms. A
 blanket `animation: none` would have deleted the feedback along with the decoration.
+
+
+## Routing — the visitor pill is gone (2026-08-26)
+
+A critique of `/scan` scored 27/40 and found the two surfaces contradicting each other. Three
+passes had rebuilt `/scan` as "the fallback, not the front door" — one column, no marketing
+composition, copy assuming a failure already happened — while this page's hero pill, "Scan to
+check in", was one of only two inbound links in the product and presented it as the primary
+visitor route. Nothing routed there as a recovery.
+
+The owner chose fallback. The pill is removed; the hero now carries **one** CTA
+("Open the console"), and the visitor path is a sentence beneath it: point your phone's own
+camera at the QR posted at your location, with "If it doesn't open, scan it here" linking to
+`/scan`. `app/quest/[questToken]/page.tsx` was reworded to match, so a quest participant is
+not paying a camera cold start at every stop when the native camera would do.
+
+Two consequences worth keeping in mind:
+- The hero is now a single-pill composition. That is deliberate and it suits the One Signal
+  Rule better than two competing pills did; do not "restore balance" by adding a second.
+- PRODUCT.md still describes the landing as routing "visitors to the scan flow". That
+  sentence is now imprecise — it routes them to the code at their door. Worth correcting the
+  next time `init` runs; not corrected here, because a design pass does not rewrite product
+  truth on its own.

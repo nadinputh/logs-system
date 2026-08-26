@@ -80,8 +80,10 @@ export default function LandingPage() {
     <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
       {/* Atmosphere, in two layers: one washed ground, and the locating field over
           it. Probe the field with the cursor and the points inside the radius warm
-          toward the accent — the geofence check the engine runs on every write.
-          The field is the only grid here; ruling it as well just read as a table.
+          toward the accent — the shape of the question the product answers, not a
+          depiction of a geofence check the engine performs (it does not; see
+          ParticleField's header). The field is the only grid here; ruling it as
+          well just read as a table.
 
           Anchored to the hero rather than fixed to the viewport, so it scrolls away
           from the dense sections below and the field's observer can stop the loop. */}
@@ -123,7 +125,7 @@ export default function LandingPage() {
               <ThemeToggle />
               <Link
                 href="/login"
-                className="gradient-cta shadow-signal press inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-white hover:scale-[1.03]"
+                className="gradient-cta shadow-signal press inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-[var(--accent-foreground)] hover:scale-[1.03]"
               >
                 Open the console
                 <ArrowRight className="size-4" strokeWidth={2.4} />
@@ -151,19 +153,32 @@ export default function LandingPage() {
               <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
                   href="/login"
-                  className="gradient-cta shadow-signal press inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-sm font-semibold text-white hover:scale-[1.02]"
+                  className="gradient-cta shadow-signal press inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-sm font-semibold text-[var(--accent-foreground)] hover:scale-[1.02]"
                 >
                   Open the console
                   <ArrowRight className="size-4" strokeWidth={2.4} />
                 </Link>
+              </div>
+
+              {/* The visitor's real door is not on this page. Every phone since
+                  iOS 11 opens a QR from the native camera straight onto
+                  /scan/[locationId], so a pill here reading "Scan to check in"
+                  sent people to the in-app scanner as if it were the way in —
+                  while /scan itself was rebuilt around the opposite premise,
+                  that you arrive there because the camera already failed. The
+                  routing now says what the product actually does: the code at
+                  the door first, this page's scanner as the recovery. */}
+              <p className="mt-6 max-w-[52ch] text-sm text-muted">
+                Here to check in? Point your phone&apos;s camera at the QR code posted at
+                your location — it opens your check-in directly.{' '}
                 <Link
                   href="/scan"
-                  className="glass press inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-sm font-semibold hover:text-[var(--accent)]"
+                  className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
                 >
-                  <QrCode className="size-4" strokeWidth={2.3} />
-                  Scan to check in
+                  If it doesn&apos;t open, scan it here
                 </Link>
-              </div>
+                .
+              </p>
 
               <ul className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-2.5 text-sm text-muted">
                 <li className="inline-flex items-center gap-2">

@@ -44,15 +44,65 @@ const steps = [
     // contact) -> identity step 2 (purpose, gender) -> checkin -> an optional
     // selfie. "Confirm and you are logged" skipped all of it; "give your name
     // and confirm" then understated it. This names the real shape.
-    text: 'Your name is the only required field — the details and photo that follow are skippable. Your entry is written once, timed by the server.',
+    text: 'Your name is the only required field — the details and photo that follow are skippable.',
   },
 ]
+
+/**
+ * Everything a check-in writes, stated before the camera opens rather than
+ * after. Checked line by line against `lib/models/Log.ts`, the `POST /api/logs`
+ * handler, `components/location/CheckInOut.tsx` and `lib/cloudinary.ts`:
+ *
+ * - automatic — server timestamp, the scanned `locationId`, `ipAddress`,
+ *   `userAgent`, and a `deviceId` random UUID kept in this browser
+ * - typed — `visitorName` required; contact, purpose and gender optional
+ * - optional — a photo, which `uploadSelfie()` POSTs to api.cloudinary.com
+ *
+ * The photo is called out as leaving the device because it does. Saying only
+ * "the camera feed never leaves your device" a few words away from "a photo is
+ * optional" invited exactly the wrong inference.
+ *
+ * No location claim appears here: `geofenceStatus` exists on the Log schema and
+ * is read by the admin viewer, but nothing in the visitor flow ever sends it.
+ */
+function CaptureDisclosure() {
+  return (
+    <>
+      <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+        What this writes
+      </h3>
+      <dl className="space-y-2 text-xs leading-snug [@media(max-height:540px)]:space-y-1">
+        <div>
+          <dt className="font-semibold text-foreground">Automatically</dt>
+          <dd className="text-muted">
+            The time, the code you scan, your IP address, your browser, and a random ID for
+            this browser.
+          </dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-foreground">From you</dt>
+          <dd className="text-muted">Your name — the only required field.</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-foreground">Only if you choose</dt>
+          <dd className="text-muted">
+            Contact details, purpose, and a photo. A photo is uploaded and stored with your
+            entry.
+          </dd>
+        </div>
+      </dl>
+    </>
+  )
+}
 
 export default function ScanPage() {
   return (
     <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
       {/* The same two atmosphere layers as the landing. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-screen [mask-image:linear-gradient(to_bottom,#000_55%,transparent_100%)]"
+      >
         <div className="ambient-wash absolute inset-0" />
         <ParticleField className="absolute inset-0" />
       </div>
@@ -73,7 +123,8 @@ export default function ScanPage() {
             wordmark is no longer hidden on phones: this page asks for a camera,
             so it has to say who is asking. */}
         <header className="border-b border-[var(--panel-border)]">
-          <nav aria-label="Primary" className="shell flex h-16 items-center sm:h-[4.5rem]">
+          <nav aria-label="Primary" className="shell">
+            <div className="mx-auto flex h-16 w-full max-w-[34rem] items-center sm:h-[4.5rem]">
             <Link
               href="/landing"
               aria-label="Kamnotheat — home"
@@ -81,10 +132,11 @@ export default function ScanPage() {
             >
               <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
               <span>
-                <span className="block text-sm font-bold tracking-tight">Kamnotheat</span>
+                <span className="block text-sm font-semibold tracking-tight">Kamnotheat</span>
                 <span className="block text-xs text-muted">Secure check-in logging</span>
               </span>
             </Link>
+            </div>
           </nav>
         </header>
 
@@ -93,36 +145,33 @@ export default function ScanPage() {
             <h1 className="text-balance text-[clamp(1.75rem,4vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.02em]">
               Scan to <span className="gradient-text">check in</span>
             </h1>
-            {/* Both halves in one line, above the fold: what is permanent *and*
-                what it contains. The previous lede repeated step 1 verbatim and
-                pushed the task off screen. */}
+            {/* The owner confirmed this is the fallback: the ordinary way in is a
+                phone's own camera opening the door code. Saying so is the first
+                thing a visitor needs, because it names why they are here and
+                offers the faster route back. The capture list that used to be
+                bolted onto this line now sits in full directly above the
+                button, where consent belongs. */}
             <p className="mt-3 text-pretty text-muted [@media(max-height:540px)]:mt-1.5">
-              Recorded once and never edited — the time, the code you scan, and your name.
+              If your phone&apos;s camera app didn&apos;t open the QR at your location, scan it
+              here instead. Your entry is written once and never edited.
             </p>
 
             {/* The task, as high as the page can put it. */}
             <div className="glass shadow-panel mt-6 rounded-3xl p-5 sm:p-6 [@media(max-height:540px)]:mt-3 [@media(max-height:540px)]:p-4">
-              <QRScanner />
+              <QRScanner idlePlaceholder={<CaptureDisclosure />} />
             </div>
 
-            <div className="mt-6 rounded-2xl border border-[var(--panel-border)] p-4">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                What gets recorded
-              </h2>
-              <p className="mt-2.5 text-sm text-muted">
-                The time, the code you scan, and{' '}
-                <span className="font-semibold text-foreground">your name</span>. Your IP
-                address, browser, and a random ID for this browser are stored alongside it.
-                Contact details, purpose and a photo are optional — you can skip all three.
-              </p>
-              <p className="mt-2 text-sm text-muted">
-                The camera feed never leaves your device; only the code is read. Entries are
-                readable by this organisation&apos;s staff.{' '}
-                <span className="font-semibold text-foreground">
-                  You do not need an account.
-                </span>
-              </p>
-            </div>
+            {/* What stays below the button is reassurance, not disclosure: it
+                describes what does *not* happen and what is not required. The
+                heading went with it — three eyebrow-styled section heads in a
+                row made every part of this page read as metadata. */}
+            <p className="mt-5 text-sm text-muted">
+              The camera feed never leaves your device; only the code is read. Entries are
+              readable by this organisation&apos;s staff.{' '}
+              <span className="font-semibold text-foreground">
+                You do not need an account.
+              </span>
+            </p>
 
             <h2 className="mt-10 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
               What happens

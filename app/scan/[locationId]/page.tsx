@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import CheckInOutClient from '@/components/location/CheckInOut'
+import { ScanNotice } from '@/components/location/ScanNotice'
 import { verifyKioskToken } from '@/lib/jwt'
 import { connectDB } from '@/lib/db'
 import { Building } from '@/lib/models/Building'
@@ -50,18 +51,22 @@ export default async function ScanLocationPage({
       const verified = await verifyKioskToken(resolvedSearchParams.token)
       if (verified.locationId !== locationId) {
         return (
-          <div className="min-h-screen flex items-center justify-center p-4">
-            <p className="text-red-500 font-medium">Invalid QR code — location mismatch.</p>
-          </div>
+          <ScanNotice
+            tone="danger"
+            icon="mismatch"
+            title="That code is for a different place"
+            detail="The code you scanned was issued for another location, so it cannot check you in here. Nothing has been recorded."
+          />
         )
       }
     } catch {
       return (
-        <div className="min-h-screen flex items-center justify-center p-4">
-          <p className="text-amber-600 font-medium">
-            QR code expired. Please scan the refreshed code on the kiosk.
-          </p>
-        </div>
+        <ScanNotice
+          tone="warning"
+          icon="expired"
+          title="That code has expired"
+          detail="Kiosk codes refresh every few seconds so they cannot be photographed and reused. Scan the one on screen now. Nothing has been recorded."
+        />
       )
     }
   }

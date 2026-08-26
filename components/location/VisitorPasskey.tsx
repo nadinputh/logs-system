@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Fingerprint, Loader2 } from 'lucide-react'
 import { toast } from '@/components/ui/sonner'
+import { buildIdempotencyKey } from '@/lib/idempotency-key'
 
 interface Props {
   locationId: string
@@ -30,15 +31,6 @@ interface VisitorPasskeyLog {
   timestamp?: string
   visitorName?: string
   passkeyVerified?: boolean
-}
-
-// sha256(sessionToken:locationId:YYYY-MM-DD:action)
-async function buildIdempotencyKey(sessionToken: string, locationId: string, action: string) {
-  const date = new Date().toISOString().slice(0, 10)
-  const raw = `${sessionToken}:${locationId}:${date}:${action}`
-  const data = new TextEncoder().encode(raw)
-  const hash = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 function contactFields(contact?: string) {
@@ -207,7 +199,7 @@ export default function VisitorPasskey({
   if (registerOnly && hasPasskey) return null
   if (hasPasskey === null && !registerOnly) {
     return (
-      <Button variant="outline" className="w-full" disabled>
+      <Button size="touch" variant="outline" className="w-full" isDisabled>
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
         Checking…
       </Button>
@@ -225,7 +217,7 @@ export default function VisitorPasskey({
 
   return (
     <div className="space-y-1.5">
-      <Button variant="outline" className="w-full" onClick={onClick} disabled={loading}>
+      <Button size="touch" variant="outline" className="w-full" onClick={onClick} isLoading={loading} loadingBehavior="busy">
         <Fingerprint className="w-4 h-4 mr-2" />
         {label}
       </Button>

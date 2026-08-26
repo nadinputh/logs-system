@@ -119,7 +119,14 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
         {/* Scan CTA */}
         <Card>
           <CardContent className="p-4 space-y-3">
-          <p className="text-sm text-muted">At a location? Scan it now to record your visit.</p>
+          {/* Same routing truth as the landing: the phone's own camera opens
+              the location code directly. The in-app scanner is the fallback,
+              and saying so keeps a quest participant from paying a camera cold
+              start at every stop when they do not have to. */}
+          <p className="text-sm text-muted">
+            At a location? Point your phone&apos;s camera at its QR code to record the
+            visit. If it doesn&apos;t open, use the scanner here.
+          </p>
           <Link
             href="/scan"
             className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"

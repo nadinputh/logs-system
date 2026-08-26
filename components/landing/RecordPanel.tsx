@@ -5,12 +5,20 @@ import { Lock, ShieldCheck } from 'lucide-react'
  *
  * This is the landing page's central argument: rather than *claiming* the record
  * is tamper-evident, it shows the fields that make it so — server-set time, the
- * anti-spoofing triple (device / ip / geofence), the sha-256 idempotency key,
+ * anti-spoofing triple (device / ip / user agent), the sha-256 idempotency key,
  * and the note that corrections append rather than overwrite.
  *
  * It is a labelled schema illustration, not a live feed: PRODUCT.md forbids
  * fabricating usage or adoption, so the values are generic and the panel says
  * so in its own footnote.
+ *
+ * Every field here must be one the engine genuinely writes, because the caption
+ * asserts exactly that. `geofence_status` used to sit in this list showing
+ * `inside · verified against polygon`; it is a Boolean on the Log schema that
+ * no code path ever sets — `navigator.geolocation` appears nowhere in the
+ * repo — so the panel was asserting both a capture that does not happen and a
+ * value shape the field cannot hold. `user_agent` replaces it: really captured
+ * on every write, and the third leg of the anti-spoofing set CLAUDE.md names.
  *
  * Deliberately a server component. The only motion is a CSS sweep, so this
  * whole artifact costs zero client JS.
@@ -34,7 +42,7 @@ const fields: Field[] = [
   { label: 'location', value: 'Atrium · Floor 2 · Room 214' },
   { label: 'device_id', value: '7f3a1c04-9c21', mono: true },
   { label: 'ip_address', value: '10.24.6.118', mono: true },
-  { label: 'geofence_status', value: 'inside', note: 'verified against polygon' },
+  { label: 'user_agent', value: 'Safari/17.4 · iPhone', note: 'from request headers' },
   { label: 'passkey_verified', value: 'true', note: 'secure enclave' },
   {
     label: 'idempotency_key',

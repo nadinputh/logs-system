@@ -1,8 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
+import { LogoTile } from '@/components/Logo'
+import { CircleCheck, Lock, MapPin, Star } from 'lucide-react'
+import { ScanNotice } from '@/components/location/ScanNotice'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/ui/sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { getPredictedAction, formatDuration } from '@/lib/predictive'
+import { buildIdempotencyKey } from '@/lib/idempotency-key'
 import { useLogRealtime } from '@/lib/useLogRealtime'
 
 const SelfieCapture = dynamic(() => import('@/components/selfie/SelfieCapture'), { ssr: false })
@@ -124,6 +129,20 @@ function toOpenLog(log: any, fallbackName?: string): OpenLog | null {
   }
 }
 
+/**
+ * Owns the one-second tick so the parent does not. `formatDuration` is the only
+ * thing in the flow that needs second resolution, and re-rendering an 860-line
+ * component once a second to advance it was the whole cost.
+ */
+function LiveDuration({ since }: { since: string }) {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return <>{formatDuration(since, now)}</>
+}
+
 function formatCheckInTime(value: string | Date) {
   return new Date(value).toLocaleTimeString([], {
     hour: 'numeric',
@@ -185,7 +204,10 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
     if (step !== 'checkedIn') return
     setCurrentTime(new Date())
 
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
+    // Once a minute, not once a second: this drives the 16:30 check-out
+    // prediction, which cannot flip more often than that. The live duration
+    // ticks inside <LiveDuration/> where only that one string re-renders.
+    const interval = setInterval(() => setCurrentTime(new Date()), 60_000)
     return () => clearInterval(interval)
   }, [step])
 
@@ -261,13 +283,23 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
   }
 
   async function handleCheckIn(photo?: string) {
+    // The write is irreversible and the ledger cannot delete a duplicate, so
+    // re-entry is refused here as well as deduplicated on the server.
+    if (loading) return
     setLoading(true)
     setCheckedInViaPasskey(false)
     setPasskeySavedThisVisit(false)
     try {
       const res = await fetch('/api/logs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Was absent entirely: the server has read this header since the
+          // idempotency engine shipped, and the passkey path has always sent
+          // one, but the ordinary click path — the one most visitors use —
+          // reached an append-only ledger with no replay protection at all.
+          'Idempotency-Key': await buildIdempotencyKey(sessionToken, locationId, 'in'),
+        },
         body: JSON.stringify({
           locationId,
           locationType: location?.locationType,
@@ -304,12 +336,15 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
   }
 
   async function handleCheckOut() {
-    if (!activeLogId) return
+    if (!activeLogId || loading) return
     setLoading(true)
     try {
       const res = await fetch(`/api/logs/${activeLogId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': await buildIdempotencyKey(sessionToken, locationId, 'out'),
+        },
         body: JSON.stringify({ sessionToken }),
       })
       if (!res.ok) {
@@ -377,6 +412,40 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
       ? `${(location as any).buildingId?.name ?? ''} › ${location.name}`
       : location?.name ?? 'Location'
 
+  // A visitor crosses seven states between scanning and leaving. Nothing
+  // announced any of them, and when the active card unmounted, focus fell to
+  // <body> — so a screen-reader user completed an irreversible write with no
+  // confirmation that anything had changed.
+  const stepKey = step === 'identity' ? `identity:${identitySubStep}` : step
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  const lastStepKey = useRef<string | null>(null)
+
+  useEffect(() => {
+    const previous = lastStepKey.current
+    lastStepKey.current = stepKey
+    // Arrival is not a transition: the first painted step owns focus already
+    // (the name field autofocuses), and moving it here would fight that.
+    if (previous === null || previous === 'loading' || previous === stepKey) return
+    stepHeadingRef.current?.focus()
+  }, [stepKey])
+
+  const stepAnnouncement =
+    step === 'identity'
+      ? identitySubStep === 1
+        ? 'Enter your name to check in.'
+        : 'Optional details. You can skip these.'
+      : step === 'checkin'
+        ? `Ready to check in to ${location?.name ?? 'this location'}.`
+        : step === 'selfie'
+          ? 'Optional photo. Take a photo or skip.'
+          : step === 'checkedIn'
+            ? `Checked in to ${location?.name ?? 'this location'}.`
+            : step === 'checkedOut'
+              ? `Checked out of ${location?.name ?? 'this location'}.`
+              : step === 'questScan'
+                ? 'Scan your quest card.'
+                : ''
+
   const passkeyRequired = location?.checkInMode === 'passkey'
   const checkoutSuggested = openLog
     ? getPredictedAction(openLog.timestamp, currentTime) === 'checkout_suggested'
@@ -384,35 +453,73 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
 
   if (!location) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-cyan-50/30 to-teal-50/20">
-        <Card className="w-full max-w-sm text-center">
-          <CardContent className="p-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h2 className="font-bold text-foreground">Location not found</h2>
-          <p className="text-sm text-muted mt-1.5">This QR code may be invalid or expired.</p>
-          </CardContent>
-        </Card>
-      </div>
+      <ScanNotice
+        tone="danger"
+        icon="missing"
+        title="That code doesn't match a location"
+        detail="The code scanned cleanly, but no building, floor or room here answers to it. It may have been retired. Nothing has been recorded."
+      />
     )
   }
 
   const locTypeColor = location.locationType === 'room'
-    ? 'text-sky-600 bg-sky-50'
+    ? 'text-sky-700 dark:text-sky-300 bg-sky-500/10'
     : location.locationType === 'floor'
-    ? 'text-cyan-600 bg-cyan-50'
-    : 'text-amber-600 bg-amber-50'
+    ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-500/10'
+    : 'text-amber-700 dark:text-amber-300 bg-amber-500/10'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50/30 to-teal-50/20 flex items-start justify-center p-4 pt-8 pb-16">
+    // The hardcoded slate/cyan gradient here was light-only: a visitor whose
+    // phone is in dark mode crossed from the dark vault at /scan straight onto a
+    // white page, mid-flow, on the screen that takes their name and photo. The
+    // ambient wash is the same ground /scan and /landing stand on and follows
+    // the theme. No particle field — DESIGN.md keeps it out of dense views.
+    <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
+        <div className="ambient-wash absolute inset-0" />
+      </div>
+
+      <a
+        href="#main"
+        className="glass sr-only rounded-full px-4 py-2 text-sm font-semibold focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+      >
+        Skip to content
+      </a>
+
+      <header className="relative z-10 border-b border-[var(--panel-border)]">
+        <nav aria-label="Primary" className="shell">
+          <div className="mx-auto flex h-16 w-full max-w-sm items-center sm:h-[4.5rem] [@media(max-height:540px)]:h-12">
+          <Link
+            href="/landing"
+            aria-label="Kamnotheat — home"
+            className="group flex items-center gap-3 rounded-2xl"
+          >
+            <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
+            <span>
+              <span className="block text-sm font-semibold tracking-tight">Kamnotheat</span>
+              <span className="block text-xs text-muted">Secure check-in logging</span>
+            </span>
+          </Link>
+          </div>
+        </nav>
+      </header>
+
+      <main
+        id="main"
+        className="shell relative z-10 flex items-start justify-center pt-8 pb-16 [@media(max-height:540px)]:pt-3 [@media(max-height:540px)]:pb-6"
+      >
       <div className="w-full max-w-sm space-y-3">
+
+        {/* Progress through the flow is polite: it never interrupts, but it
+            does tell a screen-reader user that the step changed. */}
+        <div aria-live="polite" role="status" className="sr-only">
+          {stepAnnouncement}
+        </div>
 
         {/* Loading skeleton */}
         {step === 'loading' && (
-          <>
+          <div aria-busy="true" className="space-y-3">
+            <h1 className="sr-only">Loading this location</h1>
             <Card className="overflow-hidden animate-pulse">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -433,7 +540,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               <div className="h-10 w-full bg-muted/60 rounded-xl" />
               </CardContent>
             </Card>
-          </>
+          </div>
         )}
 
         {/* Location card */}
@@ -447,13 +554,13 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                     {{ building: 'Building', floor: 'Floor', room: 'Room' }[location.locationType] ?? location.locationType}
                   </span>
                   {step === 'checkedIn' && (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--status-success)] bg-emerald-500/10 px-2 py-0.5 rounded-full">
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                       Checked In
                     </span>
                   )}
                 </div>
-                <h2 className="text-lg font-bold text-foreground leading-tight">{location.name}</h2>
+                <h1 className="text-lg font-bold text-foreground leading-tight">{location.name}</h1>
                 <p className="text-sm text-muted mt-0.5">{locationLabel}</p>
                 {location.description && (
                   <p className="text-xs text-muted mt-1.5">{location.description}</p>
@@ -465,10 +572,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 )}
               </div>
               <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shrink-0 shadow-sm">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+                <MapPin className="size-5 text-white" strokeWidth={2.2} aria-hidden />
               </div>
             </div>
           </CardContent>
@@ -480,13 +584,15 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           <Card>
             <CardContent className="p-4">
             <div className="mb-4">
-              <h3 className="font-semibold text-foreground">Who are you?</h3>
+              <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
+                Who are you?
+              </h2>
               <p className="text-sm text-muted mt-0.5">Enter your name to check in</p>
             </div>
             <form onSubmit={handleIdentityStep1} className="space-y-3.5">
               <div className="space-y-1.5">
                 <Label htmlFor="visitor-name">
-                  Full name <span className="text-red-500">*</span>
+                  Full name <span className="text-[var(--status-danger)]">*</span>
                 </Label>
                 <Input
                   id="visitor-name"
@@ -507,10 +613,11 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 />
               </div>
               <Button
+                size="touch"
                 type="submit"
                 className="w-full"
               >
-                Continue →
+                Continue
               </Button>
             </form>
             </CardContent>
@@ -522,7 +629,9 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           <Card>
             <CardContent className="p-4">
             <div className="mb-4">
-              <h3 className="font-semibold text-foreground">A couple more details</h3>
+              <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
+                A couple more details
+              </h2>
               <p className="text-sm text-muted mt-0.5">Optional — you can skip these</p>
             </div>
             <div className="space-y-3.5">
@@ -554,13 +663,15 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 </Select>
               </div>
               <Button
+                size="touch"
                 type="button"
                 onClick={() => completeIdentity(false)}
                 className="w-full"
               >
-                Continue →
+                Continue
               </Button>
               <Button
+                size="touch"
                 type="button"
                 onClick={() => completeIdentity(true)}
                 variant="ghost"
@@ -578,38 +689,44 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           <Card>
             <CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-2.5 bg-muted/40 rounded-xl px-3.5 py-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent/20 to-cyan-600/20 flex items-center justify-center text-sm font-bold text-accent shrink-0">
+              <div className="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-sm font-semibold text-accent shrink-0">
                 {name[0]?.toUpperCase() ?? '?'}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{name}</p>
                 {contact && <p className="text-xs text-muted truncate">{contact}</p>}
                 {(gender || purpose) && (
-                  <p className="text-xs text-muted/70 truncate">
+                  <p className="text-xs text-muted truncate">
                     {[purpose, gender && ({ male: 'Male', female: 'Female', non_binary: 'Non-binary', prefer_not_to_say: 'Prefer not to say' } as Record<string,string>)[gender]].filter(Boolean).join(' · ')}
                   </p>
                 )}
               </div>
+              {/* Inline, so not the full-width 48px control — but `size="sm"`
+                  alone resolves to h-9 md:h-8, a 32px target on desktop for the
+                  only way to correct a name before an irreversible write. h-11
+                  meets the 44px floor without dominating the summary row.
+                  `title` was the only long-form description and screen readers
+                  do not surface it reliably; aria-label does, and still contains
+                  the visible word so the name matches the label. */}
               <Button
                 type="button"
                 onClick={() => { setIdentitySubStep(1); setStep('identity') }}
                 variant="ghost"
                 size="sm"
-                className="shrink-0"
-                title="Edit your information"
+                className="h-11 shrink-0 px-4"
+                aria-label="Edit your information"
               >
                 Edit
               </Button>
             </div>
             {passkeyRequired ? (
-              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200/60 rounded-xl px-3 py-2">
-                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+              <div className="flex items-center gap-2 text-xs text-[var(--status-warning)] bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2">
+                <Lock className="size-3.5 shrink-0" strokeWidth={2.3} aria-hidden />
                 <span>This location requires a passkey (Face ID, Touch ID, or PIN) to check in.</span>
               </div>
             ) : (
               <Button
+                size="touch"
                 type="button"
                 onClick={() => setStep('selfie')}
                 className="w-full"
@@ -618,7 +735,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               </Button>
             )}
             {!passkeyRequired && (
-              <div className="flex items-center gap-3 text-xs text-muted/60">
+              <div className="flex items-center gap-3 text-xs text-muted">
                 <div className="flex-1 h-px bg-border" />
                 <span>or use biometrics</span>
                 <div className="flex-1 h-px bg-border" />
@@ -663,7 +780,9 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           <Card>
             <CardContent className="p-4">
             <div className="mb-4">
-              <h3 className="font-semibold text-foreground">Optional Selfie</h3>
+              <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
+                Optional Selfie
+              </h2>
               <p className="text-sm text-muted mt-0.5">Take a photo or skip</p>
             </div>
             <SelfieCapture
@@ -682,27 +801,35 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           <Card>
             <CardContent className="p-4 space-y-3">
             {openLog && (
-              <div className="bg-emerald-50 border border-emerald-200/60 rounded-xl px-4 py-3 space-y-1">
-                <p className="text-xs text-emerald-700 font-medium">
-                  Checked in at {formatCheckInTime(openLog.timestamp)} · {formatDuration(openLog.timestamp, currentTime)}
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 space-y-1">
+                <p className="text-xs text-[var(--status-success)] font-semibold">
+                  Checked in at {formatCheckInTime(openLog.timestamp)} ·{' '}
+                  <LiveDuration since={openLog.timestamp} />
                 </p>
                 {checkoutSuggested && (
-                  <p className="text-xs font-semibold text-amber-700">
+                  <p className="text-xs font-semibold text-[var(--status-warning)]">
                     Suggested: time to check out.
                   </p>
                 )}
               </div>
             )}
             {/* Click checkout — only if guest checked in by clicking */}
+            {/* Busy, not disabled. HeroUI renders a disabled control at
+                --disabled-opacity and the native attribute blurs it, so the one
+                irreversible action in the flow became both unreadable and
+                unfocused at the moment it was pressed. handleCheckOut refuses
+                re-entry itself, so nothing needs the attribute to do it. */}
             {!checkedInViaPasskey && (
               <Button
+                size="touch"
                 type="button"
                 onClick={handleCheckOut}
-                disabled={loading}
+                isLoading={loading}
+                loadingBehavior="busy"
                 variant="destructive"
                 className="w-full"
               >
-                {loading ? 'Checking out…' : checkoutSuggested ? 'Check Out - Suggested' : 'Check Out'}
+                {loading ? 'Checking out…' : checkoutSuggested ? 'Check Out — Suggested' : 'Check Out'}
               </Button>
             )}
             {/* Passkey checkout — only if guest checked in by passkey */}
@@ -730,7 +857,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             {/* Offer to save passkey only if location is click-mode and passkey not yet registered */}
             {location.checkInMode !== 'passkey' && !checkedInViaPasskey && !visitorPasskeyRegistered && (
               <>
-                <div className="flex items-center gap-3 text-xs text-muted/60">
+                <div className="flex items-center gap-3 text-xs text-muted">
                   <div className="flex-1 h-px bg-border" />
                   <span>save for next time</span>
                   <div className="flex-1 h-px bg-border" />
@@ -754,37 +881,34 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               </>
             )}
             {passkeySavedThisVisit && (
-              <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-600 font-medium">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
+              <div className="flex items-center justify-center gap-1.5 text-xs text-[var(--status-success)] font-semibold">
+                <CircleCheck className="size-3.5" strokeWidth={2.3} aria-hidden />
                 Passkey saved
               </div>
             )}
 
             {!questRecorded && (
               <>
-                <div className="flex items-center gap-3 text-xs text-muted/60">
+                <div className="flex items-center gap-3 text-xs text-muted">
                   <div className="flex-1 h-px bg-border" />
                   <span>quest</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
                 <Button
+                  size="touch"
                   type="button"
                   onClick={() => setStep('questScan')}
                   variant="outline"
                   className="w-full"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                  </svg>
+                  <Star className="size-4" strokeWidth={2.3} aria-hidden />
                   Scan Quest Card
                 </Button>
               </>
             )}
             {questRecorded && (
-              <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-600 font-semibold">
-                ✨ Quest step recorded!
+              <div className="flex items-center justify-center gap-1.5 text-sm text-[var(--status-success)] font-semibold">
+                <Star className="size-4" strokeWidth={2.3} aria-hidden /> Quest step recorded!
               </div>
             )}
             </CardContent>
@@ -796,11 +920,14 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           <Card>
             <CardContent className="p-4">
             <div className="mb-4">
-              <h3 className="font-semibold text-foreground">Scan Quest Card</h3>
+              <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
+                Scan Quest Card
+              </h2>
               <p className="text-sm text-muted mt-0.5">Point camera at your quest card QR code</p>
             </div>
             <QRScanner onResult={handleQuestCardScanned} redirectOnScan={false} />
             <Button
+              size="touch"
               type="button"
               onClick={() => setStep('checkedIn')}
               variant="ghost"
@@ -816,20 +943,21 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         {step === 'checkedOut' && (
           <Card className="text-center">
             <CardContent className="p-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+              <CircleCheck className="size-8 text-[var(--status-success)]" strokeWidth={2.2} aria-hidden />
             </div>
-            <h3 className="font-bold text-foreground text-lg">All done!</h3>
+            <h2 ref={stepHeadingRef} tabIndex={-1} className="font-bold text-foreground text-lg outline-none">
+              All done!
+            </h2>
             <p className="text-sm text-muted mt-1.5">
               You've checked out of <span className="font-medium text-foreground">{location.name}</span>
             </p>
-            <p className="text-sm text-muted mt-1">Thanks for visiting. See you soon! 👋</p>
+            <p className="text-sm text-muted mt-1">Thanks for visiting. See you soon.</p>
             </CardContent>
           </Card>
         )}
       </div>
+      </main>
     </div>
   )
 }

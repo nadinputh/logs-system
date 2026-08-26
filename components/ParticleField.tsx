@@ -7,9 +7,16 @@ import { useEffect, useRef } from 'react'
  *
  * A calm grid of survey points. Move a cursor through it and the points nearest
  * the probe displace and warm toward the accent, falling off at a soft radius —
- * the same shape as the geofence check the engine runs on every check-in
- * (`geofence_status`: is this point inside the boundary?). The field is the
- * product's central question rendered as atmosphere.
+ * the shape of the question this product exists to answer: is this person
+ * inside this boundary, at this moment?
+ *
+ * Accuracy note: that is the *shape* of a geofence test, not a description of a
+ * running one. `geofenceStatus` is a Boolean on the Log schema and is read by
+ * the admin log viewer, but no code path sets it — `navigator.geolocation`
+ * appears nowhere in this repo. This comment used to assert "the geofence check
+ * the engine runs on every check-in", and that claim propagated onto the
+ * landing page's record panel as a captured field. The motif stays (owner call,
+ * 2026-08-22); the claim does not.
  *
  * Physics per point:
  *   • Probe displacement with a smooth radial falloff.

@@ -22,8 +22,29 @@ export interface ButtonProps
    * the console's ~26 primary buttons are unaffected by this.
    */
   variant?: "default" | "brand" | "outline" | "secondary" | "ghost" | "destructive" | "link"
-  size?: "xs" | "sm" | "default" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg"
+  /**
+   * `touch` is the 48px control the visitor-facing flow uses. HeroUI's base
+   * `.button` is `h-10 md:h-9`, so an unsized button is 40px on a phone and
+   * 36px on desktop — below Apple's 44pt and Material's 48dp, and 12px shorter
+   * than the controls on `/scan`, which is the first half of the same journey.
+   * It is a named size rather than a change to `default` because the console is
+   * a dense desktop surface where 36px is a deliberate choice; only the
+   * one-handed visitor path needs the larger target.
+   */
+  size?: "xs" | "sm" | "default" | "touch" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg"
   isLoading?: boolean
+  /**
+   * What `isLoading` does to the control.
+   *
+   * `disable` (default) is right for a form submit: the press is irreversible,
+   * so blocking a second one is worth the cost. `busy` is for a control whose
+   * caller already guards re-entry and whose loading state the user must be
+   * able to *read* — a disabled button is rendered at `--disabled-opacity`,
+   * which drops a white label on the brand gradient to roughly 1.5:1, and the
+   * `disabled` attribute blurs the element, so the person who just pressed it
+   * loses both the message and their place on the page.
+   */
+  loadingBehavior?: "disable" | "busy"
   onPress?: React.ComponentProps<typeof HeroUIButton>["onPress"]
   isDisabled?: boolean
   value?: string
@@ -44,12 +65,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       disabled,
       isDisabled,
       isLoading,
+      loadingBehavior = "disable",
       children,
       ...props
     },
     ref
   ) => {
-    const isDisabledFinal = isDisabled ?? disabled ?? isLoading ?? false
+    const isDisabledFinal =
+      isDisabled ?? disabled ?? (isLoading === true && loadingBehavior === "disable")
+
     
     const handlePress: NonNullable<ButtonProps["onPress"]> | undefined =
       onPress || onClick
@@ -88,13 +112,16 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // Two-Weight Rule (600 for labels; 500 is off the ramp).
     const brandClasses =
       variant === "brand"
-        ? "gradient-cta shadow-signal press h-12 rounded-full px-7 text-sm font-semibold text-white"
+        ? "gradient-cta shadow-signal press h-12 rounded-full px-7 text-sm font-semibold text-[var(--accent-foreground)]"
         : ""
 
     const sizeMap: Record<NonNullable<ButtonProps["size"]>, "sm" | "md" | "lg"> = {
       xs: "sm",
       sm: "sm",
       default: "md",
+      // `md` carries no height rule of its own, so the h-12 below lands
+      // uncontested — the same mechanism `variant="brand"` already relies on.
+      touch: "md",
       lg: "lg",
       icon: "md",
       "icon-xs": "sm",
@@ -102,6 +129,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       "icon-lg": "lg",
     }
     const heroUISize = sizeMap[size] || "md"
+    const touchClasses = size === "touch" ? "h-12 text-sm font-semibold" : ""
     
     const isIconOnly = size?.includes("icon")
 
@@ -111,9 +139,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         variant={heroUIVariant}
         size={heroUISize}
         isDisabled={isDisabledFinal}
+        aria-busy={isLoading ? true : undefined}
         isIconOnly={isIconOnly}
         onPress={handlePress}
-        className={[brandClasses, className].filter(Boolean).join(" ")}
+        className={[brandClasses, touchClasses, className].filter(Boolean).join(" ")}
         {...(props as any)}
       >
         {children}

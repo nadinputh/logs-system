@@ -221,3 +221,205 @@ in light mode — failing 4.5:1 for text and 3.0:1 for icons. Ten occurrences ac
 Not swapped, for two reasons: those surfaces have not been audited, and on the dashboard
 sky vs cyan may be distinguishing two metrics — collapsing both to one token would remove
 information. This wants its own pass.
+
+## Routing premise resolved, and consent moved above the control (2026-08-26)
+
+The 27/40 critique found the page's premise and the product's navigation disagreeing: three
+passes had rebuilt this surface as "the fallback, not the front door", while
+`app/landing/page.tsx:160` and `app/quest/[questToken]/page.tsx:124` were the only inbound
+links and both presented it as the primary visitor route. **The owner chose fallback and
+fixed the routing.** The landing's visitor pill is gone; the landing and the quest card now
+both say to point the phone's own camera at the location QR, with `/scan` linked as the
+recovery. This page's lede acknowledges that route having failed. Do not re-tune this
+layout on the front-door premise again — it is settled.
+
+### Consent now sits above the control that opens the camera
+The disclosure used to put the benign three fields (time, code, name) above the CTA and the
+invasive three (IP, browser, device id) below it, under the faintest heading on the page.
+Both halves are now in one complete list rendered *above* the button, at zero vertical cost,
+by filling the idle box that already holds the viewfinder's place. The box keeps identical
+sizing classes, so the measured CTA fold position is unchanged; it loses the dashed edge,
+which stops being true once the box carries real content, and scrolls rather than clips in
+landscape.
+
+`QRScanner` gained an `idlePlaceholder` slot for this. It is a slot rather than fixed copy
+for a second reason: visitor consent copy must not render on `/terminal`, where the same
+component is embedded and the operator is staff.
+
+### The photo disclosure was wrong by omission
+"The camera feed never leaves your device" sat three words from "a photo are optional", and
+`lib/cloudinary.ts:10-13` POSTs the selfie to `https://api.cloudinary.com/v1_1/…` — an
+unauthenticated upload preset on a third-party host outside the organisation. The list now
+says a photo "is uploaded and stored with your entry". Verified against `uploadSelfie()`.
+
+### `starting` was the least readable moment on the page
+`isLoading` collapsed into a native `disabled` attribute at `--disabled-opacity: 0.5`,
+putting the white label at roughly 1.5:1 on the brand gradient in light mode, blurring the
+element so a keyboard user dropped to `<body>`, and leaving the polite region empty for up
+to the full 10s watchdog. The Button adapter gained `loadingBehavior="disable" | "busy"`;
+form submits keep `disable` (double-submit protection on an irreversible POST), the scanner
+takes `busy`. Progress is announced in the polite region rather than left to a label change
+under an already-focused element.
+
+**Focus recovery deliberately stays gated on `deadEnd`.** The critique recommended widening
+it to any failure; that is now the wrong fix. An undisabled button never loses focus, so a
+retryable failure already leaves the visitor on the control they want, its label reading
+"Try again" while `role="alert"` gives the cause. Sending focus to the notice would park
+them on static text *after* that button in the DOM.
+
+### A stray QR no longer ends the scan
+The decode callback stopped the camera *before* validating. A wifi card, a menu or a poster
+in frame therefore shut the scanner down and cost a re-tap plus a cold start — the most
+likely real-world misfire, and a contradiction of step 2's "It reads itself". Validation now
+runs first; a code this product does not own posts a deduped "still looking" notice and the
+camera stays live. Deduped by content because the same sticker decodes ten times a second.
+
+### Decode logic is now testable
+`resolveDecoded` and `describeFailure` moved to `lib/scanner/decode.ts` — no React, no
+`window` (origin is a parameter). `__tests__/scanner-decode.test.ts` covers 18 cases
+including protocol-relative `//evil/scan/x`, a `javascript:` payload, same-origin routes the
+scanner does not own, the html5-qrcode plain-string rejection path, and an assertion that no
+non-retryable cause contains the words "try again".
+
+## The destination, and the final polish (2026-08-26)
+
+### `/scan/[locationId]` no longer collapses the visual world
+The three ways arriving at a check-in code can fail — an expired kiosk token, a token signed
+for another location, and a code matching no location — were a bare centred sentence in raw
+`text-red-500` / `text-amber-600`, with no header, no branding and **no route forward**. They
+are now one shared `components/location/ScanNotice.tsx`: the page's own ambient ground, the
+wordmark, a foreground heading with a status-coloured icon (status is text and icon only,
+never a fill), and the same two routes the scanner offers. Copy for all three now also says
+plainly that nothing has been recorded.
+
+`CheckInOut` lost its hardcoded `bg-gradient-to-br from-slate-50 via-cyan-50/30
+to-teal-50/20`, which was light-only: a visitor whose phone is in dark mode crossed from the
+dark vault straight onto a white page, mid-flow, on the screen that takes their name and
+photo. It now stands on `.ambient-wash` over `bg-background` and carries the wordmark.
+
+**`--status-success` was a missing token, not a local defect.** DESIGN.md documents Success —
+"Occupied Green" — with both foregrounds (`#047857` / `#6ee7b7`), but no CSS variable existed,
+which is why every success state in the flow hardcoded emerald and none had a dark value. The
+token now exists and carries them. All 15 hardcoded palette utilities in `CheckInOut` are
+gone: status *text* moved onto `--status-success` / `--status-warning` / `--status-danger`;
+washes and dots keep the raw `-500` hue, which DESIGN.md reserves for graphic fills. The
+location-type chip keeps its three hues, because they carry information, but each now ships
+the light and dark foreground pair the system requires.
+
+Not verified here: `KIOSK_SECRET` is unset in this environment, so the expired and mismatch
+branches cannot be exercised. They share the component and props with the third, which was
+verified rendering.
+
+### Polish
+- **The CTA gradient is theme-aware.** `--brand-sky-deep` / `--brand-teal-deep` held the same
+  deep stops in both themes, leaving the primary control at **3.20:1 against the `#0f0f1e`
+  vault** — the dimmest branded object on the page, while the headline and logo tile both
+  brighten. Renamed to `--cta-from` / `--cta-to`; dark mode now takes `#38bdf8 → #2dd4bf`, the
+  same stops `--headline-from/to` use, so the mark, the headline and the CTA rhyme. The label
+  follows `--accent-foreground`, which the theme already defines as dark-on-brand. Measured:
+  label **8.79:1 / 10.11:1** (was 5.93 / 5.47) and presence **8.85:1 / 10.19:1** (was 3.20 /
+  3.46). Light mode is untouched. All three `.gradient-cta` call sites updated together.
+- **`Stop scanner` was 40px on desktop.** `size="lg"` resolves to HeroUI's `.button--lg`,
+  which is `h-11` but `md:h-10` — under the touch-target floor, and an 8px shrink from
+  `Start scanner` the moment scanning began. Dropping the size prop leaves `.button--md`,
+  which carries no height rule, so `h-12` wins uncontested exactly as `variant="brand"`
+  already does. Start and Stop are now the same object.
+- **One page, one spine.** The header sat on the 1440px `.shell` while the content sat in a
+  34rem column, so the wordmark started ~383px left of everything beneath it. The header now
+  shares the content column on `/scan`, `ScanNotice` and `CheckInOut`.
+- **The particle field is masked.** `/scan` used a bare `absolute inset-0`, so the dot grid
+  ran behind the consent text to the page foot. It now fades out like the landing's, bounded
+  to the viewport because this page is far shorter.
+- **`font-bold` (700) on the wordmark** — the only off-scale weight in the file, on the
+  brand's own name — is now 600.
+
+### Verification
+Detector clean (exit 0) across all eight changed UI files. 79/79 tests pass (18 new).
+Typecheck holds at the 36 pre-existing errors — generated route types, test files, and a
+missing `nodemailer` — with zero in any touched file. `/scan`, `/landing`, `/login`,
+`/register`, and `/scan/[locationId]` for a real room, floor and building all render 200.
+
+### Still open, deliberately
+- **Console brand-colour contrast.** Raw `text-cyan-500` / `text-sky-500` on their own `/10`
+  washes across `app/dashboard`, `app/logs`, `app/settings/*` and `VisitorPasskey`. Untouched
+  here; those surfaces have not been audited and on the dashboard the two hues may be
+  distinguishing two metrics.
+- **No return path to a live scanner** after `router.push`, so a five-stop quest card still
+  costs five camera cold starts. Needs a flow decision, not a copy change.
+- **Retention period and organisation name** still cannot be written: no policy figure exists
+  and naming the building's owner needs a field on Team plus a public read path.
+- **`geofenceStatus`** is claimed as captured in CLAUDE.md and rendered as
+  `geofence_status: inside` on the landing's `RecordPanel`, but no code path sends it. Either
+  the feature is unbuilt or two surfaces are lying — an owner decision.
+
+## Audit remediation — check-in to check-out (2026-08-26)
+
+An audit of the full workflow scored **11/20**; after three remediation passes it scores
+**17/20**, with all 17 original findings closed. The workflow's two halves were effectively
+two products meeting at `/scan/[locationId]`.
+
+**Idempotency parity.** `POST /api/logs` had read the `Idempotency-Key` header since the
+engine shipped, and `VisitorPasskey` had always sent one — but it built the key in a private
+function, so the ordinary click path reached an append-only ledger with no replay protection
+at all, and `PATCH /api/logs/[id]` had none server-side either. The builder now lives in
+`lib/idempotency-key.ts`; both writes send the header, both refuse re-entry, and the checkout
+route checks and commits like `POST` does. Both endpoints' `existing`/`already` lookups are
+read-then-write and not atomic — the key is what closes that window.
+
+**The flow had no accessibility infrastructure.** No `<main>`, no `<h1>`, no live region, no
+focus management across seven step transitions. It now has a skip link, one `<main>`, one
+`h1`, five focusable `h2` step headings, one polite live region announcing each step, focus
+that follows the step, and `aria-busy` on the loading skeleton.
+
+**Control system unified.** HeroUI's base `.button` is `h-10 md:h-9`, so every control in the
+flow was 40px on a phone and **36px on desktop** while `/scan` shipped 48px. The adapter
+gained `size="touch"` (48px) — a named size, not a change to `default`, because the console
+is a dense desktop surface where 36px is deliberate. 17/17 controls now meet 44px (14 at 48,
+the inline Edit at 44; it had been 32px, the only way to correct a name before an
+irreversible write).
+
+**Resource leaks and cost.** `SelfieCapture` never released the camera on unmount, on the one
+flow whose disclosure promises the feed never leaves the device. It now stops tracks and
+revokes its object URL from refs (a cleanup registered at mount closes over empty state).
+`toDataURL` → `fetch` → `blob` held two full copies of a camera frame; `toBlob` produces the
+upload payload directly. The 1s tick that re-rendered the whole 860-line component moved into
+a `LiveDuration` leaf; the parent ticks once a minute for the 16:30 threshold.
+
+**One icon system, one brand tile.** Five hand-inlined heroicon paths at stroke 2 (none
+`aria-hidden`) became lucide at the project's weight. `.gradient-primary` was built on
+`--brand-sky`/`--brand-cyan`, which brighten in dark — so the icon tiles matched `LogoTile` in
+light and drifted away from it in dark, taking the white mark to 1.81:1. Fixed at the token
+layer with theme-invariant `--mark-*`, and `LogoTile` now uses the same class, so the brand
+tile has exactly one definition. It also gained its missing teal stop; two stops had been
+violating the Gradient-Direction Rule.
+
+**Reduced motion.** Tailwind's `animate-pulse` / `animate-spin` sat outside the project's own
+policy. Following its stated rule — movement goes, meaning stays — the skeletons freeze and
+the spinner slows to 2s rather than stopping, since stopping it would delete the only
+in-flight signal.
+
+### The geofence claim is retired from user-facing surfaces
+`geofenceStatus` is a Boolean on the Log schema, read by the admin log viewer, and set by
+nothing — `navigator.geolocation` appears nowhere in the repo. `RecordPanel` was showing
+`geofence_status: inside · verified against polygon` under a caption asserting "field names
+and capture rules are the ones the engine uses", which is a fabricated claim in PRODUCT.md's
+own terms, and the value shape was wrong for a Boolean besides. It is replaced by `user_agent`
+— genuinely captured on every write, and the third leg of the anti-spoofing set CLAUDE.md
+names. The source comments in `ParticleField` and `app/landing/page.tsx` that asserted "the
+geofence check the engine runs on every write" — the origin of the claim — are corrected. The
+locating motif itself stays (owner call, 2026-08-22); only the claim went.
+
+**Still the owner's call:** whether to build geofence capture or drop the field from the
+schema and the admin log viewer. Nothing user-facing now asserts it either way.
+
+### Verified, not assumed
+Detector exit 0 across eleven UI files. 79/79 tests. Zero source errors in any touched file
+(the `.next/types` count fluctuates with which routes the dev server has compiled — it moved
+42 → 12 → 14 with no source change, which is what identifies it as generated noise). All of
+`/scan`, `/landing`, `/login`, `/register` and `/scan/[locationId]` for a real room, floor,
+building and an unknown id render 200.
+
+**Verified as a non-issue:** the width difference between `/scan` (544px) and the flow
+(384px). On a phone the two are 350px and 358px — the 8px came from a flat `p-4` against
+`.shell`'s clamped gutter, and the flow now uses `.shell`, so they match. On desktop a form
+column is deliberately narrower than a reading column; that is not drift and was left alone.
