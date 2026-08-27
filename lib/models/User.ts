@@ -7,6 +7,16 @@ export interface IUser extends Document {
   role: "admin" | "staff";
   activeTeamId?: Types.ObjectId;
   emailVerified?: Date | null;
+  /**
+   * Monotonic counter of session invalidations for this user. Bumped by
+   * password reset, and by the "sign out other devices" control. Every JWT
+   * stamps the value it was minted at; the jwt callback rejects any token
+   * whose stamp is below the current value.
+   *
+   * This is the revocation channel a JWT strategy otherwise lacks: without it,
+   * a lost phone stays signed in for 30 days and no admin action can end it.
+   */
+  sessionsVersion: number;
   createdAt: Date;
 }
 
@@ -24,6 +34,7 @@ const UserSchema = new Schema<IUser>(
     role: { type: String, enum: ["admin", "staff"], default: "staff" },
     activeTeamId: { type: Schema.Types.ObjectId, ref: "Team" },
     emailVerified: { type: Date, default: null }, // null until email is verified; login is blocked while null
+    sessionsVersion: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

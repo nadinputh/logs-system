@@ -7,6 +7,7 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { issueVerificationToken, setPasswordLink } from "@/lib/verification";
 import { sendSetPasswordEmail } from "@/lib/email/send";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,9 @@ const Schema = z.object({
 // Admin/owner provisions an account directly. The user receives a set-password
 // link (which also verifies their email); no temporary password is shared.
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const auth = await requireTeamPermission("team.members.manage");
   if (auth.error || !auth.teamId || !auth.membership) {
     // `auth.error` is nullable, so returning it bare can yield `null` where a

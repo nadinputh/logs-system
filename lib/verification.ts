@@ -25,8 +25,22 @@ export const VERIFICATION_TTL_MS = 60 * 60 * 1000;
  */
 export const SET_PASSWORD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Password-reset links get 1 hour, not 7 days.
+ *
+ * The recipient asked for the link (unlike set-password, which arrives cold),
+ * so they are actively watching their inbox — a long window buys nothing and
+ * lets a stolen bearer credential linger. Same TTL as email verification for
+ * the same reason.
+ */
+export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+
 const ttlFor = (type: VerificationTokenType) =>
-  type === "set_password" ? SET_PASSWORD_TTL_MS : VERIFICATION_TTL_MS;
+  type === "set_password"
+    ? SET_PASSWORD_TTL_MS
+    : type === "password_reset"
+      ? PASSWORD_RESET_TTL_MS
+      : VERIFICATION_TTL_MS;
 
 /**
  * Verification links are bearer credentials: whoever holds one can verify an
@@ -83,4 +97,8 @@ export function setPasswordLink(token: string) {
 
 export function inviteLink(token: string) {
   return `${baseUrl()}/invite/${token}`;
+}
+
+export function resetPasswordLink(token: string) {
+  return `${baseUrl()}/reset-password/${token}`;
 }

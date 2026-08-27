@@ -3,13 +3,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ credentialId: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { credentialId } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user) {

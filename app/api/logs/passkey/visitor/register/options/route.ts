@@ -6,6 +6,7 @@ import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential"
 import { VisitorPasskeyChallenge } from "@/lib/models/VisitorPasskeyChallenge";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,9 @@ function buildVisitorPasskeyNames({
 }
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const body = await req.json();
   const parsed = Schema.safeParse(body);
   if (!parsed.success) {
@@ -85,7 +89,7 @@ export async function POST(req: NextRequest) {
     .digest()
     .subarray(0, 16);
 
-  const rpID = new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000")
+  const rpID = new URL(process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`)
     .hostname;
   const { userName, userDisplayName } = buildVisitorPasskeyNames({
     visitorName,

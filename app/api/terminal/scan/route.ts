@@ -7,10 +7,14 @@ import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const body = await req.json();
   const { token, locationId, locationType } = body;
 

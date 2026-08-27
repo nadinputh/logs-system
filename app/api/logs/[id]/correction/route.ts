@@ -4,6 +4,7 @@ import { Log } from "@/lib/models/Log";
 import { AuditLog } from "@/lib/models/AuditLog";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { z } from "zod";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -21,8 +22,11 @@ const CorrectionSchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("logs.correct");
   if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;

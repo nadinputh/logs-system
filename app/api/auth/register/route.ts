@@ -8,6 +8,7 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import { issueVerificationToken, verifyEmailLink } from "@/lib/verification";
 import { sendVerificationEmail } from "@/lib/email/send";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -87,6 +88,9 @@ async function uniqueSlug(base: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   // Each call mints a user AND a team, so an unthrottled endpoint is a way to
   // fill the database from the open internet.
   const limited = rateLimit(clientKey(req, "register"), 5, 15 * 60 * 1000);

@@ -13,12 +13,16 @@ import {
   smtpConfigured,
 } from "@/lib/email/send";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({ email: z.string().email() });
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   // This endpoint sends mail to any address supplied, and answers neutrally in
   // every case — so without a limit it is both an email-bombing tool and a
   // silent one.

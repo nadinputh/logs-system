@@ -6,6 +6,7 @@ import { Team } from "@/lib/models/Team";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 import { requireAuth } from "@/lib/middleware/auth";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -81,6 +82,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const { error, session } = await requireAuth();
   if (error || !session?.user) return error;
 

@@ -25,14 +25,28 @@ export function LoginForm() {
   const [passkeyLoading, setPasskeyLoading] = useState(false)
 
   async function handleResend() {
-    // Claiming the send before the request resolves reported success even when
-    // the fetch rejected.
+    // Claim success only when the server actually accepted the request. A 429
+    // still parses as JSON but must not flip the UI to "sent"; the previous
+    // shape did.
     try {
-      await fetch('/api/auth/resend-verification', {
+      const res = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       })
+      if (res.status === 429) {
+        const data = await res.json().catch(() => ({}))
+        setError(
+          typeof data?.error === 'string'
+            ? data.error
+            : 'Too many attempts. Try again in a few minutes.',
+        )
+        return
+      }
+      if (!res.ok) {
+        setError('Could not request a new link just now. Try again in a moment.')
+        return
+      }
       setResent(true)
     } catch {
       setError('Could not request a new link just now. Try again in a moment.')
@@ -104,7 +118,13 @@ export function LoginForm() {
     setLoading(false)
 
     if (result?.error) {
-      if (result.error.includes('PASSWORD_NOT_SET')) {
+      if (result.error.includes('TOO_MANY_ATTEMPTS')) {
+        // Guessing rate limit tripped — a stuffing attack from the same IP or
+        // a targeted attempt on this address. The message deliberately doesn't
+        // name which axis: telling an attacker which axis they hit tells them
+        // how to spread the attack.
+        setError('Too many sign-in attempts. Try again in a few minutes.')
+      } else if (result.error.includes('PASSWORD_NOT_SET')) {
         // The account was created by an administrator and has never had a
         // password. Resend issues a set-password link for exactly this case.
         setNeedsPassword(true)
@@ -143,7 +163,15 @@ export function LoginForm() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
+          <div className="flex items-baseline justify-between gap-3">
+            <Label htmlFor="password">Password</Label>
+            <Link
+              href="/forgot-password"
+              className="text-xs font-semibold text-[var(--accent)] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <Input
             id="password"
             type="password"
@@ -198,7 +226,9 @@ export function LoginForm() {
 
         <Button
           type="submit"
+          size="touch"
           isLoading={loading}
+          loadingBehavior="busy"
           isDisabled={busy}
           variant="brand"
           className="w-full"
@@ -221,8 +251,10 @@ export function LoginForm() {
 
         <Button
           type="button"
+          size="touch"
           onPress={handlePasskeyLogin}
           isLoading={passkeyLoading}
+          loadingBehavior="busy"
           isDisabled={busy}
           variant="outline"
           className="press w-full"

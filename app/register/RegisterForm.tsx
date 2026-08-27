@@ -23,6 +23,12 @@ export function RegisterForm() {
   // when it did not left registrants waiting on mail that never existed, and
   // sent them to "try a different address" — which orphans a second account.
   const [delivered, setDelivered] = useState(true)
+  // Confirmation-card actions after the account is committed. `resend-verification`
+  // is neutral about whether the address maps to an account, so it can't leak
+  // enumeration — but it CAN answer "did that link ever leave the server?" via
+  // its mailConfigured flag.
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -57,6 +63,28 @@ export function RegisterForm() {
       )
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    setResending(true)
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      // The endpoint is neutral about the address but reveals server mail
+      // state. If mail isn't configured, admit that instead of claiming a
+      // second send that also didn't happen.
+      setDelivered(data?.mailConfigured !== false)
+      setResent(true)
+    } catch {
+      // Deliberately silent — an unreachable /api endpoint doesn't change the
+      // fact the account was created.
+    } finally {
+      setResending(false)
     }
   }
 
@@ -100,17 +128,31 @@ export function RegisterForm() {
           </p>
         </div>
         {delivered ? (
-          <p className="text-sm text-muted">
-            Nothing arrived? Check your spam folder, or{' '}
-            <button
-              type="button"
-              onClick={() => setDone(false)}
-              className="font-semibold text-[var(--accent)] hover:underline"
-            >
-              try a different address
-            </button>
-            .
-          </p>
+          <div className="space-y-2 text-sm text-muted">
+            <p>
+              Nothing arrived? Check your spam folder first — if it still isn't there in a
+              minute or two, ask us to send it again.
+            </p>
+            {resent ? (
+              <p className="text-[var(--status-success)]">
+                Another link was requested. It should arrive shortly.
+              </p>
+            ) : (
+              // "Try a different address" used to sit here — but changing only the
+              // email doesn't clear the form, and submitting again creates a
+              // second user + a second team owned by the new address, silently
+              // orphaning the first workspace. Resending the same address is the
+              // correct recovery when mail is slow.
+              <button
+                type="button"
+                onClick={() => void handleResend()}
+                disabled={resending}
+                className="font-semibold text-[var(--accent)] hover:underline disabled:opacity-60"
+              >
+                {resending ? 'Sending…' : `Resend the link to ${email}`}
+              </button>
+            )}
+          </div>
         ) : (
           // Deliberately not offering "try a different address" here: the send
           // failed for a server-side reason, so a second attempt would only
@@ -202,7 +244,7 @@ export function RegisterForm() {
           {error && <FormNotice tone="danger" title={error} />}
         </div>
 
-        <Button type="submit" variant="brand" isLoading={loading} className="w-full">
+        <Button type="submit" size="touch" variant="brand" isLoading={loading} loadingBehavior="busy" className="w-full">
           {loading ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />

@@ -5,10 +5,14 @@ import { connectDB } from "@/lib/db";
 import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
 import { WebAuthnChallenge } from "@/lib/models/WebAuthnChallenge";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const origin = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const origin = process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`;
   const rpID = new URL(origin).hostname;
 
   let verification;

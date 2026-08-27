@@ -8,10 +8,14 @@ import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const body = await req.json();
   const {
     response,
@@ -140,7 +144,7 @@ export async function POST(req: NextRequest) {
     ? staffCred.transports
     : visitorCred!.transports;
 
-  const origin = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  const origin = process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`;
   const rpID = new URL(origin).hostname;
 
   // Step 6: Cryptographic verification

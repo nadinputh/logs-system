@@ -7,6 +7,7 @@ import { TeamMember, TeamRole } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { recordTeamAuditEvent } from "@/lib/teamAudit";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -19,8 +20,11 @@ const TransferOwnershipSchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("team.ownership.transfer", {
     teamId: id,

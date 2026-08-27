@@ -7,6 +7,7 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { issueVerificationToken, setPasswordLink } from "@/lib/verification";
 import { sendSetPasswordEmail } from "@/lib/email/send";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,9 @@ const Schema = z.object({ userId: z.string().min(1) });
  * The admin who provisioned the account had no lever at all.
  */
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const auth = await requireTeamPermission("team.members.manage");
   if (auth.error || !auth.teamId || !auth.membership) {
     // `auth.error` is typed as nullable, so returning it bare can yield `null`

@@ -5,6 +5,7 @@ import { Floor } from "@/lib/models/Floor";
 import { Room } from "@/lib/models/Room";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { UpdateLocationModeSchema } from "@/lib/validations/location";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -47,8 +48,11 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("locations.mode.update");
   if (auth.error || !auth.teamId) return auth.error;

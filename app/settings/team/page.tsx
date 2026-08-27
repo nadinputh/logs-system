@@ -141,6 +141,44 @@ export default function TeamSettingsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextPath = searchParams.get('next') ?? '/dashboard'
+  const redirectReason = searchParams.get('reason') as
+    | 'no_active_team'
+    | 'removed'
+    | 'suspended'
+    | 'team_deleted'
+    | 'insufficient_role'
+    | null
+  const reasonBanner = (() => {
+    switch (redirectReason) {
+      case 'suspended':
+        return {
+          title: 'Your access to that team is suspended',
+          body: 'A team owner or admin paused your membership. Ask them to reactivate you, or switch to another team below.',
+        }
+      case 'removed':
+        return {
+          title: 'You are no longer a member of that team',
+          body: 'A team owner or admin removed you. If this was a mistake, ask them to invite you again.',
+        }
+      case 'team_deleted':
+        return {
+          title: 'That team no longer exists',
+          body: 'The team you last used has been deleted. Pick another team below, or start a new one.',
+        }
+      case 'insufficient_role':
+        return {
+          title: 'You do not have permission for that page',
+          body: 'Your role on the active team does not include access to what you were trying to open.',
+        }
+      case 'no_active_team':
+        return {
+          title: 'Pick an active team first',
+          body: 'Every dashboard page runs against one team at a time. Pick one below to continue.',
+        }
+      default:
+        return null
+    }
+  })()
   const { update } = useSession()
 
   const [teams, setTeams] = useState<TeamSummary[]>([])
@@ -766,6 +804,21 @@ export default function TeamSettingsPage() {
           Switch active team, manage members, and control invite access for locations, guests, and logs.
         </p>
       </div>
+
+      {reasonBanner && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            redirectReason === 'suspended' || redirectReason === 'removed' || redirectReason === 'team_deleted'
+              ? 'space-y-1 rounded-xl border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/10 px-4 py-3'
+              : 'space-y-1 rounded-xl border border-border bg-muted/30 px-4 py-3'
+          }
+        >
+          <p className="text-sm font-semibold text-foreground">{reasonBanner.title}</p>
+          <p className="text-xs text-muted">{reasonBanner.body}</p>
+        </div>
+      )}
 
       {pendingLink && (
         <div

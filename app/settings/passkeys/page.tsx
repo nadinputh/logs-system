@@ -6,6 +6,7 @@ import { User } from '@/lib/models/User'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import PasskeyManager from './PasskeyManager'
+import { ActiveSessions } from './ActiveSessions'
 import { Card, CardContent } from '@/components/ui/card'
 
 export default async function PasskeysSettingsPage() {
@@ -89,6 +90,28 @@ export default async function PasskeysSettingsPage() {
             </div>
           </div>
           <PasskeyManager initialPasskeys={JSON.parse(JSON.stringify(passkeys))} />
+        </CardContent>
+      </Card>
+
+      {/* Active sessions card */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-4">
+          <div className="mb-4 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[var(--status-warning)]/10 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-[var(--status-warning)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold text-foreground text-sm">Active sessions</h2>
+              <p className="text-xs text-muted mt-0.5">
+                Lost a phone or borrowed a laptop? End every other signed-in session on this
+                account — no admin needed, and rotating your password does not do this for
+                JWT-backed sessions.
+              </p>
+            </div>
+          </div>
+          <ActiveSessions />
         </CardContent>
       </Card>
     </div>

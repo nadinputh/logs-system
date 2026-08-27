@@ -6,6 +6,7 @@ import { AuditLog } from "@/lib/models/AuditLog";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -15,8 +16,11 @@ const ManualCheckoutSchema = z.object({
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("logs.manualCheckout");
   if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;

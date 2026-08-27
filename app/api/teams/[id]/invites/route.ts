@@ -9,6 +9,7 @@ import { User } from "@/lib/models/User";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { hashToken, inviteLink } from "@/lib/verification";
 import { sendInviteEmail } from "@/lib/email/send";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -54,8 +55,11 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("team.invites.manage", {
     teamId: id,
@@ -163,8 +167,11 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("team.invites.manage", {
     teamId: id,

@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
-export type VerificationTokenType = "email_verify" | "set_password";
+export type VerificationTokenType = "email_verify" | "set_password" | "password_reset";
 
 export interface IVerificationToken extends Document {
   token: string;
@@ -20,7 +20,7 @@ const VerificationTokenSchema = new Schema<IVerificationToken>(
     email: { type: String, required: true, lowercase: true, trim: true },
     type: {
       type: String,
-      enum: ["email_verify", "set_password"],
+      enum: ["email_verify", "set_password", "password_reset"],
       required: true,
     },
     expiresAt: { type: Date, required: true },

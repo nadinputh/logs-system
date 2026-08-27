@@ -5,13 +5,17 @@ import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const body = await req.json();
   const { sessionToken } = body;

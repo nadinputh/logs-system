@@ -5,6 +5,7 @@ import { requireTeamAccess } from "@/lib/middleware/auth";
 import { CreateQuestCardSchema } from "@/lib/validations/quest";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { v4 as uuidv4 } from "uuid";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const auth = await requireTeamAccess({ minRole: "manager" });
   if (auth.error || !auth.teamId || !auth.session?.user) return auth.error;
 

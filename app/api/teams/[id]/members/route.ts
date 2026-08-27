@@ -3,8 +3,10 @@ import { z } from "zod";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { TeamMember, TeamRole } from "@/lib/models/TeamMember";
+import { User } from "@/lib/models/User";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { recordTeamAuditEvent } from "@/lib/teamAudit";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -58,8 +60,11 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+ params }: { params: Promise<{ id: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("team.members.manage", {
     teamId: id,
@@ -145,6 +150,20 @@ export async function PATCH(
 
   if (remove) {
     await TeamMember.deleteOne({ _id: target._id });
+
+    /**
+     * Reconcile the removed user's cached active-team pointer.
+     *
+     * Without this the target's next request goes through the "no membership
+     * for this activeTeamId" redirect indefinitely — a per-request 302 dance
+     * they cannot escape until they manually pick another team from the
+     * dropdown. Unset it now so their next visit lands on the clean empty
+     * state with the "removed" reason banner.
+     */
+    await User.updateOne(
+      { _id: userId, activeTeamId: auth.teamId },
+      { $unset: { activeTeamId: 1 } },
+    );
 
     await recordTeamAuditEvent({
       teamId: auth.teamId,

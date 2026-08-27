@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/db";
 import { PasskeyCheckInChallenge } from "@/lib/models/PasskeyCheckInChallenge";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,9 @@ const ChallengeSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const body = await req.json();
   const parsed = ChallengeSchema.safeParse(body);
   if (!parsed.success) {
@@ -63,7 +67,7 @@ export async function POST(req: NextRequest) {
   // Remove any stale pending challenge for this session + action (e.g. user cancelled then retried)
   await PasskeyCheckInChallenge.deleteMany({ teamId, sessionToken, action });
 
-  const rpID = new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000")
+  const rpID = new URL(process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`)
     .hostname;
 
   // Discoverable credentials: allowCredentials:[] lets the OS pick any registered passkey

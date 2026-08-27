@@ -3,10 +3,14 @@ import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { VerificationToken } from "@/lib/models/VerificationToken";
 import { hashToken } from "@/lib/verification";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const { token } = await req.json().catch(() => ({}));
   if (!token) {
     return NextResponse.json({ error: "Token required" }, { status: 400 });

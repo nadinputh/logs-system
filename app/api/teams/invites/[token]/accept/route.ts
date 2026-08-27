@@ -5,13 +5,16 @@ import { hashToken } from "@/lib/verification";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 import { requireAuth } from "@/lib/middleware/auth";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { token } = await params;
   const { error, session } = await requireAuth();
   if (error || !session?.user) return error;

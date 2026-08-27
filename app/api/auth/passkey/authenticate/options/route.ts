@@ -4,10 +4,14 @@ import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
 import { WebAuthnChallenge } from "@/lib/models/WebAuthnChallenge";
 import { User } from "@/lib/models/User";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const body = await req.json();
   const { email } = body;
 
@@ -32,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
 
   const options = await generateAuthenticationOptions({
-    rpID: new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000").hostname,
+    rpID: new URL(process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`).hostname,
     allowCredentials: credentials.map((c: any) => ({
       id: c.credentialId as string,
       transports: c.transports,

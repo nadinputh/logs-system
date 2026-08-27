@@ -6,13 +6,17 @@ import { QuestCard } from "@/lib/models/QuestCard";
 import { QuestProgress } from "@/lib/models/QuestProgress";
 import { QuestProgressSchema } from "@/lib/validations/quest";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ token: string }> },
+  {
+ params }: { params: Promise<{ token: string }> },
 ) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const { token } = await params;
   const body = await req.json();
   const parsed = QuestProgressSchema.safeParse(body);

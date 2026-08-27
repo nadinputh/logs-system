@@ -4,10 +4,14 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { PushSubscription } from "@/lib/models/PushSubscription";
 import webpush from "web-push";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT ?? "mailto:admin@example.com",
     process.env.VAPID_PUBLIC_KEY ?? "",

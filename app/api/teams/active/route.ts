@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 import { requireAuth } from "@/lib/middleware/auth";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,9 @@ const SetActiveTeamSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const { error, session } = await requireAuth();
   if (error || !session?.user) return error;
 

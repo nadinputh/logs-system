@@ -365,3 +365,26 @@ export async function sendInviteEmail(
     ),
   });
 }
+
+export async function sendPasswordResetEmail(
+  to: string,
+  link: string,
+  opts: { expiresAt?: Date } = {},
+): Promise<boolean> {
+  const { expiresAt } = opts;
+  // Password-reset links live an hour; state the exact time when we can.
+  const expiry = expiresAt
+    ? ` The link is single-use and expires on ${formatExpiry(expiresAt)}.`
+    : " The link is single-use and expires in 1 hour.";
+  return sendMail({
+    to,
+    subject: "Kamnotheat — reset your password",
+    text: `Someone asked to reset the Kamnotheat password for this address. Open the link below to choose a new one.${expiry}\n\n${link}\n\n${IGNORE_LINE}`,
+    html: shell(
+      "Reset your password",
+      `Someone asked to reset the Kamnotheat password for this address. Open the link below to choose a new one.${escapeHtml(expiry)}`,
+      { label: "Reset password", href: link },
+      "You asked to reset your password. Single-use link, expires in 1 hour.",
+    ),
+  });
+}

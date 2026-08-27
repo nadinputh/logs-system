@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest) {
 
   const options = await generateRegistrationOptions({
     rpName: "Check-In System",
-    rpID: new URL(process.env.NEXTAUTH_URL ?? "http://localhost:3000").hostname,
+    rpID: new URL(process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`).hostname,
     userName: (user as any).email,
     userDisplayName: (user as any).name,
     attestationType: "none",

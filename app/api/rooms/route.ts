@@ -5,6 +5,7 @@ import { Floor } from "@/lib/models/Floor";
 import { Building } from "@/lib/models/Building";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { CreateRoomSchema } from "@/lib/validations/location";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const auth = await requireTeamPermission("locations.write");
   if (auth.error || !auth.teamId) return auth.error;
 

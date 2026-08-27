@@ -14,6 +14,7 @@ import {
 } from "@/lib/middleware/auth";
 import { hasMinimumTeamRole } from "@/lib/teamPermissions";
 import { TeamRole } from "@/lib/models/TeamMember";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
@@ -96,6 +97,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
   const body = await req.json();
   const parsed = CreateLogSchema.safeParse(body);
   if (!parsed.success) {
