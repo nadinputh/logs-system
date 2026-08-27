@@ -14,9 +14,22 @@ declare global {
  * meant a half-configured environment skipped the safe path and threw at send
  * time, after the caller had already committed its writes.
  */
-function smtpConfigured() {
+export function smtpConfigured() {
   return Boolean(
     process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS,
+  );
+}
+
+/**
+ * Say it once, at load, rather than waiting for a user to report that mail
+ * never arrived. Production with no SMTP is a misconfiguration, not a mode:
+ * the console fallback deliberately prints nothing there, so without this the
+ * first signal an operator gets is a complaint.
+ */
+if (process.env.NODE_ENV === "production" && !smtpConfigured()) {
+  console.error(
+    "[email] STARTUP: SMTP is not configured — no verification, set-password " +
+      "or invite mail will be sent. Set SMTP_HOST, SMTP_USER and SMTP_PASS.",
   );
 }
 
@@ -99,6 +112,15 @@ async function getTransport(): Promise<Transporter> {
 }
 
 /**
+ * Drops the cached transport so the next send rebuilds it from current env.
+ * Without this, correcting a wrong SMTP_PASS appeared not to work: the broken
+ * transport survived every hot reload and only a full restart cleared it.
+ */
+export function resetTransport() {
+  global._mailer = undefined;
+}
+
+/**
  * `no-reply@localhost` is rejected outright by most receiving servers, so it is
  * a worse default than no default: it turns a configuration mistake into
  * silently undelivered mail. Absent EMAIL_FROM, fall back to the SMTP user,
@@ -107,20 +129,41 @@ async function getTransport(): Promise<Transporter> {
 const from = () =>
   process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? "no-reply@localhost";
 
+/**
+ * Resolves true when the message was actually handed to an SMTP relay, false
+ * when it was not sent at all. Callers surface the difference: an admin told
+ * "a set-password email was sent" when nothing left the process has no reason
+ * to look for the link, and no way to find out.
+ */
 async function sendMail(opts: {
   to: string;
   subject: string;
   html: string;
   text: string;
-}): Promise<void> {
-  // With no SMTP configured, log the message instead of throwing so the flows
-  // stay testable in development.
+}): Promise<boolean> {
   if (!smtpConfigured()) {
-    console.log(`[email:dev] To: ${opts.to}\n${opts.subject}\n${opts.text}`);
-    return;
+    // `opts.text` carries the plaintext link, and these links are bearer
+    // credentials — lib/verification.ts hashes them at rest precisely so no log
+    // ever holds a live account-takeover URL. Printing them is a development
+    // affordance and must never follow the app into production, where the
+    // console is an aggregator someone else can read.
+    // Whitelist development explicitly. Testing `!== "production"` printed the
+    // link under NODE_ENV=test and — the case that matters — whenever NODE_ENV
+    // is unset, which is the default for any process that imports this module
+    // outside Next: a seed script, a cron worker, a one-off `node`.
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[email:dev] To: ${opts.to}\n${opts.subject}\n${opts.text}`);
+    } else {
+      console.error(
+        "[email] SMTP is not configured — mail was NOT sent. " +
+          "Set SMTP_HOST, SMTP_USER and SMTP_PASS (all three are required).",
+      );
+    }
+    return false;
   }
   const transport = await getTransport();
   await transport.sendMail({ from: from(), ...opts });
+  return true;
 }
 
 /**
@@ -138,30 +181,129 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Team names and role labels are user-supplied and may be RTL or mixed-script.
+ * `dir="auto"` lets the mail client pick direction per span instead of forcing
+ * the paragraph's LTR onto Arabic or Hebrew text.
+ */
+function autoDir(value: string) {
+  return `<span dir="auto">${escapeHtml(value)}</span>`;
+}
+
+/**
+ * A header line has no escaping of its own, so a newline in a team name would
+ * end the Subject and start a new header. Nodemailer sanitises this too; doing
+ * it here means the guarantee does not depend on that.
+ */
+function headerSafe(value: string) {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+/** "Thursday 3 September" — a date a recipient can act on, not "soon". */
+function formatExpiry(at: Date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(at);
+}
+
+const IGNORE_LINE =
+  "If you weren't expecting this, you can ignore this email — nothing happens until you open the link.";
+
+/**
+ * Table-based shell with a real <head>.
+ *
+ * Every element here is load-bearing for a client that is not a browser:
+ * - `color-scheme` + an explicit `color` on the heading. Without both, Gmail on
+ *   iOS partially inverts — it keeps the card's explicit white background and
+ *   remaps inherited text to white, producing a white heading on a white card.
+ * - `role="presentation"` so screen readers do not announce layout tables.
+ * - The fallback URL is an <a>, not bare text: a recipient whose client blocks
+ *   the button is exactly the one who needs it, and bare text is neither
+ *   clickable nor in a screen reader's link rota.
+ * - `overflow-wrap` because a long unbroken team name otherwise runs out of the
+ *   480px card.
+ */
 function shell(
   title: string,
   bodyHtml: string,
   cta: { label: string; href: string },
+  preheader: string,
 ) {
   const href = encodeURI(cta.href);
-  return `<!doctype html><html><body style="font-family:system-ui,sans-serif;background:#f6f7f9;padding:32px">
-  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px">
-    <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(title)}</h1>
-    <p style="color:#475569;line-height:1.5;margin:0 0 24px">${bodyHtml}</p>
-    <a href="${escapeHtml(href)}" style="display:inline-block;background:#0e7490;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600">${escapeHtml(cta.label)}</a>
-    <p style="color:#94a3b8;font-size:12px;margin:24px 0 0">If the button doesn't work, paste this link:<br>${escapeHtml(href)}</p>
-  </div></body></html>`;
+  return `<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>${escapeHtml(title)}</title>
+<style>
+  /* Declaring color-scheme without implementing it is worse than declaring
+     nothing: Apple Mail reads the meta above, suppresses its own auto-inversion,
+     and leaves a glaring white card in a dark inbox. DESIGN.md calls the dark
+     vault first-class, so honour the claim. Inline styles win over stylesheets,
+     so these overrides need !important. */
+  @media (prefers-color-scheme: dark) {
+    .kt-ground { background:#07070f !important; }
+    .kt-card   { background:#0f0f1e !important; }
+    .kt-title  { color:#f4f4f5 !important; }
+    .kt-body   { color:#c7c7d1 !important; }
+    .kt-fine   { color:#9d9daa !important; }
+    .kt-link   { color:#22d3ee !important; }
+    .kt-cta    { background:#0e7490 !important; }
+  }
+</style>
+</head>
+<body class="kt-ground" style="margin:0;padding:0;background:#f6f7f9;color:#0f0f1e;font-family:'Inter',system-ui,sans-serif">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all">${escapeHtml(preheader)}${"&#8204;&nbsp;".repeat(60)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f7f9" class="kt-ground" style="background:#f6f7f9">
+<tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;width:100%">
+<tr><td bgcolor="#ffffff" class="kt-card" style="background:#ffffff;border-radius:16px;padding:32px;border:1px solid #e6e8ec">
+<h1 class="kt-title" style="margin:0 0 12px;font-size:20px;line-height:1.3;font-weight:800;color:#0f0f1e;word-wrap:break-word;overflow-wrap:anywhere;word-break:break-word">${escapeHtml(title)}</h1>
+<p class="kt-body" style="margin:0 0 24px;color:#475569;font-size:16px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere">${bodyHtml}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td bgcolor="#0e7490" class="kt-cta" style="background:#0e7490;border-radius:10px">
+<a href="${escapeHtml(href)}" style="display:inline-block;min-height:48px;line-height:48px;padding:0 24px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600">${escapeHtml(cta.label)}</a>
+</td></tr></table>
+<p class="kt-fine" style="margin:24px 0 0;color:#57575e;font-size:13px;line-height:1.5">If the button doesn't work, use this link:<br>
+<a href="${escapeHtml(href)}" class="kt-link" style="color:#0e7490;word-wrap:break-word;overflow-wrap:anywhere;word-break:break-all">${escapeHtml(href)}</a></p>
+<p class="kt-fine" style="margin:16px 0 0;color:#57575e;font-size:13px;line-height:1.5">${escapeHtml(IGNORE_LINE)}</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
 }
 
-export async function sendVerificationEmail(to: string, link: string) {
-  await sendMail({
+/** What each role actually grants, in words the recipient did not have to look up. */
+const ROLE_CLAUSE: Record<string, string> = {
+  admin: "an <b>admin</b> — full access to the console, including team and location management",
+  manager: "a <b>manager</b> — you can manage locations, quests and logs for the team",
+  member: "a <b>member</b> — you can check in and out and see your own logs",
+  auditor: "an <b>auditor</b> — read-only access to logs and reports",
+};
+
+const roleClause = (role: string) =>
+  ROLE_CLAUSE[role] ?? `<b>${escapeHtml(role)}</b>`;
+
+export async function sendVerificationEmail(
+  to: string,
+  link: string,
+): Promise<boolean> {
+  return sendMail({
     to,
-    subject: "Verify your email — Kamnotheat",
-    text: `Verify your email (link expires in 1 hour): ${link}`,
+    subject: "Kamnotheat — verify your email",
+    text: `Confirm this address to activate your Kamnotheat account. The link is single-use and expires 1 hour after it was sent: ${link}\n\n${IGNORE_LINE}`,
     html: shell(
       "Verify your email",
-      "Confirm this address to activate your Kamnotheat account. This link expires in 1 hour.",
+      "Confirm this address to activate your Kamnotheat account. The link is single-use and expires 1 hour after it was sent.",
       { label: "Verify email", href: link },
+      "Single-use link, expires in 1 hour.",
     ),
   });
 }
@@ -169,16 +311,27 @@ export async function sendVerificationEmail(to: string, link: string) {
 export async function sendSetPasswordEmail(
   to: string,
   link: string,
-  teamName?: string,
-) {
-  await sendMail({
+  opts: { teamName?: string; invitedByName?: string; expiresAt?: Date } = {},
+): Promise<boolean> {
+  const { teamName, invitedByName, expiresAt } = opts;
+  // Who created the account is the fact a recipient needs to judge whether this
+  // is legitimate, and it was being discarded at the call site.
+  const actor = invitedByName ? autoDir(invitedByName) : "An administrator";
+  const on = teamName ? ` on <b>${autoDir(teamName)}</b>` : "";
+  const actorText = invitedByName ?? "An administrator";
+  const onText = teamName ? ` on ${teamName}` : "";
+  const expiry = expiresAt
+    ? ` The link is single-use and expires on ${formatExpiry(expiresAt)}.`
+    : " The link is single-use.";
+  return sendMail({
     to,
-    subject: "Set your password — Kamnotheat",
-    text: `Set your password (link expires in 1 hour): ${link}`,
+    subject: "Kamnotheat — set your password",
+    text: `${actorText} created a Kamnotheat account for you${onText}. Set a password to sign in.${expiry}\n\n${link}\n\n${IGNORE_LINE}`,
     html: shell(
       "Set your password",
-      `An account was created for you${teamName ? ` on <b>${escapeHtml(teamName)}</b>` : ""}. Set a password to sign in. This link expires in 1 hour.`,
+      `${actor} created a Kamnotheat account for you${on}. Set a password to sign in.${escapeHtml(expiry)}`,
       { label: "Set password", href: link },
+      `${actorText} created this account for you.`,
     ),
   });
 }
@@ -186,17 +339,29 @@ export async function sendSetPasswordEmail(
 export async function sendInviteEmail(
   to: string,
   link: string,
-  teamName: string,
-  role: string,
-) {
-  await sendMail({
+  opts: {
+    teamName: string;
+    role: string;
+    invitedByName?: string;
+    expiresAt?: Date;
+  },
+): Promise<boolean> {
+  const { teamName, role, invitedByName, expiresAt } = opts;
+  const actor = invitedByName ? autoDir(invitedByName) : "Someone";
+  const actorText = invitedByName ?? "Someone";
+  // "Expires soon" read as hours on a seven-day window. State the day.
+  const expiry = expiresAt
+    ? ` This invite expires on ${formatExpiry(expiresAt)}.`
+    : "";
+  return sendMail({
     to,
-    subject: `You're invited to ${teamName} — Kamnotheat`,
-    text: `You've been invited to join ${teamName} as ${role}. Accept (link expires soon): ${link}`,
+    subject: headerSafe(`Kamnotheat — you're invited to ${teamName}`),
+    text: `${actorText} invited you to join ${teamName} on Kamnotheat as ${role}. Accepting will create or link your account.${expiry}\n\n${link}\n\n${IGNORE_LINE}`,
     html: shell(
       `Join ${teamName}`,
-      `You've been invited to join <b>${escapeHtml(teamName)}</b> as <b>${escapeHtml(role)}</b>. Accepting will create or link your account.`,
+      `${actor} invited you to join <b>${autoDir(teamName)}</b> on Kamnotheat as ${roleClause(role)}. Accepting will create or link your account.${escapeHtml(expiry)}`,
       { label: "Accept invite", href: link },
+      `${actorText} invited you to join ${teamName}.`,
     ),
   });
 }

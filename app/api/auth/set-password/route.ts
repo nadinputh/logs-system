@@ -13,6 +13,44 @@ const Schema = z.object({
   password: z.string().min(8).max(200),
 });
 
+/**
+ * Reports whether a set-password link is still usable, without consuming it.
+ *
+ * The page used to render its form unconditionally, so a recipient whose link
+ * had expired chose a password, confirmed it, submitted, and only then learned
+ * the link was dead — with no way forward. The invite page has validated on
+ * mount all along; this brings the higher-stakes flow up to the same bar.
+ *
+ * It reveals only validity and the address the link was issued to, which the
+ * holder of the link already knows.
+ */
+export async function GET(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get("token");
+  if (!token) {
+    return NextResponse.json({ valid: false }, { status: 400 });
+  }
+
+  await connectDB();
+
+  const doc = await VerificationToken.findOne({
+    token: hashToken(token),
+    type: "set_password",
+    expiresAt: { $gt: new Date() },
+    consumedAt: null,
+  })
+    .select("email expiresAt")
+    .lean<any>();
+
+  if (!doc) {
+    return NextResponse.json(
+      { valid: false, code: "INVALID_TOKEN", error: "This link is invalid or has expired." },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ valid: true, email: doc.email, expiresAt: doc.expiresAt });
+}
+
 // Consumes a set_password token: sets the password AND verifies the email.
 export async function POST(req: NextRequest) {
   const parsed = Schema.safeParse(await req.json().catch(() => ({})));

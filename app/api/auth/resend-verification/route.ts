@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
-import { issueVerificationToken, verifyEmailLink } from "@/lib/verification";
-import { sendVerificationEmail } from "@/lib/email/send";
+import {
+  issueVerificationToken,
+  setPasswordLink,
+  verifyEmailLink,
+} from "@/lib/verification";
+import {
+  sendSetPasswordEmail,
+  sendVerificationEmail,
+  smtpConfigured,
+} from "@/lib/email/send";
 import { clientKey, rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
@@ -23,10 +31,16 @@ export async function POST(req: NextRequest) {
   }
 
   const parsed = Schema.safeParse(await req.json().catch(() => ({})));
-  // Always neutral — never reveal whether the email maps to an account.
+  /**
+   * Always neutral about the *address* — never reveal whether it maps to an
+   * account. `mailConfigured` is server state, identical for every input, so it
+   * reveals nothing about the address while letting the UI stop promising a
+   * link that the server cannot send.
+   */
   const neutral = NextResponse.json({
     ok: true,
     message: "If that account needs verification, a new link is on its way.",
+    mailConfigured: smtpConfigured(),
   });
   if (!parsed.success) return neutral;
 
@@ -34,10 +48,30 @@ export async function POST(req: NextRequest) {
   await connectDB();
 
   const user = await User.findOne({ email });
-  if (user && !user.emailVerified) {
-    const token = await issueVerificationToken(user._id, email, "email_verify");
+  if (user && (!user.emailVerified || !user.passwordHash)) {
     try {
-      await sendVerificationEmail(email, verifyEmailLink(token));
+      if (!user.passwordHash) {
+        /**
+         * An admin-provisioned account has no password, so an email_verify token
+         * is the wrong instrument: following it marked the address verified and
+         * left the account still unreachable — the one recovery button the user
+         * could see appeared to work while moving them further from access.
+         * Reissue the token type that actually opens the account.
+         */
+        const { token, expiresAt } = await issueVerificationToken(
+          user._id,
+          email,
+          "set_password",
+        );
+        await sendSetPasswordEmail(email, setPasswordLink(token), { expiresAt });
+      } else {
+        const { token } = await issueVerificationToken(
+          user._id,
+          email,
+          "email_verify",
+        );
+        await sendVerificationEmail(email, verifyEmailLink(token));
+      }
     } catch (err) {
       // Still answer neutrally: revealing a send failure would leak that the
       // address maps to an unverified account.

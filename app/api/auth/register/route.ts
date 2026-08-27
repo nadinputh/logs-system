@@ -28,9 +28,24 @@ const RegisterSchema = z.object({
  * returned *after* the user, team and membership had all been written, which
  * the user could never get past by retrying.
  */
-const neutral = () =>
+/**
+ * `delivered` reports whether the verification mail actually left the process.
+ *
+ * It leaks nothing: the neutrality this endpoint maintains is about whether an
+ * *address* maps to an account, and a send failure is a server-side condition
+ * independent of the address — identical for every input. Claiming "a link is on
+ * its way" when the relay is unconfigured or missing told every registrant
+ * something false and left them waiting on mail that never existed.
+ */
+const neutral = (delivered: boolean) =>
   NextResponse.json(
-    { ok: true, message: "Check your email to verify your account." },
+    {
+      ok: true,
+      delivered,
+      message: delivered
+        ? "Check your email to verify your account."
+        : "Your workspace is ready, but the verification email could not be sent.",
+    },
     { status: 201 },
   );
 
@@ -42,9 +57,10 @@ const neutral = () =>
  */
 async function trySendVerification(email: string, link: string) {
   try {
-    await sendVerificationEmail(email, link);
+    return await sendVerificationEmail(email, link);
   } catch (err) {
     console.error("[register] verification email failed to send:", err);
+    return false;
   }
 }
 
@@ -108,9 +124,9 @@ export async function POST(req: NextRequest) {
     existing.name = name;
     existing.passwordHash = passwordHash;
     await existing.save();
-    const token = await issueVerificationToken(existing._id, email, "email_verify");
-    await trySendVerification(email, verifyEmailLink(token));
-    return neutral();
+    const { token } = await issueVerificationToken(existing._id, email, "email_verify");
+    const delivered = await trySendVerification(email, verifyEmailLink(token));
+    return neutral(delivered);
   }
 
   const user = await User.create({
@@ -137,8 +153,8 @@ export async function POST(req: NextRequest) {
   });
   await User.updateOne({ _id: user._id }, { activeTeamId: team._id });
 
-  const token = await issueVerificationToken(user._id, email, "email_verify");
-  await trySendVerification(email, verifyEmailLink(token));
+  const { token } = await issueVerificationToken(user._id, email, "email_verify");
+  const delivered = await trySendVerification(email, verifyEmailLink(token));
 
-  return neutral();
+  return neutral(delivered);
 }

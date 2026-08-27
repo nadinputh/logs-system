@@ -17,16 +17,21 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<DirectRole>('member')
   const [busy, setBusy] = useState(false)
+  // Set when the account was created but the email did not go out. Persistent,
+  // not a toast: this link is the only way the user reaches their account, and a
+  // notice that auto-dismisses loses it.
+  const [undelivered, setUndelivered] = useState<{ email: string; url: string } | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || !email.trim()) return
     setBusy(true)
+    const target = email.trim()
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), role }),
+        body: JSON.stringify({ name: name.trim(), email: target, role }),
       })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -36,7 +41,16 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
       setName('')
       setEmail('')
       setRole('member')
-      toast.success('User created — a set-password email was sent')
+      // Report what actually happened. Claiming a send that never left the
+      // process left admins with no reason to look for the link, and no way to
+      // find out it had not arrived.
+      if (payload.emailDelivered) {
+        setUndelivered(null)
+        toast.success(`User created — set-password link sent to ${target}`)
+      } else {
+        setUndelivered({ email: target, url: payload.setPasswordUrl ?? '' })
+        toast.warning('User created, but the email could not be sent')
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create user')
     } finally {
@@ -83,11 +97,48 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
               </Select>
             </div>
             <div className="flex items-end">
-              <Button type="submit" disabled={busy || !name.trim() || !email.trim()}>
+              <Button
+                type="submit"
+                variant="brand"
+                size="touch"
+                isDisabled={busy || !name.trim() || !email.trim()}
+                isLoading={busy}
+                loadingBehavior="busy"
+              >
                 {busy ? 'Creating…' : 'Create user'}
               </Button>
             </div>
           </form>
+        )}
+
+        {undelivered && (
+          <div
+            role="status"
+            className="space-y-2 rounded-xl border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/10 px-3 py-3"
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {undelivered.email} was created, but the email could not be sent.
+            </p>
+            <p className="text-xs text-muted">
+              Send them this link yourself — it expires in 7 days. You can also resend it later
+              from their row in the members list.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(undelivered.url)
+                  toast.success('Set-password link copied')
+                }}
+                className="max-w-[320px] truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground"
+              >
+                {undelivered.url}
+              </button>
+              <Button size="sm" variant="outline" onPress={() => setUndelivered(null)}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

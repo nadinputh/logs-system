@@ -34,7 +34,7 @@ export async function GET(
   await connectDB();
 
   const members = await TeamMember.find({ teamId: auth.teamId })
-    .populate("userId", "name email role activeTeamId")
+    .populate("userId", "name email role activeTeamId passwordHash")
     .sort({ createdAt: 1 })
     .lean<any[]>();
 
@@ -47,6 +47,10 @@ export async function GET(
       teamRole: m.role,
       status: m.status,
       joinedAt: m.joinedAt,
+      // Boolean only — the hash itself never leaves the server. Drives the
+      // "resend set-password link" control for admin-provisioned accounts that
+      // never reached one.
+      awaitingPassword: !m.userId?.passwordHash,
       isSelf: m.userId?._id?.toString?.() === (auth.session?.user as any)?.id,
     })),
   });
@@ -168,7 +172,7 @@ export async function PATCH(
     updatePayload,
     { returnDocument: "after" },
   )
-    .populate("userId", "name email role activeTeamId")
+    .populate("userId", "name email role activeTeamId passwordHash")
     .lean<any>();
 
   const auditWrites: Array<Promise<unknown>> = [];

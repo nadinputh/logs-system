@@ -21,7 +21,16 @@ export const authOptions: NextAuthOptions = {
         const user = await User.findOne({
           email: credentials.email.toLowerCase(),
         });
-        if (!user || !user.passwordHash) return null;
+        if (!user) return null;
+        /**
+         * An admin-provisioned account exists but has no password yet. Returning
+         * null here collapsed it into the generic credential failure, so the user
+         * was told their email and password "do not match an account" — for an
+         * account that provably exists — and the resend control that would have
+         * rescued them never rendered. Name the condition so the UI can offer the
+         * one recovery that works for it.
+         */
+        if (!user.passwordHash) throw new Error("PASSWORD_NOT_SET");
         const valid = await bcrypt.compare(
           credentials.password,
           user.passwordHash,

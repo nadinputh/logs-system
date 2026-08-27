@@ -302,9 +302,74 @@ npm run dev
 | `EMAIL_FROM`                           | From header (falls back to `SMTP_USER`)   | Optional |
 
 **Email delivery.** `lib/email/send.ts` sends verification, set-password and invite mail.
-If `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are not *all* set, it logs the message to the
-server console instead of sending — which keeps the flows testable in development but means
-a half-configured production deploy silently delivers nothing. Set all three together.
+`SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are required **together** — `smtpConfigured()` tests
+all three, and setting `SMTP_HOST` alone does not turn sending on.
+
+When they are not all set, nothing is sent and the behaviour splits by environment:
+
+- **development** — the message is printed to the server console, so the flows stay testable.
+- **production** — `console.error` reports the missing configuration and the mail is dropped.
+  The link is **never** printed. These links are bearer credentials; `lib/verification.ts`
+  hashes them at rest precisely so no log ever holds a live account-takeover URL, and the
+  console fallback must not undo that.
+
+`.env.local.example` ships the SMTP block commented out on purpose: its placeholder values are
+all truthy, so uncommenting them satisfies the all-three check and the app builds a real
+transport to a host that never answers — stalling each signup for the 10s connection timeout
+instead of using the console fallback.
+
+**Every send reports whether it actually left the process.** `sendVerificationEmail`,
+`sendSetPasswordEmail` and `sendInviteEmail` return `boolean`: `true` only on a real SMTP
+hand-off, `false` when nothing was sent. All five call sites surface it:
+
+- `POST /api/admin/users`, `POST /api/admin/users/resend-set-password` and
+  `POST /api/teams/[id]/invites` return `emailDelivered` alongside the link
+  (`setPasswordUrl` / `inviteUrl`); the UI shows a persistent copy-link notice.
+- `POST /api/auth/register` returns `delivered`, and the confirmation card says the workspace
+  is ready but mail failed rather than "a verification link is on its way". It deliberately
+  does **not** offer "try a different address" in that branch — the failure is server-side, so
+  retrying only orphans a second account.
+- `POST /api/auth/resend-verification` stays neutral about the *address* but returns
+  `mailConfigured`, which is server state and identical for every input.
+
+Reporting a send failure leaks nothing: the neutrality these endpoints maintain is about
+whether an address maps to an account, and a transport failure is independent of the address.
+
+**Production with no SMTP warns at load** (`lib/email/send.ts`), because the console fallback
+deliberately prints nothing there — without the startup line the first signal is a complaint.
+
+**A passwordless account is a named condition, not a wrong password.** `lib/auth.ts` throws
+`PASSWORD_NOT_SET` before the `EMAIL_NOT_VERIFIED` check; returning `null` collapsed it into
+the generic credential failure, so an admin-provisioned user was told their email and password
+"do not match an account" and the resend control never rendered. `LoginForm` offers
+"Email me a link" on that branch. `GET /api/auth/set-password?token=` validates a link without
+consuming it, so `/set-password/[token]` shows an expired state up front instead of accepting
+a password and a confirmation first.
+
+**All five call sites treat mail as best-effort.** Register, resend-verification, admin user
+creation, the set-password resend and team invites each wrap the send and continue. `admin/users` was the exception
+until it was fixed: it threw after committing the User, TeamMember and token, so the admin got
+"Failed to create user" for a user that existed, and their retry hit the duplicate-email guard
+telling them to invite instead — which 409s too. `__tests__/admin-users-mail-failure.test.ts`
+pins that contract.
+
+**Token lifetimes match who is waiting.** `email_verify` expires in 1 hour — the user just
+asked for it. `set_password` gets **7 days** (`SET_PASSWORD_TTL_MS`): its recipient never asked
+for the account, so they are least likely to be watching their inbox, and possession of the
+link proves control of the address exactly as the 7-day team invite does.
+`POST /api/auth/resend-verification` branches on `!user.passwordHash` and reissues a
+`set_password` token for admin-provisioned accounts — issuing an `email_verify` one marked the
+address verified and left the account still unreachable. `POST /api/admin/users/resend-set-password`
+gives an admin the same lever from the members list.
+
+**Invite tokens are hashed at rest** (`TeamInvite.token` holds the SHA-256), like verification
+tokens. The plaintext exists only inside the POST that mints it and is returned once; the
+invite list has no token to show, so reissue with Resend instead of copying an old link.
+
+> **Migration note.** Rows written before this change hold a plaintext token and will no
+> longer resolve, because the lookup now hashes the URL token first. Any already-sent invite
+> link is dead and must be reissued with Resend. This database had none pending at the time of
+> the change, so nothing was stranded here — check before deploying anywhere that did.
 
 `nodemailer` is loaded lazily at send time through a runtime indirection, and is listed in
 `serverExternalPackages`. That is deliberate: mail is an optional capability, and a static
@@ -312,6 +377,9 @@ import made the package a hard build-time dependency of every route importing th
 when it was missing from `node_modules`, registration, resend-verification, admin user
 creation and team invites all returned 500 before running any of their own logic, and in
 dev the whole compilation failed. Callers now log a send failure and continue; the account
-still exists and `POST /api/auth/resend-verification` is the recovery.
+still exists and the resend endpoints above are the recovery.
+
+Deliverability is not configured by these variables: publish SPF, DKIM and DMARC for whatever
+domain `EMAIL_FROM` uses, or transactional mail from it lands in spam.
 
 """

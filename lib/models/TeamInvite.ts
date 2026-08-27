@@ -29,6 +29,13 @@ const TeamInviteSchema = new Schema<ITeamInvite>(
       ref: "User",
       required: true,
     },
+    /**
+     * The SHA-256 hash of the invite token, never the token itself. An invite is
+     * a seven-day bearer credential — whoever holds one joins the team — so the
+     * same argument lib/verification.ts makes for verification tokens applies
+     * with more force here. The plaintext exists only inside the POST that mints
+     * it, long enough to build the link and return it once.
+     */
     token: { type: String, required: true, unique: true },
     status: {
       type: String,

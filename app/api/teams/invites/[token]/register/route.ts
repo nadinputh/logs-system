@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { TeamInvite } from "@/lib/models/TeamInvite";
+import { hashToken } from "@/lib/verification";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 
@@ -29,7 +30,8 @@ export async function POST(
   await connectDB();
 
   const invite = await TeamInvite.findOne({
-    token,
+    // Only the hash is stored; see lib/models/TeamInvite.ts.
+    token: hashToken(token),
     status: "pending",
     expiresAt: { $gt: new Date() },
   });

@@ -6,8 +6,27 @@ import {
   VerificationTokenType,
 } from "./models/VerificationToken";
 
-// Both email-verification and set-password links expire 1 hour after issuance.
+// Email-verification links expire 1 hour after issuance: the user just asked for
+// one and is watching their inbox.
 export const VERIFICATION_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Set-password links get seven days, not one hour.
+ *
+ * The recipient never asked for this account — an admin provisioned it — so they
+ * are the least likely of anyone to be watching their inbox, and a one-hour
+ * window expired routinely before they ever opened it. Every exit was then
+ * sealed: sign-in fails (no passwordHash), there is no forgot-password route,
+ * "resend the verification email" issues the wrong token type, and both the
+ * invite and re-create paths 409.
+ *
+ * Seven days is not weaker than what it replaces: possession of the link proves
+ * control of the address, exactly as the seven-day team invite it duplicates.
+ */
+export const SET_PASSWORD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+const ttlFor = (type: VerificationTokenType) =>
+  type === "set_password" ? SET_PASSWORD_TTL_MS : VERIFICATION_TTL_MS;
 
 /**
  * Verification links are bearer credentials: whoever holds one can verify an
@@ -29,17 +48,18 @@ export async function issueVerificationToken(
   userId: Types.ObjectId | string,
   email: string,
   type: VerificationTokenType,
-): Promise<string> {
+): Promise<{ token: string; expiresAt: Date }> {
   await VerificationToken.deleteMany({ userId, type });
   const token = uuidv4();
+  const expiresAt = new Date(Date.now() + ttlFor(type));
   await VerificationToken.create({
     token: hashToken(token),
     userId,
     email: email.toLowerCase(),
     type,
-    expiresAt: new Date(Date.now() + VERIFICATION_TTL_MS),
+    expiresAt,
   });
-  return token;
+  return { token, expiresAt };
 }
 
 /**

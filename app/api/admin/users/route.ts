@@ -20,7 +20,11 @@ const Schema = z.object({
 // link (which also verifies their email); no temporary password is shared.
 export async function POST(req: NextRequest) {
   const auth = await requireTeamPermission("team.members.manage");
-  if (auth.error || !auth.teamId || !auth.membership) return auth.error;
+  if (auth.error || !auth.teamId || !auth.membership) {
+    // `auth.error` is nullable, so returning it bare can yield `null` where a
+    // Response is required — the guard can fall through with no error set.
+    return auth.error ?? NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const parsed = Schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
@@ -61,9 +65,35 @@ export async function POST(req: NextRequest) {
     joinedAt: new Date(),
   });
 
-  const token = await issueVerificationToken(user._id, email, "set_password");
+  const { token, expiresAt } = await issueVerificationToken(
+    user._id,
+    email,
+    "set_password",
+  );
   const team = await Team.findById(auth.teamId).select("name").lean<any>();
-  await sendSetPasswordEmail(email, setPasswordLink(token), team?.name);
+  const setPasswordUrl = setPasswordLink(token);
+
+  /**
+   * Mail is best-effort here, as it already is in register, resend-verification
+   * and invites. Letting it throw 500s *after* the User, TeamMember and token
+   * are committed: the admin is told "Failed to create user" for a user that
+   * exists, and their retry hits the duplicate-email guard above and is told to
+   * invite them instead — which 409s too. The account is left with no password
+   * and no way to reach one.
+   *
+   * `emailDelivered` is the honest answer to "did that send?", and
+   * `setPasswordUrl` is the recovery when it did not.
+   */
+  let emailDelivered = false;
+  try {
+    emailDelivered = await sendSetPasswordEmail(email, setPasswordUrl, {
+      teamName: team?.name,
+      invitedByName: (auth.session?.user as any)?.name ?? undefined,
+      expiresAt,
+    });
+  } catch (err) {
+    console.error("[admin/users] set-password email failed to send:", err);
+  }
 
   return NextResponse.json(
     {
@@ -73,6 +103,8 @@ export async function POST(req: NextRequest) {
         email: user.email,
         role: parsed.data.role,
       },
+      emailDelivered,
+      setPasswordUrl,
     },
     { status: 201 },
   );

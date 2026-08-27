@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AlertCircle, MailWarning } from 'lucide-react'
+import { AlertCircle, MailCheck, MailWarning } from 'lucide-react'
 
 /**
  * Inline form feedback, in the same shape the scanner uses: a named problem and
@@ -18,12 +18,17 @@ export function FormNotice({
   title,
   children,
 }: {
-  tone: 'danger' | 'warning'
+  tone: 'danger' | 'warning' | 'success'
   title: string
   children?: ReactNode
 }) {
-  const color = tone === 'danger' ? 'var(--status-danger)' : 'var(--status-warning)'
-  const Icon = tone === 'danger' ? AlertCircle : MailWarning
+  const color =
+    tone === 'danger'
+      ? 'var(--status-danger)'
+      : tone === 'success'
+        ? 'var(--status-success)'
+        : 'var(--status-warning)'
+  const Icon = tone === 'danger' ? AlertCircle : tone === 'success' ? MailCheck : MailWarning
   return (
     <div
       className="animate-notice flex items-start gap-3 rounded-2xl border p-3.5"

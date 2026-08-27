@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, MailCheck } from 'lucide-react'
+import { ArrowLeft, Loader2, MailCheck, MailWarning } from 'lucide-react'
 import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,10 @@ export function RegisterForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
+  // Whether the verification mail actually left the server. Claiming it did
+  // when it did not left registrants waiting on mail that never existed, and
+  // sent them to "try a different address" — which orphans a second account.
+  const [delivered, setDelivered] = useState(true)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,6 +46,7 @@ export function RegisterForm() {
               : 'Something went wrong creating your account. Try again in a moment.'
         throw new Error(detail)
       }
+      setDelivered(data?.delivered !== false)
       setDone(true)
     } catch (err: unknown) {
       const message = (err as { message?: string })?.message
@@ -60,28 +65,61 @@ export function RegisterForm() {
       // A view change inside the same card, so it is crossfaded rather than
       // snapped — the confirmation reads as the form's outcome, not a new page.
       <div className="animate-panel-swap space-y-5">
-        <span className="inline-flex size-11 items-center justify-center rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)]">
-          <MailCheck className="size-5" strokeWidth={2.2} />
+        <span
+          className={
+            delivered
+              ? 'inline-flex size-11 items-center justify-center rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)]'
+              : 'inline-flex size-11 items-center justify-center rounded-2xl bg-[var(--status-warning)]/10 text-[var(--status-warning)]'
+          }
+        >
+          {delivered ? (
+            <MailCheck className="size-5" strokeWidth={2.2} />
+          ) : (
+            <MailWarning className="size-5" strokeWidth={2.2} />
+          )}
         </span>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Check your email</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {delivered ? 'Check your email' : 'Your workspace is ready'}
+          </h1>
           <p className="mt-2 text-sm text-muted">
-            If that address can be registered, a verification link is on its way to{' '}
-            <span className="font-semibold text-foreground">{email}</span>. It expires in one
-            hour. Verify it, then sign in.
+            {delivered ? (
+              <>
+                If that address can be registered, a verification link is on its way to{' '}
+                <span className="font-semibold text-foreground">{email}</span>. It expires in one
+                hour. Verify it, then sign in.
+              </>
+            ) : (
+              <>
+                Your account was created, but this server could not send the verification email
+                to <span className="font-semibold text-foreground">{email}</span>. Ask your
+                administrator to check the mail settings — your account is safe in the meantime,
+                and you can request a new link once mail is working.
+              </>
+            )}
           </p>
         </div>
-        <p className="text-sm text-muted">
-          Nothing arrived? Check your spam folder, or{' '}
-          <button
-            type="button"
-            onClick={() => setDone(false)}
-            className="font-semibold text-[var(--accent)] hover:underline"
-          >
-            try a different address
-          </button>
-          .
-        </p>
+        {delivered ? (
+          <p className="text-sm text-muted">
+            Nothing arrived? Check your spam folder, or{' '}
+            <button
+              type="button"
+              onClick={() => setDone(false)}
+              className="font-semibold text-[var(--accent)] hover:underline"
+            >
+              try a different address
+            </button>
+            .
+          </p>
+        ) : (
+          // Deliberately not offering "try a different address" here: the send
+          // failed for a server-side reason, so a second attempt would only
+          // orphan another account.
+          <p className="text-sm text-muted">
+            Trying a different address will not help — the problem is the mail server, not your
+            address.
+          </p>
+        )}
         <Link
           href="/login"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:underline"

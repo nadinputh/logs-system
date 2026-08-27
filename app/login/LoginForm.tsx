@@ -19,17 +19,24 @@ export function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [needsVerify, setNeedsVerify] = useState(false)
+  const [needsPassword, setNeedsPassword] = useState(false)
   const [resent, setResent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [passkeyLoading, setPasskeyLoading] = useState(false)
 
   async function handleResend() {
-    setResent(true)
-    await fetch('/api/auth/resend-verification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    }).catch(() => {})
+    // Claiming the send before the request resolves reported success even when
+    // the fetch rejected.
+    try {
+      await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      setResent(true)
+    } catch {
+      setError('Could not request a new link just now. Try again in a moment.')
+    }
   }
 
   async function handlePasskeyLogin() {
@@ -88,6 +95,7 @@ export function LoginForm() {
     e.preventDefault()
     setError('')
     setNeedsVerify(false)
+    setNeedsPassword(false)
     setResent(false)
     setLoading(true)
 
@@ -96,7 +104,11 @@ export function LoginForm() {
     setLoading(false)
 
     if (result?.error) {
-      if (result.error.includes('EMAIL_NOT_VERIFIED')) {
+      if (result.error.includes('PASSWORD_NOT_SET')) {
+        // The account was created by an administrator and has never had a
+        // password. Resend issues a set-password link for exactly this case.
+        setNeedsPassword(true)
+      } else if (result.error.includes('EMAIL_NOT_VERIFIED')) {
         setNeedsVerify(true)
       } else {
         setError('That email and password do not match an account.')
@@ -147,6 +159,26 @@ export function LoginForm() {
             announced. A region created at the same time as its content is not. */}
         <div aria-live="polite" className="empty:hidden space-y-3">
           {error && <FormNotice tone="danger" title={error} />}
+          {needsPassword && (
+            <FormNotice tone="warning" title="This account has no password yet">
+              {resent ? (
+                <span>A link to set your password is on its way to {email}.</span>
+              ) : (
+                <>
+                  <span>
+                    An administrator created it for you. Set a password to sign in.{' '}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    className="font-semibold text-[var(--accent)] hover:underline"
+                  >
+                    Email me a link
+                  </button>
+                </>
+              )}
+            </FormNotice>
+          )}
           {needsVerify && (
             <FormNotice tone="warning" title="Verify your email before signing in">
               {resent ? (

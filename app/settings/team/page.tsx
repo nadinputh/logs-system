@@ -35,6 +35,9 @@ interface TeamMemberRow {
   teamRole: TeamRole
   status: TeamStatus
   joinedAt: string
+  // Admin-provisioned account that never reached a password. Drives the
+  // "Resend set-password" control.
+  awaitingPassword?: boolean
   isSelf: boolean
 }
 
@@ -44,7 +47,8 @@ interface TeamInviteRow {
   role: Exclude<TeamRole, 'owner'>
   status: 'pending' | 'accepted' | 'revoked'
   expiresAt: string
-  token: string
+  // No `token`: only its hash is stored, so the list has no plaintext to show.
+  // Reissue with Resend to get a fresh link.
 }
 
 type TeamAuditAction =
@@ -164,6 +168,14 @@ export default function TeamSettingsPage() {
   const [transferTargetUserId, setTransferTargetUserId] = useState('')
   const [transferringOwnership, setTransferringOwnership] = useState(false)
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null)
+  const [resendingInviteId, setResendingInviteId] = useState<string | null>(null)
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null)
+  /**
+   * A link that was minted but not delivered. Held persistently rather than in a
+   * toast: for an invite it is the only copy of a token that is now stored only
+   * as a hash, and for a set-password link it is the account's sole way in.
+   */
+  const [pendingLink, setPendingLink] = useState<{ label: string; url: string } | null>(null)
   const [auditActionFilter, setAuditActionFilter] = useState<'all' | TeamAuditAction>('all')
   const [auditFromDate, setAuditFromDate] = useState('')
   const [auditToDate, setAuditToDate] = useState('')
@@ -484,6 +496,72 @@ export default function TeamSettingsPage() {
     }
   }
 
+  /**
+   * Reissues a set-password link for a member who never reached one. Without it
+   * an expired link was a permanent lockout: sign-in fails with no password,
+   * there is no forgot-password route, and re-creating or inviting the user
+   * both 409.
+   */
+  async function resendSetPassword(member: TeamMemberRow) {
+    setResendingUserId(member.userId)
+    try {
+      const res = await fetch('/api/admin/users/resend-set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: member.userId }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(readApiError(payload, 'Failed to resend the set-password link'))
+      if (payload.emailDelivered) {
+        setPendingLink(null)
+        toast.success(`Set-password link sent to ${member.email ?? 'the address'}`)
+      } else {
+        setPendingLink({
+          label: `Set-password link for ${member.email ?? member.name ?? 'this user'}`,
+          url: payload.setPasswordUrl ?? '',
+        })
+        toast.warning('Link created, but the email could not be sent')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to resend the set-password link')
+    } finally {
+      setResendingUserId(null)
+    }
+  }
+
+  /**
+   * Reissues an invite. The stored row holds only the token's hash, so there is
+   * no old link to copy — resending mints a fresh one and supersedes the last.
+   */
+  async function resendInvite(invite: TeamInviteRow) {
+    if (!activeTeam) return
+    setResendingInviteId(invite.id)
+    try {
+      const res = await fetch(`/api/teams/${activeTeam.id}/invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: invite.email, role: invite.role }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(readApiError(payload, 'Failed to resend the invite'))
+      await loadInvites(activeTeam.id)
+      if (payload.emailDelivered) {
+        setPendingLink(null)
+        toast.success(`Invite resent to ${invite.email}`)
+      } else {
+        setPendingLink({
+          label: `Invite for ${invite.email}`,
+          url: payload.inviteUrl ?? '',
+        })
+        toast.warning('Invite reissued, but the email could not be sent')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to resend the invite')
+    } finally {
+      setResendingInviteId(null)
+    }
+  }
+
   async function createInvite(e: React.FormEvent) {
     e.preventDefault()
     if (!activeTeam || !inviteEmail.trim()) return
@@ -503,7 +581,18 @@ export default function TeamSettingsPage() {
       setInviteEmail('')
       setInviteRole('member')
       await loadInvites(activeTeam.id)
-      toast.success('Invite created')
+      // The plaintext token exists only in this response. Show it when the mail
+      // did not go out, because there is no second chance to read it.
+      if (payload.emailDelivered) {
+        setPendingLink(null)
+        toast.success(`Invite sent to ${payload?.invite?.email ?? 'the address'}`)
+      } else {
+        setPendingLink({
+          label: `Invite for ${payload?.invite?.email ?? 'the address'}`,
+          url: payload.inviteUrl ?? '',
+        })
+        toast.warning('Invite created, but the email could not be sent')
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to send invite')
     } finally {
@@ -677,6 +766,35 @@ export default function TeamSettingsPage() {
           Switch active team, manage members, and control invite access for locations, guests, and logs.
         </p>
       </div>
+
+      {pendingLink && (
+        <div
+          role="status"
+          className="space-y-2 rounded-xl border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/10 px-4 py-3"
+        >
+          <p className="text-sm font-semibold text-foreground">
+            {pendingLink.label} was created, but the email could not be sent.
+          </p>
+          <p className="text-xs text-muted">
+            Pass this link on yourself. It is shown once — the server stores only its hash.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(pendingLink.url)
+                toast.success('Link copied')
+              }}
+              className="max-w-full truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground sm:max-w-[420px]"
+            >
+              {pendingLink.url}
+            </button>
+            <Button size="sm" variant="outline" onClick={() => setPendingLink(null)}>
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="space-y-4 p-4">
@@ -997,30 +1115,43 @@ export default function TeamSettingsPage() {
                           )}
                         </td>
                         <td className="px-2 py-2">
-                          {isEditable ? (
-                            <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isEditable ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void saveMember(member)}
+                                  disabled={savingMemberUserId === member.userId}
+                                >
+                                  {savingMemberUserId === member.userId ? 'Saving...' : 'Save'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => void removeMember(member)}
+                                  disabled={removingMemberUserId === member.userId}
+                                >
+                                  {removingMemberUserId === member.userId ? 'Removing...' : 'Remove'}
+                                </Button>
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted">
+                                {member.isSelf ? 'Current user' : 'No permission'}
+                              </span>
+                            )}
+                            {member.awaitingPassword && canManageMembers && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => void saveMember(member)}
-                                disabled={savingMemberUserId === member.userId}
+                                onClick={() => void resendSetPassword(member)}
+                                disabled={resendingUserId === member.userId}
+                                aria-label={`Resend set-password link to ${member.email ?? member.name ?? 'this user'}`}
                               >
-                                {savingMemberUserId === member.userId ? 'Saving...' : 'Save'}
+                                {resendingUserId === member.userId ? 'Sending...' : 'Resend set-password'}
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => void removeMember(member)}
-                                disabled={removingMemberUserId === member.userId}
-                              >
-                                {removingMemberUserId === member.userId ? 'Removing...' : 'Remove'}
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted">
-                              {member.isSelf ? 'Current user' : 'No permission'}
-                            </span>
-                          )}
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -1141,7 +1272,7 @@ export default function TeamSettingsPage() {
                 <div className="space-y-1.5">
                   <Label className="opacity-0">Send</Label>
                   <Button type="submit" disabled={creatingInvite || !inviteEmail.trim()}>
-                    {creatingInvite ? 'Sending...' : 'Send Invite'}
+                    {creatingInvite ? 'Creating...' : 'Create invite'}
                   </Button>
                 </div>
               </form>
@@ -1168,16 +1299,15 @@ export default function TeamSettingsPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void navigator.clipboard?.writeText(`${window.location.origin}/invite/${invite.token}`)
-                            toast.success('Invite link copied')
-                          }}
-                          className="max-w-[220px] truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground"
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void resendInvite(invite)}
+                          disabled={resendingInviteId === invite.id}
+                          aria-label={`Resend the invite to ${invite.email}`}
                         >
-                          /invite/{invite.token}
-                        </button>
+                          {resendingInviteId === invite.id ? 'Sending...' : 'Resend'}
+                        </Button>
                         <Button
                           size="sm"
                           variant="destructive"

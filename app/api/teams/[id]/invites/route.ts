@@ -7,7 +7,7 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import { Team } from "@/lib/models/Team";
 import { User } from "@/lib/models/User";
 import { requireTeamPermission } from "@/lib/middleware/auth";
-import { inviteLink } from "@/lib/verification";
+import { hashToken, inviteLink } from "@/lib/verification";
 import { sendInviteEmail } from "@/lib/email/send";
 
 export const runtime = "nodejs";
@@ -46,7 +46,8 @@ export async function GET(
       role: invite.role,
       status: invite.status,
       expiresAt: invite.expiresAt,
-      token: invite.token,
+      // The token is not returned here. Only its hash is stored, so there is no
+      // plaintext to return — reissue via POST to get a fresh link.
     })),
   });
 }
@@ -101,6 +102,10 @@ export async function POST(
     }
   }
 
+  // The plaintext exists only long enough to be put in the link; the row keeps
+  // its hash. An invite is a seven-day bearer credential, and lib/verification.ts
+  // already makes this argument for the shorter-lived verification tokens.
+  const plainToken = uuidv4();
   const invite = await TeamInvite.findOneAndUpdate(
     {
       teamId: auth.teamId,
@@ -113,7 +118,7 @@ export async function POST(
       email,
       role: parsed.data.role,
       invitedByUserId: (auth.session.user as any).id,
-      token: uuidv4(),
+      token: hashToken(plainToken),
       status: "pending",
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
@@ -125,14 +130,15 @@ export async function POST(
   ).lean<any>();
 
   // Email the invite link (best-effort — copy-link is still returned below).
+  let emailDelivered = false;
   try {
     const team = await Team.findById(auth.teamId).select("name").lean<any>();
-    await sendInviteEmail(
-      email,
-      inviteLink(invite.token),
-      team?.name ?? "a team",
-      invite.role,
-    );
+    emailDelivered = await sendInviteEmail(email, inviteLink(plainToken), {
+      teamName: team?.name ?? "a team",
+      role: invite.role,
+      invitedByName: (auth.session.user as any)?.name ?? undefined,
+      expiresAt: invite.expiresAt,
+    });
   } catch (err) {
     console.error("Failed to send invite email:", err);
   }
@@ -145,8 +151,11 @@ export async function POST(
         role: invite.role,
         status: invite.status,
         expiresAt: invite.expiresAt,
-        token: invite.token,
+        // Returned once, here only: this is the last moment the plaintext exists.
+        token: plainToken,
       },
+      emailDelivered,
+      inviteUrl: inviteLink(plainToken),
     },
     { status: 201 },
   );

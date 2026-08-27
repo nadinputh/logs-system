@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { TeamInvite } from "@/lib/models/TeamInvite";
+import { hashToken } from "@/lib/verification";
 import { User } from "@/lib/models/User";
 
 export const runtime = "nodejs";
@@ -15,7 +16,8 @@ export async function GET(
   await connectDB();
 
   const invite = await TeamInvite.findOne({
-    token,
+    // Only the hash is stored; see lib/models/TeamInvite.ts.
+    token: hashToken(token),
     status: "pending",
     expiresAt: { $gt: new Date() },
   })
