@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Fingerprint, Loader2 } from 'lucide-react'
+import { Fingerprint } from 'lucide-react'
 import { toast } from '@/components/ui/sonner'
 import { buildIdempotencyKey } from '@/lib/idempotency-key'
+import { usePasskeySupport } from '@/lib/usePasskeySupport'
 
 interface Props {
   locationId: string
@@ -17,6 +18,11 @@ interface Props {
   visitorGender?: string
   visitPurpose?: string
   deviceId?: string
+  // Whether this session already has a passkey registered at this location —
+  // the parent already resolves this (checkOpenLog fetches
+  // /api/logs/passkey/visitor/exists once for the whole flow), so this
+  // component no longer re-fetches the same answer for itself.
+  hasPasskey: boolean
   // authOnly: never show the register path (checkout screen)
   authOnly?: boolean
   // registerOnly: always show the register path (save passkey after click check-in)
@@ -66,33 +72,14 @@ export default function VisitorPasskey({
   visitorGender,
   visitPurpose,
   deviceId,
+  hasPasskey,
   authOnly = false,
   registerOnly = false,
   onAuthenticated,
   onRegistered,
 }: Props) {
-  const [supported, setSupported] = useState(false)
-  const [hasPasskey, setHasPasskey] = useState<boolean | null>(null)
+  const supported = usePasskeySupport()
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.PublicKeyCredential) return
-    window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-      .then(setSupported)
-      .catch(() => setSupported(false))
-  }, [])
-
-  useEffect(() => {
-    if (!sessionToken) { setHasPasskey(false); return }
-    let cancelled = false
-    fetch(
-      `/api/logs/passkey/visitor/exists?sessionToken=${encodeURIComponent(sessionToken)}&locationId=${encodeURIComponent(locationId)}&locationType=${encodeURIComponent(locationType)}`,
-    )
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) setHasPasskey(!!d.exists) })
-      .catch(() => { if (!cancelled) setHasPasskey(false) })
-    return () => { cancelled = true }
-  }, [sessionToken, locationId, locationType])
 
   const authenticate = useCallback(async (): Promise<boolean> => {
     setLoading(true)
@@ -180,7 +167,6 @@ export default function VisitorPasskey({
         const d = await verifyRes.json()
         throw new Error(d.error ?? 'Registration failed')
       }
-      setHasPasskey(true)
       if (registerOnly) {
         onRegistered?.()
       } else {
@@ -194,20 +180,26 @@ export default function VisitorPasskey({
     }
   }, [sessionToken, visitorName, visitorContact, visitorGender, visitPurpose, registerOnly, authenticate, onRegistered])
 
-  if (!supported) return null
+  // supported === null mid-check reads as unsupported here too — nothing to
+  // show yet, and the alternative (flashing this control on then off a beat
+  // later while the check resolves) is worse than the brief blank moment.
+  if (supported !== true) return null
   // registerOnly: hide once a passkey is already saved for this session
   if (registerOnly && hasPasskey) return null
-  if (hasPasskey === null && !registerOnly) {
-    return (
-      <Button size="touch" variant="outline" className="w-full" isDisabled>
-        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-        Checking…
-      </Button>
-    )
-  }
 
   const useRegister = registerOnly || (!hasPasskey && !authOnly)
-  const onClick = useRegister ? register : authenticate
+  const performAction = useRegister ? register : authenticate
+  // Re-entry guard at the interaction boundary, not inside authenticate/
+  // register themselves — register() calls authenticate() internally as its
+  // own second step, and a guard inside authenticate would silently no-op
+  // that call the moment register() sets loading. Guarding the click instead
+  // stops a double-tap from starting a second concurrent WebAuthn ceremony
+  // (browsers don't reliably reject overlapping navigator.credentials.get()
+  // calls) without touching that internal call at all.
+  const handleClick = () => {
+    if (loading) return
+    void performAction()
+  }
   const baseLabel = action === 'out' ? 'Check Out' : registerOnly ? 'Save Passkey for next visit' : 'Check In'
   const label = loading
     ? (useRegister ? 'Saving…' : 'Verifying…')
@@ -217,8 +209,8 @@ export default function VisitorPasskey({
 
   return (
     <div className="space-y-1.5">
-      <Button size="touch" variant="outline" className="w-full" onClick={onClick} isLoading={loading} loadingBehavior="busy">
-        <Fingerprint className="w-4 h-4 mr-2" />
+      <Button size="touch" variant="outline" className="w-full" onClick={handleClick} isLoading={loading} loadingBehavior="busy">
+        <Fingerprint className="w-4 h-4 mr-2" aria-hidden />
         {label}
       </Button>
       <p className="text-xs text-center text-muted">

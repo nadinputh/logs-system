@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getPredictedAction, formatDuration } from '@/lib/predictive'
 import { buildIdempotencyKey } from '@/lib/idempotency-key'
 import { useLogRealtime } from '@/lib/useLogRealtime'
+import { usePasskeySupport } from '@/lib/usePasskeySupport'
 
 const SelfieCapture = dynamic(() => import('@/components/selfie/SelfieCapture'), { ssr: false })
 const QRScanner = dynamic(() => import('@/components/scanner/QRScanner'), { ssr: false })
@@ -159,6 +160,10 @@ function splitContact(contact?: string): { visitorEmail?: string; visitorPhone?:
     : { visitorPhone: contact }
 }
 
+function firstNameOf(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || fullName
+}
+
 export default function CheckInOutClient({ locationId, initialLocation }: CheckInOutClientProps) {
   const searchParams = useSearchParams()
   const questToken = searchParams.get('quest')
@@ -183,6 +188,15 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
   const [passkeySavedThisVisit, setPasskeySavedThisVisit] = useState(false)
   const [checkedInViaPasskey, setCheckedInViaPasskey] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
+  // True only across the moment a check-in is actually written this session —
+  // never on a restored session — so the seal motion plays once, for the
+  // write it depicts, and not every time a returning visitor's page reloads.
+  const [justCheckedIn, setJustCheckedIn] = useState(false)
+  const [isReturningVisitor, setIsReturningVisitor] = useState(false)
+  const [lastStayDuration, setLastStayDuration] = useState<string | null>(null)
+  // null while the check is in flight, so the passkey-required and passkey-
+  // checkout branches don't flash an "ask staff" fallback before it resolves.
+  const passkeySupport = usePasskeySupport()
 
   useEffect(() => {
     const id = getOrCreateDeviceId()
@@ -194,6 +208,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
       setContact(session.visitorContact ?? '')
       setGender(session.visitorGender ?? '')
       setPurpose(session.visitPurpose ?? '')
+      setIsReturningVisitor(true)
       checkOpenLog(session.sessionToken)
     } else {
       setStep('identity')
@@ -219,11 +234,14 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         setActiveLogId(event.logId)
         setOpenLog({ _id: event.logId, timestamp: event.timestamp, visitorName: name })
         setActiveCheckIn(locationId, event.logId, checkedInViaPasskey)
+        setJustCheckedIn(true)
         setStep('checkedIn')
         return
       }
 
       if (event.relatedLogId === activeLogId || event.relatedLogId === openLog?._id) {
+        setLastStayDuration(openLog ? formatDuration(openLog.timestamp) : null)
+        setJustCheckedIn(false)
         clearActiveCheckIn(locationId)
         setActiveLogId(null)
         setOpenLog(null)
@@ -326,6 +344,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         await recordQuestProgress(logId)
       }
 
+      setJustCheckedIn(true)
       setStep('checkedIn')
       toast.success(`Checked in to ${location?.name}`)
     } catch {
@@ -351,6 +370,8 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error ?? `Check-out failed (${res.status})`)
       }
+      setLastStayDuration(openLog ? formatDuration(openLog.timestamp) : null)
+      setJustCheckedIn(false)
       clearActiveCheckIn(locationId)
       setStep('checkedOut')
       toast.success(`Checked out of ${location?.name}`)
@@ -435,13 +456,15 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         ? 'Enter your name to check in.'
         : 'Optional details. You can skip these.'
       : step === 'checkin'
-        ? `Ready to check in to ${location?.name ?? 'this location'}.`
+        ? isReturningVisitor
+          ? `Welcome back, ${firstNameOf(name)}. Ready to check in to ${location?.name ?? 'this location'}.`
+          : `Ready to check in to ${location?.name ?? 'this location'}.`
         : step === 'selfie'
           ? 'Optional photo. Take a photo or skip.'
           : step === 'checkedIn'
             ? `Checked in to ${location?.name ?? 'this location'}.`
             : step === 'checkedOut'
-              ? `Checked out of ${location?.name ?? 'this location'}.`
+              ? `Checked out of ${location?.name ?? 'this location'}${lastStayDuration && lastStayDuration !== '0m' ? ` after ${lastStayDuration}` : ''}.`
               : step === 'questScan'
                 ? 'Scan your quest card.'
                 : ''
@@ -545,7 +568,18 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
 
         {/* Location card */}
         {step !== 'loading' && (
-        <Card className="overflow-hidden">
+        <Card className="relative overflow-hidden">
+          {/* The same write-then-seal motion RecordPanel only illustrates on
+              the landing page, played for real over the visitor's own record
+              at the moment it is actually written. Once per genuine write —
+              justCheckedIn stays false on a restored session, so reloading an
+              already-open check-in never replays it. */}
+          {step === 'checkedIn' && justCheckedIn && (
+            <div
+              aria-hidden
+              className="animate-seal-sweep pointer-events-none absolute inset-y-0 -left-1/3 z-10 w-1/3 bg-gradient-to-r from-transparent via-[var(--accent)]/14 to-transparent"
+            />
+          )}
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -554,7 +588,9 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                     {{ building: 'Building', floor: 'Floor', room: 'Room' }[location.locationType] ?? location.locationType}
                   </span>
                   {step === 'checkedIn' && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--status-success)] bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    <span
+                      className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--status-success)] bg-emerald-500/10 px-2 py-0.5 rounded-full ${justCheckedIn ? 'animate-seal-lock' : ''}`}
+                    >
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                       Checked In
                     </span>
@@ -688,6 +724,16 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         {step === 'checkin' && (
           <Card>
             <CardContent className="p-4 space-y-3">
+            <div>
+              <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
+                {isReturningVisitor ? `Welcome back, ${firstNameOf(name)}` : 'Ready to check in'}
+              </h2>
+              <p className="text-sm text-muted mt-0.5">
+                {isReturningVisitor
+                  ? 'We already have your details on file — just confirm below.'
+                  : 'Confirm your details below to record your visit.'}
+              </p>
+            </div>
             <div className="flex items-center gap-2.5 bg-muted/40 rounded-xl px-3.5 py-2.5">
               <div className="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-sm font-semibold text-accent shrink-0">
                 {name[0]?.toUpperCase() ?? '?'}
@@ -722,7 +768,16 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             {passkeyRequired ? (
               <div className="flex items-center gap-2 text-xs text-[var(--status-warning)] bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2">
                 <Lock className="size-3.5 shrink-0" strokeWidth={2.3} aria-hidden />
-                <span>This location requires a passkey (Face ID, Touch ID, or PIN) to check in.</span>
+                {/* A device without a platform authenticator used to leave this
+                    branch entirely silent — the warning above, then nothing:
+                    no button, no explanation, no way to complete the one
+                    action this location allows. The message now names the
+                    actual constraint and the one path still open: a person. */}
+                <span>
+                  {passkeySupport === false
+                    ? "This location requires a passkey, and this device can't create one. Please ask staff to check you in another way."
+                    : 'This location requires a passkey (Face ID, Touch ID, or PIN) to check in.'}
+                </span>
               </div>
             ) : (
               <Button
@@ -734,7 +789,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 Check In
               </Button>
             )}
-            {!passkeyRequired && (
+            {!passkeyRequired && passkeySupport !== false && (
               <div className="flex items-center gap-3 text-xs text-muted">
                 <div className="flex-1 h-px bg-border" />
                 <span>or use biometrics</span>
@@ -746,6 +801,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               locationType={location.locationType}
               action="in"
               sessionToken={sessionToken}
+              hasPasskey={visitorPasskeyRegistered}
               visitorName={name}
               visitorContact={contact || undefined}
               visitorGender={gender || undefined}
@@ -763,6 +819,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 setVisitorPasskeyRegistered(true)
                 setPasskeySavedThisVisit(false)
                 setCheckedInViaPasskey(true)
+                setJustCheckedIn(true)
                 setStep('checkedIn')
                 toast.success(`Checked in`)
               }}
@@ -832,14 +889,26 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 {loading ? 'Checking out…' : checkoutSuggested ? 'Check Out — Suggested' : 'Check Out'}
               </Button>
             )}
-            {/* Passkey checkout — only if guest checked in by passkey */}
-            {checkedInViaPasskey && (
+            {/* Passkey checkout — only if guest checked in by passkey. When this
+                device has no platform authenticator, VisitorPasskey rendered
+                nothing at all here: a visitor who checked in with a passkey on
+                one device, or lost the credential, had no way to check out —
+                the ledger's promise of a matched exit for every entry broken
+                by the one path meant to guarantee it. */}
+            {checkedInViaPasskey && passkeySupport === false && (
+              <div className="flex items-center gap-2 text-xs text-[var(--status-warning)] bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2">
+                <Lock className="size-3.5 shrink-0" strokeWidth={2.3} aria-hidden />
+                <span>This device can&apos;t verify your passkey. Please ask staff to check you out.</span>
+              </div>
+            )}
+            {checkedInViaPasskey && passkeySupport !== false && (
               <VisitorPasskey
                 locationId={locationId}
                 locationType={location.locationType}
                 action="out"
                 sessionToken={sessionToken}
                 relatedLogId={activeLogId ?? undefined}
+                hasPasskey={visitorPasskeyRegistered}
                 visitorName={name}
                 visitorContact={contact || undefined}
                 visitorGender={gender || undefined}
@@ -847,6 +916,8 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 deviceId={deviceId || undefined}
                 authOnly
                 onAuthenticated={() => {
+                  setLastStayDuration(openLog ? formatDuration(openLog.timestamp) : null)
+                  setJustCheckedIn(false)
                   clearActiveCheckIn(locationId)
                   setStep('checkedOut')
                   toast.success(`Checked out`)
@@ -867,6 +938,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                   locationType={location.locationType}
                   action="in"
                   sessionToken={sessionToken}
+                  hasPasskey={visitorPasskeyRegistered}
                   visitorName={name}
                   visitorContact={contact || undefined}
                   visitorGender={gender || undefined}
@@ -943,7 +1015,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
         {step === 'checkedOut' && (
           <Card className="text-center">
             <CardContent className="p-4">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+            <div className="animate-notice w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
               <CircleCheck className="size-8 text-[var(--status-success)]" strokeWidth={2.2} aria-hidden />
             </div>
             <h2 ref={stepHeadingRef} tabIndex={-1} className="font-bold text-foreground text-lg outline-none">
@@ -952,6 +1024,12 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
             <p className="text-sm text-muted mt-1.5">
               You've checked out of <span className="font-medium text-foreground">{location.name}</span>
             </p>
+            {/* Duration is carried from the sealed timestamps that were already
+                on screen a moment ago — a receipt, not a new claim. Omitted
+                under a minute, where "0m" would read as broken rather than true. */}
+            {lastStayDuration && lastStayDuration !== '0m' && (
+              <p className="text-sm text-muted mt-1">You were here for {lastStayDuration}.</p>
+            )}
             <p className="text-sm text-muted mt-1">Thanks for visiting. See you soon.</p>
             </CardContent>
           </Card>

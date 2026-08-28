@@ -423,3 +423,61 @@ building and an unknown id render 200.
 (384px). On a phone the two are 350px and 358px — the 8px came from a flat `p-4` against
 `.shell`'s clamped gutter, and the flow now uses `.shell`, so they match. On desktop a form
 column is deliberately narrower than a reading column; that is not drift and was left alone.
+
+## Delight — the seal, for real (2026-08-28)
+
+**Thesis:** the moment this product does something clever on a visitor's behalf — remembers
+them, writes their record, or closes out their visit — it says so plainly and shows its work,
+instead of staying silent or generic. Three touches, all reusing mechanism the product already
+has, none inventing new visual language:
+
+**The seal, played for real.** `components/landing/RecordPanel.tsx` has always dramatized "a
+record being written, then sealed" (`animate-seal-sweep` then `animate-seal-lock`) as a
+marketing illustration — an *example* record, captioned as such. `CheckInOutClient` never
+played that motion for an actual visitor's actual write. It now does: the location card gets
+the sweep, and the "Checked In" chip locks into place after it passes, at the exact moment a
+check-in is genuinely written — `handleCheckIn` success, a passkey `onAuthenticated`, and a
+live `useLogRealtime` `'in'` event. A new `justCheckedIn` flag gates it and is deliberately
+**not** set on session-restore (`checkOpenLog` finding an already-open log on mount), so
+reloading an already-checked-in page never replays it — the animation depicts a write, and
+only fires for one. Reduced motion collapses both classes to their existing 0.2s fade-only
+fallback (`app/globals.css`'s established policy); nothing new was added there.
+
+**Welcome back.** The `checkin` step had no `<h2>` at all — a real gap, since focus management
+sends `stepHeadingRef` there on every other step. It now reads "Welcome back, {first name}" for
+a visitor whose session was already on file at mount (identity skipped entirely), or "Ready to
+check in" for a first-timer, with a matching one-line sub-copy. Closes the heading gap and
+gives the frictionless-recognition mechanism ("Zero-friction check-ins") a visible moment
+instead of silently skipping the form. `stepAnnouncement`'s sr-only text carries the same
+distinction for screen-reader users.
+
+**A receipt on the way out.** "All done!" previously stated only the location, never the
+duration — despite the flow already computing it live via `formatDuration` for the in-progress
+ticker. `lastStayDuration` is captured from `openLog.timestamp` at each of the three checkout
+paths (button, passkey, realtime) right before the log is cleared, and rendered as "You were
+here for {duration}." Omitted below one minute, where `formatDuration`'s `"0m"` would read as
+broken rather than true. The icon circle gets `animate-notice` (the project's existing "state
+change the reader must not miss" fade), reused rather than invented.
+
+### Verified
+Typecheck: zero errors in `CheckInOut.tsx` (pre-existing generated-route and test-file error
+count unchanged at 32). Detector: clean (`[]`) on the changed file. Tests: 124/124 pass
+(`npm test`, vitest). Live: first-time visitor flow confirmed end-to-end in a real browser
+against seeded data — "Ready to check in" renders correctly, screenshot matches DESIGN.md
+(pill radii, gradient tile, typography scale). The sweep-then-lock sequencing was confirmed by
+pausing the Web Animations API mid-timeline (`t=700ms`): the sweep is mid-crossing and the chip
+has not yet appeared, matching `RecordPanel`'s own sequencing exactly.
+
+**Not exercised live:** an actual `POST /api/logs` write, and therefore the returning-visitor
+and checked-out receipt branches. This dev environment's `.env.local` sets
+`NEXTAUTH_URL=http://localhost:$PORT` — dotenv does not expand `$PORT`, so `lib/csrf.ts`'s
+`assertSameOrigin` compares the browser's real `Origin` against the literal string
+`http://localhost:$PORT` and 403s every state-changing request on this port. Pre-existing,
+unrelated to this pass — flagged rather than fixed, since silently rewriting a teammate's local
+env file as a side effect of a design task is out of scope. A second `next dev` on a scratch
+port to work around it was tried and abandoned: two dev servers sharing one project's `.next`
+directory fed each other's file-watchers into a rebuild loop (continuous "Fast Refresh
+rebuilding," 404s on hot-update chunks, an "Invalid or unexpected token" page). The
+returning-visitor heading and receipt line are otherwise identical in shape to the
+already-verified first-timer heading — same component, same conditional-render pattern — and
+share its confirmation.
