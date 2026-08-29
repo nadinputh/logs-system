@@ -38,7 +38,7 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
   const { id } = await params
   const access = await requireTeamPageAccess('manager', '/admin/quests')
   const quest = await getQuest(id, access.teamId)
-  if (!quest) return <div className="p-8 text-red-500">Quest not found</div>
+  if (!quest) return <div className="p-8 text-[var(--status-danger)]">Quest not found</div>
 
   const appUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
   const qrUrl = `${appUrl}/quest/${quest.qrToken}`
@@ -61,12 +61,18 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
             <CardContent className="p-5 sm:p-6">
               <div className="mx-auto w-full max-w-[17.625rem]">
                 <div className="mb-5 flex items-start gap-3">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl gradient-primary text-white shadow-sm shadow-cyan-200">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-sm">
                     <QrCode className="size-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-base font-semibold text-foreground">Quest Card QR</p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
+                    {/* This card is data-qr-export-card: hardcoded bg-white so
+                        a printed/exported QR sheet stays legible regardless
+                        of app theme. Its own text must be equally fixed —
+                        text-foreground/text-muted flip to near-white in dark
+                        mode and were rendering illegibly on this permanently
+                        light card. */}
+                    <p className="text-base font-semibold text-neutral-900">Quest Card QR</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
                       <Sparkles className="size-3.5 shrink-0" />
                       Give this to participants
                     </p>
@@ -88,40 +94,40 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
           <Card className="overflow-hidden bg-white">
             <CardContent className="p-5 sm:p-6">
               <div className="mb-5 flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl gradient-primary text-white shadow-sm shadow-cyan-200">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-sm">
                   <ListChecks className="size-5" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-base font-semibold text-foreground">Steps ({steps.length})</p>
-                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-600">
+                    <p className="text-base font-semibold text-neutral-900">Steps ({steps.length})</p>
+                    <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
                       {questTypeLabel}
                     </span>
                   </div>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
+                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
                     <MapPin className="size-3.5 shrink-0" />
                     {quest.title}
                   </p>
                   {quest.description && (
-                    <p className="mt-1 text-sm text-muted">{quest.description}</p>
+                    <p className="mt-1 text-sm text-neutral-500">{quest.description}</p>
                   )}
                 </div>
               </div>
 
               <ol className="space-y-2.5">
                 {steps.map((step: any) => (
-                  <li key={step.order} className="flex items-start gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
-                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-700">
+                  <li key={step.order} className="flex items-start gap-3 rounded-xl bg-neutral-100 px-3 py-2.5">
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-bold text-white">
                       {step.order + 1}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground" title={step.locationPath ?? undefined}>
-                        {step.locationName ?? <span className="text-muted italic">Unknown location</span>}
+                      <p className="truncate text-sm font-medium text-neutral-900" title={step.locationPath ?? undefined}>
+                        {step.locationName ?? <span className="text-neutral-500 italic">Unknown location</span>}
                       </p>
-                      <p className="text-xs text-muted capitalize">
+                      <p className="text-xs text-neutral-500 capitalize">
                         {step.locationType}{step.locationPath && step.locationPath !== step.locationName ? ` · ${step.locationPath}` : ''}
                       </p>
-                      {step.challenge && <p className="mt-0.5 text-xs text-muted italic">{step.challenge}</p>}
+                      {step.challenge && <p className="mt-0.5 text-xs text-neutral-500 italic">{step.challenge}</p>}
                     </div>
                   </li>
                 ))}

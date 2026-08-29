@@ -62,7 +62,7 @@ export default function CheckInModeToggle({ locationId, value, onChange }: Props
         onClick={() => update('passkey')}
         disabled={saving}
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
-          mode === 'passkey' ? 'bg-white shadow-sm text-foreground font-medium' : 'text-muted hover:text-foreground'
+          mode === 'passkey' ? 'bg-surface shadow-sm text-foreground font-medium' : 'text-muted hover:text-foreground'
         }`}
         title="Visitors must use Face ID / Touch ID"
       >

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Building2, Layers3, Plus, QrCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -61,7 +62,7 @@ export default function AdminBuildingsPage() {
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Buildings</h1>
+          <h1 className="text-2xl font-bold text-foreground">Buildings</h1>
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-32" />
           ) : (
@@ -72,9 +73,7 @@ export default function AdminBuildingsPage() {
           <DialogTrigger render={
             <Button />
           }>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-4 h-4" aria-hidden />
             Add Building
           </DialogTrigger>
           <DialogContent>
@@ -94,7 +93,7 @@ export default function AdminBuildingsPage() {
                 <Label>Description (optional)</Label>
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Brief description…" />
               </div>
-              <Button type="submit" className="w-full" disabled={saving}>
+              <Button type="submit" variant="mono" className="w-full" disabled={saving}>
                 {saving ? 'Creating…' : 'Create Building'}
               </Button>
             </form>
@@ -138,10 +137,8 @@ export default function AdminBuildingsPage() {
           </Table>
         ) : buildings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <Building2 className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="font-medium text-foreground text-sm">No buildings yet</p>
             <p className="text-xs text-muted mt-1">Click "Add Building" to get started</p>
@@ -159,10 +156,8 @@ export default function AdminBuildingsPage() {
                 <TableRow key={b._id} className="group">
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Building2 className="w-4 h-4 text-foreground" aria-hidden />
                       </div>
                       <div>
                         <p className="font-semibold text-sm text-foreground">{b.name}</p>
@@ -183,18 +178,14 @@ export default function AdminBuildingsPage() {
                         href={`/admin/qr/${b._id}`}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                        </svg>
+                        <QrCode className="w-3.5 h-3.5" aria-hidden />
                         QR
                       </Link>
                       <Link
                         href={`/admin/floors?buildingId=${b._id}`}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-                        </svg>
+                        <Layers3 className="w-3.5 h-3.5" aria-hidden />
                         Floors
                       </Link>
                     </div>

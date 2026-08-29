@@ -66,10 +66,15 @@ export default function QRCodeDisplay({ url, label, sublabel, exportTitle = 'QR 
       <div className="rounded-[2rem] border border-border/60 bg-white p-3 shadow-sm shadow-black/10 print:p-2 print:shadow-none">
         <RoundedQRCode value={url} size={256} className="print:!h-48 print:!w-48" />
       </div>
+      {/* Fixed neutral, not text-foreground/text-muted/bg-muted: this sits
+          inside a data-qr-export-card, hardcoded bg-white so a printed or
+          exported QR sheet stays legible regardless of app theme. Those
+          theme-reactive tokens flip to near-white in dark mode and were
+          rendering illegibly on this permanently light card. */}
       <div className="text-center">
-        <p className="text-base font-semibold text-foreground">{label}</p>
-        {sublabel && <p className="mt-0.5 text-sm text-muted">{sublabel}</p>}
-        <p className="mt-2 max-w-full break-all rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted">{url}</p>
+        <p className="text-base font-semibold text-neutral-900">{label}</p>
+        {sublabel && <p className="mt-0.5 text-sm text-neutral-500">{sublabel}</p>}
+        <p className="mt-2 max-w-full break-all rounded-xl bg-neutral-100 px-3 py-2 text-xs text-neutral-500">{url}</p>
       </div>
       <Button
         ref={downloadButtonRef}

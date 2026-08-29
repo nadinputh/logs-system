@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
+import { AuditLog } from "@/lib/models/AuditLog";
+import { User } from "@/lib/models/User";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { CreateLogSchema } from "@/lib/validations/log";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
@@ -74,17 +76,49 @@ export async function GET(req: NextRequest) {
     auth.teamId,
   );
 
+  // A correction (manual checkout, or a field fix via POST .../correction) is
+  // keyed to whichever Log document it touched — the check-in or its paired
+  // checkout — so both ids need to be in scope, not just the check-in's.
+  const checkoutIds = checkouts.map((c: any) => c._id);
+  const auditEntries = await AuditLog.find({
+    teamId: auth.teamId,
+    logId: { $in: [...checkinIds, ...checkoutIds] },
+  })
+    .sort({ timestamp: 1 })
+    .populate("modifiedByUserId", "name email")
+    .lean();
+
+  const auditByLogId = new Map<string, any[]>();
+  for (const entry of auditEntries) {
+    const key = entry.logId.toString();
+    const list = auditByLogId.get(key) ?? [];
+    list.push({
+      field: entry.field,
+      originalValue: entry.originalValue,
+      newValue: entry.newValue,
+      reasonForChange: entry.reasonForChange,
+      timestamp: entry.timestamp,
+      modifiedByName: (entry.modifiedByUserId as any)?.name ?? (entry.modifiedByUserId as any)?.email ?? null,
+    });
+    auditByLogId.set(key, list);
+  }
+
   const enriched = logs.map((l: any) => {
     const checkout = checkoutMap.get(l._id.toString()) ?? null;
     const label = locationLabels.get(
       `${l.locationType}:${l.locationId.toString()}`,
     );
+    const corrections = [
+      ...(auditByLogId.get(l._id.toString()) ?? []),
+      ...(checkout ? auditByLogId.get(checkout._id.toString()) ?? [] : []),
+    ];
     return {
       ...l,
       checkoutLog: checkout,
       checkoutAt: checkout?.timestamp ?? undefined,
       locationName: label?.name ?? null,
       locationPath: label?.path ?? null,
+      corrections,
     };
   });
 

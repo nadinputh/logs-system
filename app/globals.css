@@ -119,6 +119,22 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
+
+  /* --- Admin monochrome ---------------------------------------------------
+     A deliberate, owner-approved exception to the One Signal Rule: the admin
+     console (buildings/floors/rooms/quests/logs/QR) reads as a colorless
+     instrument, distinct from the visitor-facing Glass Vault. Scoped to
+     .admin-mono (app/admin/layout.tsx's wrapper) rather than forking any
+     shared component — every one of the "154 *-accent call sites" the
+     --accent comment above describes (Button's primary/default variant,
+     text-accent/bg-accent utilities, input focus rings) already resolves
+     through this one variable, so aliasing it to the existing theme-aware
+     neutrals is enough for the whole surface to go monochrome at once, in
+     both light and dark, with no per-component fork. */
+  .admin-mono {
+    --accent: var(--foreground);
+    --accent-foreground: var(--background);
+  }
 }
 
 @layer utilities {

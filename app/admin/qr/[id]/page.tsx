@@ -36,7 +36,7 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
   if (!location) {
     return (
       <div className="p-8">
-        <p className="text-red-500">Location not found</p>
+        <p className="text-[var(--status-danger)]">Location not found</p>
       </div>
     )
   }
@@ -76,12 +76,17 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
           <CardContent className="p-5 sm:p-6">
             <div className="mx-auto w-full max-w-[17.625rem]">
               <div className="mb-5 flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl gradient-primary text-white shadow-sm shadow-cyan-200">
-                  <QrCode className="size-5" />
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-sm">
+                  <QrCode className="size-5" aria-hidden />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-base font-semibold text-foreground">Location QR Code</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
+                  {/* Fixed neutral, not text-foreground/text-muted: this card
+                      is data-qr-export-card (hardcoded bg-white for a legible
+                      printed sheet regardless of app theme), so its own text
+                      must be equally theme-invariant rather than flipping to
+                      near-white in dark mode. */}
+                  <p className="text-base font-semibold text-neutral-900">Location QR Code</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
                     <MapPin className="size-3.5" />
                     Scan to check in / out
                   </p>

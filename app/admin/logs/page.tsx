@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { EyeIcon, LogOut, MapPin, UserRound } from 'lucide-react'
+import { EyeIcon, LogOut, MapPin, RefreshCw, Search, ShieldCheck, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -35,6 +35,27 @@ interface LogEntry {
     timestamp?: string
     autoCheckedOut?: boolean
   } | null
+  corrections?: Correction[]
+}
+
+interface Correction {
+  field: string
+  originalValue: string
+  newValue: string
+  reasonForChange: string
+  timestamp: string
+  modifiedByName: string | null
+}
+
+// AuditLog stores raw schema field names ("manualCheckout", "visitorName");
+// this is the only place that needs to speak both languages.
+const CORRECTION_FIELD_LABELS: Record<string, string> = {
+  manualCheckout: 'Manual checkout',
+  visitorName: 'Name',
+  locationId: 'Location',
+  locationType: 'Location type',
+  timestamp: 'Check-in time',
+  action: 'Action',
 }
 
 function formatValue(value?: string | boolean | null) {
@@ -89,7 +110,7 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
         <div className="p-5 pb-4 sm:p-6 sm:pb-4">
           <div className="mx-auto w-full max-w-[17.625rem]">
             <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl gradient-primary text-white shadow-sm shadow-cyan-200">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-foreground text-background shadow-sm">
                 <UserRound className="size-5" aria-hidden />
               </div>
               <div className="min-w-0">
@@ -135,6 +156,25 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
               <DetailItem label="Geofence matched" value={log.geofenceStatus} />
               <DetailItem label="User agent" value={log.userAgent} />
             </DetailSection>
+
+            {/* The ledger is append-only, so a correction never overwrites
+                this log — but Product Principle 1 requires it be surfaced,
+                never silent. Only rendered when a correction actually
+                exists, so an ordinary, uncorrected log stays exactly as
+                terse as it was before this section existed. */}
+            {!!log.corrections?.length && (
+              <DetailSection title="Correction">
+                {log.corrections.map((c, i) => (
+                  <div key={i} className="min-w-0 rounded-xl bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/25 px-3 py-2">
+                    <p className="text-xs font-medium text-[var(--status-warning)]">
+                      {CORRECTION_FIELD_LABELS[c.field] ?? c.field} · {formatDate(c.timestamp)}
+                    </p>
+                    <p className="mt-1 break-words text-sm leading-5 text-foreground">{c.reasonForChange}</p>
+                    <p className="mt-1 text-xs text-muted">By {c.modifiedByName ?? 'Unknown user'}</p>
+                  </div>
+                ))}
+              </DetailSection>
+            )}
           </div>
         </DialogBody>
       </DialogContent>
@@ -205,18 +245,12 @@ export default function AdminLogsPage() {
     }
   }
 
-  const locationTypeColors: Record<string, string> = {
-    room: 'text-sky-500 bg-sky-500/10',
-    floor: 'text-cyan-500 bg-cyan-500/10',
-    building: 'text-amber-500 bg-amber-500/10',
-  }
-
   return (
     <div className="p-6 sm:p-8 space-y-6">
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">All Logs</h1>
+          <h1 className="text-2xl font-bold text-foreground">All Logs</h1>
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
@@ -230,18 +264,14 @@ export default function AdminLogsPage() {
           variant="outline"
           size="sm"
         >
-          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
           {loading ? 'Loading…' : 'Refresh'}
         </Button>
       </div>
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
         <Input
           placeholder="Filter by visitor name…"
           value={search}
@@ -293,9 +323,7 @@ export default function AdminLogsPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-muted/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </svg>
+              <ShieldCheck className="w-6 h-6 text-muted/50" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="font-medium text-foreground text-sm">{search ? 'No matching logs' : 'No logs yet'}</p>
             <p className="text-xs text-muted mt-1">{search ? 'Try a different search term' : 'Logs will appear here as visitors check in'}</p>
@@ -313,14 +341,12 @@ export default function AdminLogsPage() {
             </TableHeader>
             <TableBody>
               {filtered.map(l => {
-                const typeKey = l.locationType?.toLowerCase() ?? ''
-                const typeBadge = locationTypeColors[typeKey] ?? 'text-muted bg-muted'
                 const isIn = !l.checkoutAt
                 return (
                   <TableRow key={l._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent/20 to-cyan-600/20 flex items-center justify-center shrink-0 text-xs font-semibold text-accent">
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-xs font-semibold text-foreground">
                           {(l.visitorName ?? '?')[0].toUpperCase()}
                         </div>
                         <div className="min-w-0">
@@ -338,14 +364,20 @@ export default function AdminLogsPage() {
                       )}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${typeBadge}`}>
+                      <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-foreground bg-muted">
                         {l.locationType}
                       </span>
                     </TableCell>
                     <TableCell>
                       {isIn ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                        // Outlined, not solid-filled: a solid bg-foreground
+                        // pill is the exact same recipe as a primary action
+                        // button (see Button's default variant), which made
+                        // "In" and "Add Building" indistinguishable at a
+                        // glance. The dot stays solid — it alone carries the
+                        // "something is live" read a status pill needs.
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground border border-foreground/40 px-2.5 py-0.5 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-pulse" />
                           In
                         </span>
                       ) : (

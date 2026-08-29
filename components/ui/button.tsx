@@ -21,7 +21,7 @@ export interface ButtonProps
    * re-checked. `default` deliberately still maps to HeroUI's flat primary so
    * the console's ~26 primary buttons are unaffected by this.
    */
-  variant?: "default" | "brand" | "outline" | "secondary" | "ghost" | "destructive" | "link"
+  variant?: "default" | "brand" | "mono" | "outline" | "secondary" | "ghost" | "destructive" | "link"
   /**
    * `touch` is the 48px control the visitor-facing flow uses. HeroUI's base
    * `.button` is `h-10 md:h-9`, so an unsized button is 40px on a phone and
@@ -102,6 +102,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         heroUIVariant = "tertiary"
         break
       case "brand":
+      case "mono":
       case "default":
       default:
         heroUIVariant = "primary"
@@ -114,6 +115,18 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       variant === "brand"
         ? "gradient-cta shadow-signal press h-12 rounded-full px-7 text-sm font-semibold text-[var(--accent-foreground)]"
         : ""
+
+    // `mono`: a primary action that must render monochrome even where the
+    // admin-mono scope can't reach it. HeroUI's Dialog portals its content to
+    // document.body, outside any React-tree-scoped wrapper, so the div-scoped
+    // `.admin-mono { --accent: var(--foreground) }` override in globals.css
+    // never touched a dialog's own submit button — CSS custom properties only
+    // inherit through the DOM. Reading --foreground/--background directly
+    // instead of --accent sidesteps the whole scoping problem: those tokens
+    // were never overridden in the first place, so this renders correctly
+    // monochrome no matter where in the DOM it ends up.
+    const monoClasses =
+      variant === "mono" ? "bg-foreground text-background hover:bg-foreground/90" : ""
 
     const sizeMap: Record<NonNullable<ButtonProps["size"]>, "sm" | "md" | "lg"> = {
       xs: "sm",
@@ -142,7 +155,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={isLoading ? true : undefined}
         isIconOnly={isIconOnly}
         onPress={handlePress}
-        className={[brandClasses, touchClasses, className].filter(Boolean).join(" ")}
+        className={[brandClasses, monoClasses, touchClasses, className].filter(Boolean).join(" ")}
         {...(props as any)}
       >
         {children}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -92,7 +93,7 @@ export default function AdminQuestsPage() {
     <div className="p-6 sm:p-8 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Quest Cards</h1>
+          <h1 className="text-2xl font-bold text-foreground">Quest Cards</h1>
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
@@ -103,9 +104,7 @@ export default function AdminQuestsPage() {
           <DialogTrigger render={
             <Button />
           }>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-4 h-4" aria-hidden />
             Issue Quest
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -178,7 +177,7 @@ export default function AdminQuestsPage() {
                 <Button type="button" variant="outline" size="sm" onClick={addStep}>+ Add Step</Button>
               </div>
 
-              <Button type="submit" className="w-full" disabled={saving}>{saving ? 'Creating…' : `Create ${count} Card(s)`}</Button>
+              <Button type="submit" variant="mono" className="w-full" disabled={saving}>{saving ? 'Creating…' : `Create ${count} Card(s)`}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -215,10 +214,8 @@ export default function AdminQuestsPage() {
           </Table>
         ) : quests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <Sparkles className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="font-medium text-foreground text-sm">No quests yet</p>
             <p className="text-xs text-muted mt-1">Issue a quest to get started</p>
@@ -237,16 +234,14 @@ export default function AdminQuestsPage() {
                 <TableRow key={q._id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                        </svg>
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Sparkles className="w-4 h-4 text-foreground" aria-hidden />
                       </div>
                       <p className="font-semibold text-sm text-foreground">{q.title}</p>
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-sky-500 bg-sky-500/10">
+                    <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-foreground bg-muted">
                       {q.type === 'location_chain' ? 'Location Chain' : 'Custom'}
                     </span>
                   </TableCell>
@@ -255,8 +250,12 @@ export default function AdminQuestsPage() {
                   </TableCell>
                   <TableCell>
                     {q.isActive ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                      // Outlined, not solid-filled — see the matching note on
+                      // the Logs page's "In" pill. A quest's active/inactive
+                      // state is a stable configuration flag, not a live
+                      // signal, so unlike "In" this dot doesn't pulse.
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground border border-foreground/40 px-2.5 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 bg-foreground rounded-full" />
                         Active
                       </span>
                     ) : (

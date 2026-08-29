@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft, DoorOpen, Layers3, Plus, QrCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -75,10 +76,21 @@ function FloorsContent() {
 
   return (
     <div className="p-6 sm:p-8 space-y-6">
+      {/* Breadcrumb back to the building this view is filtered to */}
+      {buildingFilter && (
+        <Link
+          href="/admin/buildings"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" aria-hidden />
+          Back to buildings
+        </Link>
+      )}
+
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Floors</h1>
+          <h1 className="text-2xl font-bold text-foreground">Floors</h1>
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
@@ -92,9 +104,7 @@ function FloorsContent() {
           <DialogTrigger render={
             <Button />
           }>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-4 h-4" aria-hidden />
             Add Floor
           </DialogTrigger>
           <DialogContent>
@@ -128,7 +138,7 @@ function FloorsContent() {
                 <Label>Description (optional)</Label>
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Brief description…" />
               </div>
-              <Button type="submit" className="w-full" disabled={saving}>{saving ? 'Creating…' : 'Create Floor'}</Button>
+              <Button type="submit" variant="mono" className="w-full" disabled={saving}>{saving ? 'Creating…' : 'Create Floor'}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -170,10 +180,8 @@ function FloorsContent() {
           </Table>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 12h16M4 18h7" />
-              </svg>
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <Layers3 className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="font-medium text-foreground text-sm">No floors yet</p>
             <p className="text-xs text-muted mt-1">Add a floor to begin organising rooms</p>
@@ -191,7 +199,7 @@ function FloorsContent() {
                 <TableRow key={f._id} className="group">
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0 text-xs font-bold text-cyan-500">
+                      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 text-xs font-bold text-foreground">
                         {f.number}
                       </div>
                       <div>
@@ -212,18 +220,14 @@ function FloorsContent() {
                         href={`/admin/qr/${f._id}`}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                        </svg>
+                        <QrCode className="w-3.5 h-3.5" aria-hidden />
                         QR
                       </Link>
                       <Link
                         href={`/admin/rooms?floorId=${f._id}`}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                        </svg>
+                        <DoorOpen className="w-3.5 h-3.5" aria-hidden />
                         Rooms
                       </Link>
                     </div>
