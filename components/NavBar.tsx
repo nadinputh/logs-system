@@ -66,6 +66,13 @@ const passkeyItem: NavigationItem = {
   Icon: Fingerprint,
 }
 
+const securityItem: NavigationItem = {
+  href: '/settings/security',
+  label: 'Security',
+  description: 'Active sessions on every device',
+  Icon: ShieldCheck,
+}
+
 const teamAccessItem: NavigationItem = {
   href: '/settings/team',
   label: 'Team & Access',
@@ -333,7 +340,7 @@ export default function NavBar() {
   const userName = (session?.user?.name ?? userEmail) || 'Account'
   const initials = userEmail ? userEmail[0].toUpperCase() : 'LM'
   const isLocationActive = locationItems.some((item) => isRouteActive(pathname, item.href))
-  const accountMenuItems = [passkeyItem, teamAccessItem]
+  const accountMenuItems = [passkeyItem, securityItem, teamAccessItem]
   const [teams, setTeams] = useState<TeamSummary[]>([])
   const [switchingTeamId, setSwitchingTeamId] = useState<string | null>(null)
   const [openDropdown, setOpenDropdown] = useState<DropdownKey | null>(null)
@@ -595,6 +602,12 @@ export default function NavBar() {
                       <DropdownNavigationItem
                         item={passkeyItem}
                         active={isRouteActive(pathname, passkeyItem.href)}
+                        onSelect={navigateTo}
+                        className="sm:hidden"
+                      />
+                      <DropdownNavigationItem
+                        item={securityItem}
+                        active={isRouteActive(pathname, securityItem.href)}
                         onSelect={navigateTo}
                         className="sm:hidden"
                       />

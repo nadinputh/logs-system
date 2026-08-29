@@ -1,11 +1,10 @@
 import { Types } from "mongoose";
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Team } from "@/lib/models/Team";
 import { TeamMember, TeamRole } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
+import { requireSession } from "@/lib/server/requireSession";
 import { hasMinimumTeamRole } from "@/lib/teamPermissions";
 
 /** Codes the /settings/team page renders as inline explanations. */
@@ -34,10 +33,11 @@ export async function requireTeamPageAccess(
   minRole: TeamRole,
   nextPath: string,
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    redirect("/login");
-  }
+  // Handles both cases distinctly: no cookie → bare /login; cookie present but
+  // session invalidated (sv bump, revoked JTI, expired maxAge) → /login with
+  // ?reason=session_expired. Was previously always a bare redirect, so a user
+  // whose session got nuked on another device landed on an empty form.
+  const session = await requireSession(nextPath);
 
   const userId = (session.user as any).id;
   if (!Types.ObjectId.isValid(userId)) {

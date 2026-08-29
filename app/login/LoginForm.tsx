@@ -11,10 +11,44 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+type RedirectReason = 'session_expired' | 'session_revoked' | 'signed_out_others'
+
+function isRedirectReason(v: string | null): v is RedirectReason {
+  return (
+    v === 'session_expired' || v === 'session_revoked' || v === 'signed_out_others'
+  )
+}
+
+const REASON_COPY: Record<
+  RedirectReason,
+  { tone: 'success' | 'warning'; title: string; body: string }
+> = {
+  signed_out_others: {
+    tone: 'success',
+    title: 'Every other session on this account has ended.',
+    body:
+      'Sign in again to continue on this device. Every browser and phone with an old cookie will land here on its next request — usually within a minute of you pressing the button.',
+  },
+  session_expired: {
+    tone: 'warning',
+    title: "You've been signed out on this device.",
+    body:
+      'Your session ended — either the 14-day sign-in expired or someone on this account ended every session. Sign back in to continue.',
+  },
+  session_revoked: {
+    tone: 'warning',
+    title: 'This session was ended.',
+    body:
+      "The session on this device was revoked from Settings → Security. If that wasn't you, sign in and end every session immediately.",
+  },
+}
+
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextUrl = searchParams.get('next') || '/dashboard'
+  const reasonParam = searchParams.get('reason')
+  const reason: RedirectReason | null = isRedirectReason(reasonParam) ? reasonParam : null
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -186,6 +220,11 @@ export function LoginForm() {
         {/* The live region is always mounted, so a notice appearing inside it is
             announced. A region created at the same time as its content is not. */}
         <div aria-live="polite" className="empty:hidden space-y-3">
+          {reason && !error && (
+            <FormNotice tone={REASON_COPY[reason].tone} title={REASON_COPY[reason].title}>
+              {REASON_COPY[reason].body}
+            </FormNotice>
+          )}
           {error && <FormNotice tone="danger" title={error} />}
           {needsPassword && (
             <FormNotice tone="warning" title="This account has no password yet">

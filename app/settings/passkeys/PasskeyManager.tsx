@@ -80,7 +80,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
         <p className="text-sm text-muted">
           {passkeys.length === 0 ? 'No passkeys registered yet.' : `${passkeys.length} passkey${passkeys.length !== 1 ? 's' : ''} registered`}
         </p>
-        <Button onClick={handleRegister} disabled={loading} size="sm">
+        <Button onPress={handleRegister} isDisabled={loading} size="sm">
           <Plus className="w-4 h-4 mr-2" />
           {loading ? 'Waiting…' : 'Add Passkey'}
         </Button>
@@ -111,7 +111,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
               size="icon"
               className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
               aria-label="Remove passkey"
-              onClick={() => setPasskeyToDelete(pk)}
+              onPress={() => setPasskeyToDelete(pk)}
             >
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -134,15 +134,15 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPasskeyToDelete(null)}
-              disabled={Boolean(deletingPasskeyId)}
+              onPress={() => setPasskeyToDelete(null)}
+              isDisabled={Boolean(deletingPasskeyId)}
             >
               Cancel
             </Button>
             <Button
               variant="destructive"
               size="sm"
-              onClick={handleDelete}
+              onPress={handleDelete}
               isLoading={deletingPasskeyId === passkeyToDelete?._id}
             >
               Remove Passkey
@@ -195,7 +195,7 @@ export function PasskeyLoginButton({ email }: { email: string }) {
   }, [email])
 
   return (
-    <Button variant="outline" onClick={handleLogin} disabled={loading} className="w-full">
+    <Button variant="outline" onPress={handleLogin} isDisabled={loading} className="w-full">
       <KeyRound className="w-4 h-4 mr-2" />
       {loading ? 'Authenticating…' : 'Sign in with Passkey'}
     </Button>

@@ -1,9 +1,11 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { connectDB } from "./db";
 import { User } from "./models/User";
 import { PreAuthToken } from "./models/PreAuthToken";
+import { SessionInventory } from "./models/SessionInventory";
 import { rateLimit } from "./rateLimit";
 
 /**
@@ -50,6 +52,74 @@ function readSessionVersionCached(userId: string): number | null {
 }
 
 /**
+ * Per-JTI existence cache. The jwt callback needs a cheap way to answer
+ * "does this token still have an inventory row?" without querying Mongo per
+ * request. Same 60s window as sessionsVersion — a revoked session dies within
+ * a minute across every process.
+ *
+ * `null` cached means "we asked, it wasn't there". `true` means "confirmed
+ * present at cache time". Cold-cache reads accept the token once while the
+ * refresh completes; that's the same trade sessionsVersion makes.
+ */
+type JtiEntry = { present: boolean; expiresAt: number };
+declare global {
+  var _jtiCache: Map<string, JtiEntry> | undefined;
+  var _jtiCachePending: Map<string, Promise<boolean>> | undefined;
+  var _jtiLastTouch: Map<string, number> | undefined;
+}
+const JTI_CACHE_TTL_MS = 60_000;
+const JTI_TOUCH_MIN_INTERVAL_MS = 5 * 60_000;
+
+function isJtiPresentCached(sid: string): boolean | null {
+  const now = Date.now();
+  const cache = (global._jtiCache ??= new Map());
+  const hit = cache.get(sid);
+  if (hit && hit.expiresAt > now) return hit.present;
+  const pending = (global._jtiCachePending ??= new Map());
+  if (!pending.has(sid)) {
+    pending.set(
+      sid,
+      SessionInventory.exists({ jti: sid })
+        .then((doc) => {
+          const present = !!doc;
+          cache.set(sid, { present, expiresAt: Date.now() + JTI_CACHE_TTL_MS });
+          return present;
+        })
+        .catch(() => false)
+        .finally(() => pending.delete(sid)),
+    );
+  }
+  return hit?.present ?? null;
+}
+
+function invalidateJtiCache(sid: string) {
+  (global._jtiCache ??= new Map()).delete(sid);
+}
+
+/**
+ * Best-effort lastSeenAt touch. Every jwt decode fires this, so it MUST be
+ * throttled — otherwise every request writes to Mongo. 5-minute intervals per
+ * JTI in-process keep the inventory close to real without hammering.
+ */
+function touchSessionSeen(sid: string) {
+  const now = Date.now();
+  const touch = (global._jtiLastTouch ??= new Map());
+  const last = touch.get(sid) ?? 0;
+  if (now - last < JTI_TOUCH_MIN_INTERVAL_MS) return;
+  touch.set(sid, now);
+  SessionInventory.updateOne({ jti: sid }, { $set: { lastSeenAt: new Date() } }).catch(
+    () => {
+      // Non-fatal; the row will just show a stale lastSeenAt on the next fetch.
+    },
+  );
+}
+
+export function forgetJtiCache(sid: string) {
+  invalidateJtiCache(sid);
+  (global._jtiLastTouch ??= new Map()).delete(sid);
+}
+
+/**
  * Bumps User.sessionsVersion and invalidates the read-through cache so the
  * next JWT decode picks up the new value. Called by password reset and by the
  * "sign out other devices" control.
@@ -66,6 +136,20 @@ export async function bumpSessionsVersion(userId: string): Promise<number> {
     value,
     expiresAt: Date.now() + SV_CACHE_TTL_MS,
   });
+  // Every caller of this ("sign out everywhere", password reset) means
+  // "invalidate every session on this user". Delete the inventory rows too so
+  // the "Active sessions" surface reflects the truth immediately, not just
+  // once each stale token happens to hit a request.
+  try {
+    await SessionInventory.deleteMany({ userId });
+  } catch {
+    // Non-fatal; the sessionsVersion gate still evicts every token on its
+    // next decode. Rows will look stale until a subsequent write clears them.
+  }
+  // Clear per-JTI caches for this user's rows; we don't have the list of JTIs
+  // here, so drop the whole map — cheaper than tracking. Cold caches accept
+  // once per JTI and then re-check.
+  global._jtiCache = new Map();
   return value;
 }
 
@@ -120,6 +204,10 @@ export const authOptions: NextAuthOptions = {
         await connectDB();
         const user = await User.findOne({ email });
         if (!user) return null;
+        // Snapshot request context now while we still have it — the jwt
+        // callback runs later without a request object.
+        const uaHeader = (req?.headers?.["user-agent"] as string | undefined) ?? "unknown";
+        const originIp = ip;
         /**
          * An admin-provisioned account exists but has no password yet. Returning
          * null here collapsed it into the generic credential failure, so the user
@@ -136,6 +224,31 @@ export const authOptions: NextAuthOptions = {
         if (!valid) return null;
         // Block sign-in until the email has been verified (set-password / verify link).
         if (!user.emailVerified) throw new Error("EMAIL_NOT_VERIFIED");
+
+        // Mint a session id now so both the JWT and the inventory row share
+        // the same opaque handle. We store it on `sid` because NextAuth's own
+        // encoder calls `jose.SignJWT.setJti()` which overwrites any payload
+        // `jti` we set — the token then reaches the client stamped with a
+        // NextAuth-generated jti that has no matching inventory row, and the
+        // revocation gate treats every request as revoked. `sid` sits outside
+        // the JWT standard-claims namespace and survives round-trip. The
+        // inventory column keeps the `jti` name because that's what it stores.
+        const sid = randomUUID();
+        try {
+          await SessionInventory.create({
+            userId: user._id,
+            jti: sid,
+            ipAddress: originIp,
+            userAgent: uaHeader.slice(0, 512),
+            provider: "credentials",
+          });
+        } catch {
+          // Non-fatal: sign-in still succeeds if inventory write fails; the
+          // per-JTI revocation gate treats missing rows as "unknown, allow
+          // once per cache window" so a bad DB moment does not sign the user
+          // out.
+        }
+
         return {
           id: user._id.toString(),
           name: user.name,
@@ -143,6 +256,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           activeTeamId: user.activeTeamId?.toString() ?? null,
           sessionsVersion: user.sessionsVersion ?? 0,
+          sid,
         } as any;
       },
     }),
@@ -153,7 +267,7 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         preAuthToken: { type: "text" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.preAuthToken) return null;
         await connectDB();
         const tokenDoc = await PreAuthToken.findOneAndDelete({
@@ -163,6 +277,28 @@ export const authOptions: NextAuthOptions = {
         if (!tokenDoc) return null;
         const user = await User.findById(tokenDoc.userId);
         if (!user) return null;
+
+        const fwd = req?.headers?.["x-forwarded-for"] ?? "";
+        const ip =
+          (Array.isArray(fwd) ? fwd[0] : String(fwd)).split(",")[0]?.trim() ||
+          (req?.headers?.["x-real-ip"] as string | undefined) ||
+          "unknown";
+        const uaHeader =
+          (req?.headers?.["user-agent"] as string | undefined) ?? "unknown";
+
+        const sid = randomUUID();
+        try {
+          await SessionInventory.create({
+            userId: user._id,
+            jti: sid,
+            ipAddress: ip,
+            userAgent: uaHeader.slice(0, 512),
+            provider: "passkey",
+          });
+        } catch {
+          // See credentials branch above.
+        }
+
         return {
           id: user._id.toString(),
           name: user.name,
@@ -170,6 +306,7 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           activeTeamId: user.activeTeamId?.toString() ?? null,
           sessionsVersion: user.sessionsVersion ?? 0,
+          sid,
         } as any;
       },
     }),
@@ -181,6 +318,7 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.activeTeamId = (user as any).activeTeamId ?? null;
         (token as any).sv = (user as any).sessionsVersion ?? 0;
+        (token as any).sid = (user as any).sid ?? null;
       }
 
       if (trigger === "update") {
@@ -191,23 +329,39 @@ export const authOptions: NextAuthOptions = {
       /**
        * Revocation check.
        *
-       * On every jwt decode after the initial sign-in, compare the token's
-       * sessions-version stamp against the current one on the User document.
-       * If the DB value is higher, the token is stale (a password was reset,
-       * or "sign out other devices" was pressed) and we return an empty token
-       * — NextAuth treats that as "no session" and redirects to /login.
+       * Two gates run every decode after the initial sign-in:
        *
-       * A DB read per request is too much: cache the fresh value in-process
-       * for a short window. That is the same trade-off every JWT-strategy
-       * revocation design has to make. 60 seconds is short enough that a lost
-       * phone loses access quickly and long enough that a normal browse
-       * session is close to free.
+       * 1. `sessionsVersion` — the nuclear switch. Bumped by password reset
+       *    and by "Sign out everywhere". Every JWT stamps the value it was
+       *    minted at; a token whose stamp is stale is dropped.
+       *
+       * 2. `jti` — the per-session switch. Each sign-in creates a row in
+       *    SessionInventory; a per-row Revoke deletes that row, and the jwt
+       *    callback drops any token whose jti is no longer present.
+       *
+       * Both are read through short-TTL in-process caches so the steady-state
+       * cost stays near zero. 60 seconds is short enough that a lost phone
+       * loses access quickly and long enough that a normal browse session
+       * looks free. That is the same trade every JWT-strategy revocation
+       * design has to make.
        */
       if (!user && token?.id) {
-        const cached = readSessionVersionCached(token.id as string);
-        if (cached !== null && cached !== (token as any).sv) {
+        const cachedSv = readSessionVersionCached(token.id as string);
+        if (cachedSv !== null && cachedSv !== (token as any).sv) {
           // Stale — force sign-out on next server touch.
           return {} as any;
+        }
+
+        const sid = (token as any).sid as string | undefined;
+        if (sid) {
+          const present = isJtiPresentCached(sid);
+          if (present === false) {
+            // Row was revoked — end this session.
+            return {} as any;
+          }
+          // Best-effort throttled touch so the inventory shows a real
+          // lastSeenAt without writing on every request.
+          touchSessionSeen(sid);
         }
       }
 
@@ -219,8 +373,25 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role as string;
         (session.user as any).activeTeamId =
           (token as any).activeTeamId ?? null;
+        (session.user as any).sid = (token as any).sid ?? null;
       }
       return session;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      // Explicit sign-out (this browser only) should retire its inventory row
+      // — otherwise the "This device" row lingers until the JWT's own maxAge.
+      const sid = (token as any)?.sid as string | undefined;
+      if (!sid) return;
+      try {
+        await SessionInventory.deleteOne({ jti: sid });
+      } catch {
+        // Non-fatal; a stale row is harmless — its handle won't be re-used
+        // and the periodic revocation gate will treat it as absent on next
+        // read.
+      }
+      forgetJtiCache(sid);
     },
   },
   pages: { signIn: "/login" },

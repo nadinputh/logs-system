@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions, bumpSessionsVersion } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
+import { rateLimit, clientKey } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -14,12 +15,23 @@ export const runtime = "nodejs";
  * dance is the only way JWT-strategy sessions can revoke.
  *
  * Downstream: readSessionVersionCached picks up the new value within
- * SV_CACHE_TTL_MS (60s), and every other device's next request returns to
- * /login.
+ * SV_CACHE_TTL_MS (60s), bumpSessionsVersion also drops the inventory rows,
+ * and every other device's next request returns to /login.
+ *
+ * Rate-limited because the underlying `$inc` writes to the User document; an
+ * unbounded loop here would add write pressure the caller has no legitimate
+ * reason to generate.
  */
 export async function POST(req: Request) {
   const csrf = assertSameOrigin(req);
   if (csrf) return csrf;
+  const verdict = rateLimit(clientKey(req, "signout-others"), 5, 60_000);
+  if (!verdict.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again in a moment." },
+      { status: 429, headers: { "Retry-After": String(verdict.retryAfter) } },
+    );
+  }
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
