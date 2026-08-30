@@ -302,3 +302,46 @@ truncate correctly in the list, found it by searching its description text alone
 printed card render the description in both light and dark mode, and confirmed the reissue
 trigger is now legible in both themes after the fix. Full route smoke-test (dashboard,
 buildings, quests, logs, landing) and a clean `.next` boot both came back clean.
+
+## Critique remediation round 2 (2026-08-30)
+
+A fresh dual-agent critique re-scored the whole admin console after the rounds above: **21/40
+→ 29/40** ("Acceptable" → "Good"), P0 count 2 → 0. Full report:
+`.impeccable/critique/2026-08-30T16-01-49Z__app-admin-buildings-page-tsx.md`.
+
+The monochrome mechanism, NavBar's retained brand signal, and dialog-button monochrome were
+all re-confirmed live and unregressed. What remained was narrower than before — one flow that
+hadn't kept pace with fixes already applied to its siblings, plus one shared-component gap:
+
+- **Quest creation had regressed to swallowing the server's real error.** `app/admin/quests/page.tsx`
+  never adopted `readApiError` the way Building/Floor/Room did. Now imports and uses it,
+  matching its siblings exactly.
+- **The quest detail page's Steps card was hardcoded `bg-white` with no `data-qr-export-card`
+  marker**, unlike the genuine QR export card beside it — forcing `ReissueQuestCardButton` to
+  hardcode neutral colors just to stay legible on it. Converted to theme tokens
+  (`bg-foreground`/`text-background`/`bg-muted`/`text-muted-foreground`/`border-foreground/40`);
+  the Reissue trigger reverted to a normal themed `Button variant="outline"` now that its host
+  card is theme-reactive again.
+- **NavBar's role-aware items flashed on every hard navigation** — Locations/Quests/All Logs
+  briefly vanished while `/api/teams` resolved client-side, collapsing to the two-item member
+  view. Added a `teamsLoaded` state; while unresolved, the admin nav slot renders skeleton
+  placeholders instead of silently downgrading.
+- **`CheckInModeToggle` had no programmatic pressed-state** — Click/Passkey conveyed active
+  mode only via a hover-only `title`. Added `aria-pressed` per button and `role="group"` /
+  `aria-label="Check-in mode"` on the wrapper.
+- **Detector-confirmed `cramped-padding` on the shared `table-root` container**, present on
+  every list page (buildings/floors/rooms/logs/quests) — content sat flush against the
+  container edge. Fixed once, in the shared adapter (`components/ui/table.tsx`, `p-2`), not
+  per-page.
+
+**Not fixed, by design:** `overused-font` (Inter at 100%) is DESIGN.md's own Two-Weight Rule,
+not a defect. `em-dash-overuse` (101) on `/admin/quests` is almost certainly the detector
+miscounting the "—" placeholder glyph across ~100 seeded rows' empty Card column, not real
+prose — a detector-rule note, not a UI fix. Delete for Buildings/Floors/Rooms remains an
+intentionally deferred owner decision, re-confirmed rather than re-litigated.
+
+Verified: detector clean (`[]`) across the full admin surface before and after, typecheck
+identical to the 12-error baseline (0 new, confirmed on a clean `.next`), 124/124 tests, and
+every fix confirmed live — the Steps card and Reissue button via a fresh dark-mode screenshot,
+`aria-pressed`/`role="group"` via direct DOM inspection, and the table inset via
+`getComputedStyle` (8px on all sides).

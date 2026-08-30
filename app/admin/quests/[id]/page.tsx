@@ -105,36 +105,36 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden bg-white">
+          <Card className="overflow-hidden">
             <CardContent className="p-5 sm:p-6">
                 <div className="mb-5 flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-sm">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-foreground text-background shadow-sm">
                       <ListChecks className="size-5" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-base font-semibold text-neutral-900">Steps ({steps.length})</p>
-                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                        <p className="text-base font-semibold text-foreground">Steps ({steps.length})</p>
+                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                           {cardLabel}
                         </span>
                         {quest.completedAt ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-foreground/40 px-2 py-0.5 text-xs font-semibold text-foreground">
                             <CheckCircle2 className="size-3" />
                             Completed
                           </span>
                         ) : (
-                          <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                             {quest.completedCount}/{steps.length} done
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
+                      <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
                         <MapPin className="size-3.5 shrink-0" />
                         {quest.title}
                       </p>
                       {quest.description && (
-                        <p className="mt-1 text-sm text-neutral-500">{quest.description}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{quest.description}</p>
                       )}
                     </div>
                   </div>
@@ -145,23 +145,23 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                   {steps.map((step: any) => (
                     <li
                       key={step.order}
-                      className={`flex items-start gap-3 rounded-xl px-3 py-2.5 ${step.done ? 'bg-emerald-50' : 'bg-neutral-100'}`}
+                      className={`flex items-start gap-3 rounded-xl px-3 py-2.5 ${step.done ? 'bg-muted' : ''}`}
                     >
                       <span
-                        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
-                          step.done ? 'bg-emerald-500' : 'bg-neutral-900'
+                        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                          step.done ? 'bg-foreground text-background' : 'border border-foreground/40 text-foreground'
                         }`}
                       >
                         {step.done ? <CheckCircle2 className="size-4" /> : step.order + 1}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-neutral-900" title={step.locationPath ?? undefined}>
-                          {step.locationName ?? <span className="text-neutral-500 italic">Unknown location</span>}
+                        <p className="truncate text-sm font-medium text-foreground" title={step.locationPath ?? undefined}>
+                          {step.locationName ?? <span className="text-muted-foreground italic">Unknown location</span>}
                         </p>
-                        <p className="text-xs text-neutral-500 capitalize">
+                        <p className="text-xs text-muted-foreground capitalize">
                           {step.locationType}{step.locationPath && step.locationPath !== step.locationName ? ` · ${step.locationPath}` : ''}
                         </p>
-                        {step.challenge && <p className="mt-0.5 text-xs text-neutral-500 italic">{step.challenge}</p>}
+                        {step.challenge && <p className="mt-0.5 text-xs text-muted-foreground italic">{step.challenge}</p>}
                       </div>
                     </li>
                   ))}

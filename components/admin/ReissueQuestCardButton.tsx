@@ -31,17 +31,8 @@ export default function ReissueQuestCardButton({ questId }: { questId: string })
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {/* This trigger sits inside the Steps card, which — like the QR export
-          card beside it — is hardcoded bg-white so it stays legible on a
-          printed sheet regardless of app theme. A themed Button variant
-          (outline/ghost/mono all resolve --foreground) turns white-on-white
-          in dark mode; fixed neutral classes match the rest of this card's
-          own text instead. */}
       <DialogTrigger render={
-        <button
-          type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-        />
+        <Button type="button" variant="outline" size="sm" className="shrink-0" />
       }>
         <RefreshCw className="size-3.5" aria-hidden />
         Card lost? Reissue

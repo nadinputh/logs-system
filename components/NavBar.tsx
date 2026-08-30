@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/sonner'
 import type { LucideIcon } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LogoTile } from '@/components/Logo'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Building2,
   ChevronDown,
@@ -342,6 +343,7 @@ export default function NavBar() {
   const isLocationActive = locationItems.some((item) => isRouteActive(pathname, item.href))
   const accountMenuItems = [passkeyItem, securityItem, teamAccessItem]
   const [teams, setTeams] = useState<TeamSummary[]>([])
+  const [teamsLoaded, setTeamsLoaded] = useState(false)
   const [switchingTeamId, setSwitchingTeamId] = useState<string | null>(null)
   const [openDropdown, setOpenDropdown] = useState<DropdownKey | null>(null)
   const locationDropdown = useHoverDropdown('locations', openDropdown, setOpenDropdown)
@@ -372,6 +374,8 @@ export default function NavBar() {
         }
       } catch {
         if (!cancelled) setTeams([])
+      } finally {
+        if (!cancelled) setTeamsLoaded(true)
       }
     }
 
@@ -450,7 +454,14 @@ export default function NavBar() {
               )
             })}
 
-            {isAdmin && (
+            {!teamsLoaded ? (
+              <>
+                <span aria-hidden="true" className="mx-1 h-5 w-px self-center rounded-full bg-border/70" />
+                <Skeleton className="h-9 w-28 rounded-full" />
+                <Skeleton className="h-9 w-24 rounded-full" />
+                <Skeleton className="h-9 w-24 rounded-full" />
+              </>
+            ) : isAdmin && (
               <>
                 <span aria-hidden="true" className="mx-1 h-5 w-px self-center rounded-full bg-border/70" />
                 <div {...locationDropdown.triggerProps}>

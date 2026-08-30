@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from '@/components/ui/sonner'
-import { fetchJsonOnce } from '@/lib/clientFetch'
+import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
 
 interface QuestCard {
   _id: string
@@ -99,14 +99,15 @@ export default function AdminQuestsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, description, type, steps, count: parseInt(count) }),
       })
-      if (!res.ok) throw new Error()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(readApiError(data, 'Failed to create quest'))
       toast.success(`${count} quest card(s) created`)
       setOpen(false)
       setTitle(''); setDescription(''); setCount('1')
       setSteps([{ order: 0, locationId: '', locationType: 'room' }])
       fetch('/api/quests').then(r => r.json()).then(setQuests)
-    } catch {
-      toast.error('Failed to create quest')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create quest')
     } finally {
       setSaving(false)
     }

@@ -42,13 +42,18 @@ export default function CheckInModeToggle({ locationId, locationType, value, onC
   }
 
   return (
-    <div className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5 text-xs">
+    <div
+      role="group"
+      aria-label="Check-in mode"
+      className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5 text-xs"
+    >
       <Button
         type="button"
         variant="ghost"
         size="sm"
         onClick={() => update('click')}
         disabled={saving}
+        aria-pressed={mode === 'click'}
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
           mode === 'click' ? 'bg-surface shadow-sm text-foreground font-medium' : 'text-muted hover:text-foreground'
         }`}
@@ -63,6 +68,7 @@ export default function CheckInModeToggle({ locationId, locationType, value, onC
         size="sm"
         onClick={() => update('passkey')}
         disabled={saving}
+        aria-pressed={mode === 'passkey'}
         className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
           mode === 'passkey' ? 'bg-surface shadow-sm text-foreground font-medium' : 'text-muted hover:text-foreground'
         }`}

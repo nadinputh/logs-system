@@ -18,7 +18,7 @@ function Table({
   ...props
 }: TableProps) {
   return (
-    <HeroTable.Root className={className} variant={variant}>
+    <HeroTable.Root className={["p-2", className].filter(Boolean).join(" ")} variant={variant}>
       <HeroTable.ScrollContainer className={scrollContainerClassName}>
         <HeroTable.Content
           aria-label={ariaLabel}
