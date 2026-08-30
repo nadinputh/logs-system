@@ -154,3 +154,151 @@ Verified: typecheck clean, detector clean (`[]`), 124/124 tests, and every fix c
 the dialog-button and NavBar fixes via `getComputedStyle` before and after, the dark-mode text
 fix via a fresh test record on a clean page load, and the correction UI via a real manual
 checkout performed through the actual dialog.
+
+## Audit remediation — locations management workflow (2026-08-30)
+
+A technical audit of Buildings/Floors/Rooms (admin CRUD + `/api/buildings`, `/api/floors`,
+`/api/rooms`, `/api/locations/[id]`) found four fixable gaps and one item that isn't a bug —
+it's an owner decision.
+
+**Create-flow failures discarded the server's actual error.** All three "Create X" forms did
+`if (!res.ok) throw new Error()` then a fixed `toast.error('Failed to create X')`, so a
+referential-integrity rejection (e.g. "Floor does not belong to the supplied building") was
+indistinguishable from a network hiccup. `app/admin/logs/page.tsx` had already solved this with
+a local `readApiError` helper; it's now promoted to `lib/clientFetch.ts` (exported alongside
+`fetchJsonOnce`) and used by all four call sites, `logs/page.tsx` included.
+
+**`PATCH /api/locations/[id]` no longer guesses the model on every call.** It used to probe
+Room → Floor → Building sequentially even though every call site already knows which one it
+means — the sibling `GET` handler on the same file already accepted a `?type=` hint for this
+exact reason. `CheckInModeToggle` now takes a `locationType` prop and all three admin pages
+pass it, so the common case is a single query instead of up to three. Untyped requests still
+fall back to the old probe, so nothing calling the endpoint pre-fix breaks. Mode changes
+(`checkInMode`) stay gated behind `locations.mode.update` (admin); the new metadata path is
+gated behind `locations.write` (manager) — the same permission `POST` already uses — since
+renaming a room isn't a security-relevant action the way flipping passkey-required is.
+
+**Buildings/Floors/Rooms had no search**, unlike Logs. Each list page now has a client-side
+filter input (name + address for Buildings, name + number for Floors, name + number + type for
+Rooms) matching the existing pattern in `app/admin/logs/page.tsx`, with its own "No matching
+X" empty state distinct from the "no X yet" one.
+
+**Metadata editing didn't exist at all** — renaming a building meant no path but deleting and
+recreating it, and there was no delete either. Added an Edit action (pencil icon, next to QR)
+opening a dialog prefilled from the row: Building gets name/address/description, Floor gets
+number/name/description, Room gets name/number/type/capacity/description. New
+`UpdateBuildingSchema`/`UpdateFloorSchema`/`UpdateRoomSchema` in `lib/validations/location.ts`
+back a type-specific branch in the `PATCH` handler. Deliberately excluded: reassigning a
+Floor's `buildingId` or a Room's `floorId`/`buildingId` — that's a structural move, not a
+metadata edit, and carries the same cascade questions as delete below.
+
+**Delete is deliberately not implemented — this is an owner decision, not an oversight.**
+Buildings/Floors/Rooms are referenced by historical `Log` documents (`buildingId`/`floorId`/
+`roomId`), by `Quest` step definitions, and by printed/posted QR codes that encode a location
+ID directly. Deleting a Building with existing Floors (or a Floor with existing Rooms) needs an
+explicit answer to at least three questions before it's safe to build: does delete cascade to
+children, get blocked while children exist, or orphan them; do historical Logs referencing the
+deleted location keep displaying (with what label) or break; and does a QR code printed for a
+now-deleted location fail closed (safe) or silently 404 for a visitor mid-scan. None of those
+are UI decisions — they're data-retention and audit-integrity decisions the owner needs to make
+once, not something to guess at while fixing an unrelated create-flow bug. Flagging here rather
+than building a delete button that quietly picks an answer nobody signed off on.
+
+Verified: typecheck clean, detector clean, full test suite green, and the new search/edit flows
+confirmed live for all three location types (create → search → edit → verify the change
+persisted and re-renders).
+checkout performed through the actual dialog.
+
+## Audit remediation — the lost quest card scenario (2026-08-30)
+
+`/impeccable audit` was asked to specifically probe what happens when a guest loses their
+quest card. Reading the domain model surfaced a real gap: `QuestCard` documents are fully
+anonymous — bulk-issuing "N cards" for one quest creates N documents with identical
+`title`/`type`/`steps` and zero identity or linkage between siblings. Once a card is out of
+staff's hands, there was no way to tell it apart from its siblings, no visibility into how
+far it had progressed, no search on the list, and no way to invalidate a lost card or hand
+the guest a working replacement — `isActive` existed on the schema but nothing ever set it.
+
+**Every card now carries a stable label.** `QuestCard` gained `cardNumber`/`batchSize`
+(set once at issuance, defaulted to `1`/`1` for pre-migration documents so nothing broke).
+"Card N of M" is printed directly on the physical card's own QR export — the one place a
+guest can reference it after the card leaves the admin's screen — and shown in both the
+list and detail page. `POST /api/quests` sets these per-card at bulk-creation time.
+
+**Progress is now visible everywhere**, not just derivable by a visitor scanning their own
+card. `GET /api/quests` joins `QuestProgress` (mirroring the `AuditLog` join `GET
+/api/logs` already does) so the list shows "3/5 done" per row — letting staff match a
+guest's verbal claim ("I'd done 3 stops") against the one row in a 50-card batch that
+actually shows that state. The detail page (`app/admin/quests/[id]/page.tsx`) previously
+never fetched `QuestProgress` at all; it now marks each step done/pending and shows a
+completed badge, matching the visitor-facing page's own step styling.
+
+**Search** was added to the quest list (`app/admin/quests/page.tsx`), matching the pattern
+already used on Buildings/Floors/Rooms/Logs — filters by title or card number, since card
+number is the only thing that makes one bulk-issued row findable among its siblings.
+
+**A lost card can now be safely and losslessly reissued.** `POST
+/api/quests/[token]/reissue` (new `ReissueQuestCardButton` client component, confirm dialog
+with Cancel per the app's established destructive-action pattern) rotates the card's
+`qrToken` in place. Because `QuestProgress` is keyed to the card's `_id`, not its token,
+this invalidates the lost physical QR *instantly* — anyone who finds the dropped card can no
+longer use or claim it — while every completed step survives untouched, and the new QR
+resumes exactly where the old one left off. The route lives under the existing `[token]`
+dynamic segment (not a new `[id]` folder) because Next.js requires sibling dynamic routes
+to share a slug name; the value passed is always the card's database `_id` from the
+authenticated admin UI, never the public `qrToken` the sibling routes use.
+
+Verified: typecheck identical to the pre-existing 12-error baseline (checked with a clean
+`.next` both before and after — a stale `.next` from a `dev` run produces false-positive
+diffs, confirmed and ruled out), detector clean, 124/124 tests, and the full lost-card flow
+driven live: issued a batch of 3 identically-titled cards, confirmed they render as "1 of
+3"/"2 of 3"/"3 of 3", searched by card number to isolate one, reissued it, confirmed the old
+QR now 404s to "Quest not found" while the new QR resolves with progress intact (`0/1`,
+unchanged) at a freshly rotated token.
+
+## Layout — surface each card's description / use case (2026-08-30)
+
+`/impeccable layout` was asked to find where a quest card's own `description` field (already
+collected at issuance, already optional) was going unseen, and to fix the structural gap
+rather than add a new field. Two isolated assessments, then one shared fix.
+
+**List (`app/admin/quests/page.tsx`).** The description was invisible everywhere except the
+detail page — with several bulk-issued cards sharing an identical title ("Scavenger Hunt" ×
+3), the list gave staff no way to tell what any one of them was actually *for* without
+opening it. Proximity, not a new column: added it as a second line under the title, exactly
+mirroring Buildings'/Floors' own `{x.description && <p className="text-xs text-muted mt-0.5
+truncate max-w-[200px]">}` treatment — same truncation width, same conditional render, same
+two-line skeleton shape. A new "Card" and "Progress" column already exist from the prior
+lost-card work; a use-case column would have competed with them for width at exactly the
+breakpoints where they already collapse. Search was extended to match description text too
+("onboarding" now finds "New Hire Orientation" even though the word isn't in its title), and
+the placeholder updated to say so.
+
+**The printed card (`components/admin/QRCodeDisplay.tsx`, used by both the quest card and
+the location QR export).** The physical artifact handed to a participant carried only a
+title and a type/card-number line — no explanation of what it's for, which matters most
+exactly when it's out of staff's hands and the guest is looking at it cold. Added an optional
+third `description` prop, styled `text-xs text-neutral-500 italic` — the same treatment this
+file's sibling page already gives a quest step's `challenge` text, so a new visual tier
+wasn't invented, an existing one was reused. Wired into `app/admin/quests/[id]/page.tsx`'s
+printed card only (the location QR page's `sublabel` already carries floor/building path
+context and wasn't touched); the prop is optional so nothing changes for a card issued
+without one.
+
+**A layout-verification pass found a real, unrelated bug.** Screenshotting the detail page in
+dark mode for the first time (prior verification had used the accessibility tree, not a
+visual render) showed the "Card lost? Reissue" trigger from the prior lost-card-scenario work
+had gone invisible — `variant="outline"` resolves `--foreground`, which is near-white in dark
+mode, sitting on the same permanently-`bg-white` Steps card the rest of this page already
+treats as theme-invariant. Fixed by dropping the themed `Button` variant for that one trigger
+and using fixed `neutral-300`/`neutral-700`/`bg-white` classes instead, matching every other
+piece of text already on that card. `mono`/`ghost`/`outline` all still resolve `--foreground`
+and would have failed the identical way — this needed a genuinely fixed palette, not a
+different variant.
+
+Verified: detector clean, typecheck identical to the 12-error baseline (0 new), 124/124
+tests, and confirmed live in both themes — created a real card with a description, saw it
+truncate correctly in the list, found it by searching its description text alone, saw the
+printed card render the description in both light and dark mode, and confirmed the reissue
+trigger is now legible in both themes after the fix. Full route smoke-test (dashboard,
+buildings, quests, logs, landing) and a clean `.next` boot both came back clean.

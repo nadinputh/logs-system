@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
-import { fetchJsonOnce } from '@/lib/clientFetch'
+import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
 import { useLogRealtime } from '@/lib/useLogRealtime'
 
 interface LogEntry {
@@ -66,12 +66,6 @@ function formatValue(value?: string | boolean | null) {
 
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : '—'
-}
-
-function readApiError(payload: any, fallback: string) {
-  if (typeof payload?.message === 'string') return payload.message
-  if (typeof payload?.error === 'string') return payload.error
-  return fallback
 }
 
 function durationLabel(entry: LogEntry) {

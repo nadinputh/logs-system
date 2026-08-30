@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Sparkles } from 'lucide-react'
+import { Plus, Search, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +14,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce } from '@/lib/clientFetch'
 
-interface QuestCard { _id: string; title: string; type: string; qrToken: string; isActive: boolean; steps: any[] }
+interface QuestCard {
+  _id: string
+  title: string
+  description?: string
+  type: string
+  qrToken: string
+  isActive: boolean
+  steps: any[]
+  cardNumber: number
+  batchSize: number
+  completedCount: number
+  completedAt?: string | null
+}
 interface Building { _id: string; name: string }
 interface Floor { _id: string; name: string; number: number }
 interface Room { _id: string; name: string; number: string; floorId: string }
@@ -33,6 +45,7 @@ export default function AdminQuestsPage() {
   const [steps, setSteps] = useState<Step[]>([{ order: 0, locationId: '', locationType: 'room' }])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -47,6 +60,16 @@ export default function AdminQuestsPage() {
       setRooms(nextRooms)
     }).finally(() => setLoading(false))
   }, [])
+
+  const filtered = quests.filter(q => {
+    const query = search.trim().toLowerCase()
+    if (!query) return true
+    return (
+      q.title.toLowerCase().includes(query) ||
+      String(q.cardNumber).includes(query) ||
+      (q.description ?? '').toLowerCase().includes(query)
+    )
+  })
 
   function addStep() {
     setSteps(s => [...s, { order: s.length, locationId: '', locationType: 'room' }])
@@ -183,13 +206,27 @@ export default function AdminQuestsPage() {
         </Dialog>
       </div>
 
+      {/* Search — the only way to find one card among an identically-titled
+          bulk batch without opening each row, e.g. when a guest reports
+          losing theirs. */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
+        <Input
+          placeholder="Search by title, use case, or card number…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       <div>
         {loading ? (
           <Table aria-label="Quest cards loading table">
             <TableHeader>
               <TableHead isRowHeader>Title</TableHead>
+              <TableHead>Card</TableHead>
               <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead className="hidden md:table-cell">Steps</TableHead>
+              <TableHead className="hidden md:table-cell">Progress</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableHeader>
@@ -199,9 +236,13 @@ export default function AdminQuestsPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Skeleton className="h-8 w-8 rounded-lg" />
-                      <Skeleton className="h-4 w-40" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-3 w-44" />
+                      </div>
                     </div>
                   </TableCell>
+                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-28 rounded-full" /></TableCell>
                   <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
@@ -220,25 +261,40 @@ export default function AdminQuestsPage() {
             <p className="font-medium text-foreground text-sm">No quests yet</p>
             <p className="text-xs text-muted mt-1">Issue a quest to get started</p>
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <Search className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
+            </div>
+            <p className="font-medium text-foreground text-sm">No matching quest cards</p>
+            <p className="text-xs text-muted mt-1">Try a different search term</p>
+          </div>
         ) : (
           <Table aria-label="Quest cards table">
             <TableHeader>
               <TableHead isRowHeader>Title</TableHead>
+              <TableHead>Card</TableHead>
               <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead className="hidden md:table-cell">Steps</TableHead>
+              <TableHead className="hidden md:table-cell">Progress</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableHeader>
             <TableBody>
-              {quests.map(q => (
+              {filtered.map(q => (
                 <TableRow key={q._id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                         <Sparkles className="w-4 h-4 text-foreground" aria-hidden />
                       </div>
-                      <p className="font-semibold text-sm text-foreground">{q.title}</p>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">{q.title}</p>
+                        {q.description && <p className="text-xs text-muted mt-0.5 truncate max-w-[200px]">{q.description}</p>}
+                      </div>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm text-muted">{q.batchSize > 1 ? `${q.cardNumber} of ${q.batchSize}` : '—'}</span>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-foreground bg-muted">
@@ -246,7 +302,9 @@ export default function AdminQuestsPage() {
                     </span>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    <span className="text-sm text-muted">{q.steps.length} step{q.steps.length !== 1 ? 's' : ''}</span>
+                    <span className="text-sm text-muted">
+                      {q.completedAt ? 'Completed' : `${q.completedCount}/${q.steps.length} done`}
+                    </span>
                   </TableCell>
                   <TableCell>
                     {q.isActive ? (

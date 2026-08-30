@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, DoorOpen, Layers3, Plus, QrCode } from 'lucide-react'
+import { ArrowLeft, DoorOpen, Layers3, Pencil, Plus, QrCode, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,10 +14,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
 import { toast } from '@/components/ui/sonner'
-import { fetchJsonOnce } from '@/lib/clientFetch'
+import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
 
 interface Building { _id: string; name: string }
-interface Floor { _id: string; name: string; number: number; buildingId: string | Building; checkInMode?: 'click' | 'passkey' }
+interface Floor { _id: string; name: string; number: number; buildingId: string | Building; description?: string; checkInMode?: 'click' | 'passkey' }
 
 function FloorsContent() {
   const searchParams = useSearchParams()
@@ -32,6 +32,17 @@ function FloorsContent() {
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const [editing, setEditing] = useState<Floor | null>(null)
+  const [editNumber, setEditNumber] = useState('')
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+
+  function reloadFloors() {
+    return fetch('/api/floors').then(r => r.json()).then(setFloors)
+  }
 
   useEffect(() => {
     Promise.all([
@@ -43,10 +54,16 @@ function FloorsContent() {
     }).finally(() => setLoading(false))
   }, [])
 
-  const filtered = buildingFilter ? floors.filter(f => {
+  const scoped = buildingFilter ? floors.filter(f => {
     const bId = typeof f.buildingId === 'object' ? (f.buildingId as Building)._id : f.buildingId
     return bId === buildingFilter
   }) : floors
+
+  const filtered = scoped.filter(f => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return f.name.toLowerCase().includes(q) || String(f.number).includes(q)
+  })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -57,15 +74,45 @@ function FloorsContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ buildingId, number: parseInt(number), name, description }),
       })
-      if (!res.ok) throw new Error()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(readApiError(data, 'Failed to create floor'))
       toast.success('Floor created')
       setOpen(false)
       setName(''); setNumber(''); setDescription('')
-      fetch('/api/floors').then(r => r.json()).then(setFloors)
-    } catch {
-      toast.error('Failed to create floor')
+      reloadFloors()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create floor')
     } finally {
       setSaving(false)
+    }
+  }
+
+  function openEdit(f: Floor) {
+    setEditing(f)
+    setEditNumber(String(f.number))
+    setEditName(f.name)
+    setEditDescription(f.description ?? '')
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editing) return
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/locations/${editing._id}?type=floor`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: parseInt(editNumber), name: editName, description: editDescription }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(readApiError(data, 'Failed to update floor'))
+      toast.success('Floor updated')
+      setEditing(null)
+      reloadFloors()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update floor')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -95,7 +142,7 @@ function FloorsContent() {
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
             <p className="text-sm text-muted mt-0.5">
-              {filtered.length} floor{filtered.length !== 1 ? 's' : ''}
+              {scoped.length} floor{scoped.length !== 1 ? 's' : ''}
               {buildingFilter && buildings.length > 0 && ` in ${getBuildingName(buildingFilter)}`}
             </p>
           )}
@@ -144,6 +191,41 @@ function FloorsContent() {
         </Dialog>
       </div>
 
+      {/* Edit dialog */}
+      <Dialog open={!!editing} onOpenChange={(o: boolean) => { if (!o) setEditing(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Floor</DialogTitle></DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Floor Number</Label>
+                <Input type="number" value={editNumber} onChange={e => setEditNumber(e.target.value)} required placeholder="1" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Name</Label>
+                <Input value={editName} onChange={e => setEditName(e.target.value)} required placeholder="Ground Floor" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description (optional)</Label>
+              <Textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} placeholder="Brief description…" />
+            </div>
+            <Button type="submit" variant="mono" className="w-full" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save Changes'}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
+        <Input
+          placeholder="Search by name or number…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       {/* Table */}
       <div>
         {loading ? (
@@ -178,13 +260,21 @@ function FloorsContent() {
               ))}
             </TableBody>
           </Table>
-        ) : filtered.length === 0 ? (
+        ) : scoped.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <Layers3 className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="font-medium text-foreground text-sm">No floors yet</p>
             <p className="text-xs text-muted mt-1">Add a floor to begin organising rooms</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <Search className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
+            </div>
+            <p className="font-medium text-foreground text-sm">No matching floors</p>
+            <p className="text-xs text-muted mt-1">Try a different search term</p>
           </div>
         ) : (
           <Table aria-label="Floors table">
@@ -212,10 +302,19 @@ function FloorsContent() {
                     <p className="text-sm text-muted">{getBuildingName(f.buildingId)}</p>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    <CheckInModeToggle locationId={f._id} value={f.checkInMode ?? 'click'} />
+                    <CheckInModeToggle locationId={f._id} locationType="floor" value={f.checkInMode ?? 'click'} />
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(f)}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted bg-muted/40 hover:bg-muted/60 hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+                        title="Edit floor"
+                      >
+                        <Pencil className="w-3.5 h-3.5" aria-hidden />
+                        Edit
+                      </button>
                       <Link
                         href={`/admin/qr/${f._id}`}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"

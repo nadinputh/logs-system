@@ -1,11 +1,13 @@
 import QRCodeDisplay from '@/components/admin/QRCodeDisplay'
+import ReissueQuestCardButton from '@/components/admin/ReissueQuestCardButton'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { connectDB } from '@/lib/db'
 import { QuestCard } from '@/lib/models/QuestCard'
+import { QuestProgress } from '@/lib/models/QuestProgress'
 import { resolveLocationLabels } from '@/lib/locationLabels'
 import { requireTeamPageAccess } from '@/lib/server/requireTeamPageAccess'
-import { ArrowLeft, ListChecks, MapPin, QrCode, Sparkles } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ListChecks, MapPin, QrCode, Sparkles } from 'lucide-react'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,6 +17,7 @@ async function getQuest(id: string, teamId: string) {
     await connectDB()
     const quest = await QuestCard.findOne({ _id: id, teamId }).lean<any>()
     if (!quest) return null
+    const progress = await QuestProgress.findOne({ teamId, questCardId: id }).lean<any>()
     const labels = await resolveLocationLabels(
       (quest.steps ?? []).map((s: any) => ({
         locationType: s.locationType,
@@ -22,15 +25,22 @@ async function getQuest(id: string, teamId: string) {
       })),
       teamId,
     )
+    const completedOrders = new Set((progress?.completedSteps ?? []).map((s: any) => s.stepOrder))
     const stepsWithLabels = (quest.steps ?? []).map((s: any) => {
       const label = labels.get(`${s.locationType}:${s.locationId.toString()}`)
       return {
         ...s,
         locationName: label?.name ?? null,
         locationPath: label?.path ?? null,
+        done: completedOrders.has(s.order),
       }
     })
-    return JSON.parse(JSON.stringify({ ...quest, steps: stepsWithLabels }))
+    return JSON.parse(JSON.stringify({
+      ...quest,
+      steps: stepsWithLabels,
+      completedCount: completedOrders.size,
+      completedAt: progress?.completedAt ?? null,
+    }))
   } catch { return null }
 }
 
@@ -43,6 +53,9 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
   const appUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
   const qrUrl = `${appUrl}/quest/${quest.qrToken}`
   const questTypeLabel = quest.type === 'location_chain' ? 'Location Chain' : 'Custom'
+  const cardLabel = quest.batchSize > 1
+    ? `${questTypeLabel} · Card ${quest.cardNumber} of ${quest.batchSize}`
+    : questTypeLabel
   const steps = [...(quest.steps ?? [])].sort((a: any, b: any) => a.order - b.order)
 
   return (
@@ -82,7 +95,8 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                   <QRCodeDisplay
                     url={qrUrl}
                     label={quest.title}
-                    sublabel={questTypeLabel}
+                    sublabel={cardLabel}
+                    description={quest.description}
                     exportTitle="Quest Card QR"
                     exportDescription="Give this to participants"
                   />
@@ -93,47 +107,67 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
 
           <Card className="overflow-hidden bg-white">
             <CardContent className="p-5 sm:p-6">
-              <div className="mb-5 flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-sm">
-                  <ListChecks className="size-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-base font-semibold text-neutral-900">Steps ({steps.length})</p>
-                    <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
-                      {questTypeLabel}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
-                    <MapPin className="size-3.5 shrink-0" />
-                    {quest.title}
-                  </p>
-                  {quest.description && (
-                    <p className="mt-1 text-sm text-neutral-500">{quest.description}</p>
-                  )}
-                </div>
-              </div>
-
-              <ol className="space-y-2.5">
-                {steps.map((step: any) => (
-                  <li key={step.order} className="flex items-start gap-3 rounded-xl bg-neutral-100 px-3 py-2.5">
-                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-bold text-white">
-                      {step.order + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-neutral-900" title={step.locationPath ?? undefined}>
-                        {step.locationName ?? <span className="text-neutral-500 italic">Unknown location</span>}
-                      </p>
-                      <p className="text-xs text-neutral-500 capitalize">
-                        {step.locationType}{step.locationPath && step.locationPath !== step.locationName ? ` · ${step.locationPath}` : ''}
-                      </p>
-                      {step.challenge && <p className="mt-0.5 text-xs text-neutral-500 italic">{step.challenge}</p>}
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-sm">
+                      <ListChecks className="size-5" />
                     </div>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-neutral-900">Steps ({steps.length})</p>
+                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                          {cardLabel}
+                        </span>
+                        {quest.completedAt ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                            <CheckCircle2 className="size-3" />
+                            Completed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                            {quest.completedCount}/{steps.length} done
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
+                        <MapPin className="size-3.5 shrink-0" />
+                        {quest.title}
+                      </p>
+                      {quest.description && (
+                        <p className="mt-1 text-sm text-neutral-500">{quest.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <ReissueQuestCardButton questId={quest._id} />
+                </div>
+
+                <ol className="space-y-2.5">
+                  {steps.map((step: any) => (
+                    <li
+                      key={step.order}
+                      className={`flex items-start gap-3 rounded-xl px-3 py-2.5 ${step.done ? 'bg-emerald-50' : 'bg-neutral-100'}`}
+                    >
+                      <span
+                        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
+                          step.done ? 'bg-emerald-500' : 'bg-neutral-900'
+                        }`}
+                      >
+                        {step.done ? <CheckCircle2 className="size-4" /> : step.order + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-neutral-900" title={step.locationPath ?? undefined}>
+                          {step.locationName ?? <span className="text-neutral-500 italic">Unknown location</span>}
+                        </p>
+                        <p className="text-xs text-neutral-500 capitalize">
+                          {step.locationType}{step.locationPath && step.locationPath !== step.locationName ? ` · ${step.locationPath}` : ''}
+                        </p>
+                        {step.challenge && <p className="mt-0.5 text-xs text-neutral-500 italic">{step.challenge}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
         </div>
       </div>
     </div>

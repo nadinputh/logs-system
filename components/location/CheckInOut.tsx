@@ -341,7 +341,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
       setActiveCheckIn(locationId, logId, false)
 
       if (questToken) {
-        await recordQuestProgress(logId)
+        await recordQuestProgress()
       }
 
       setJustCheckedIn(true)
@@ -382,47 +382,60 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
     }
   }
 
-  async function recordQuestProgress(token: string) {
-    if (!questToken || !location) return
+  async function postQuestProgress(token: string) {
+    const res = await fetch(`/api/quests/${token}/progress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        locationId,
+        locationType: location!.locationType,
+        sessionToken,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok, data }
+  }
+
+  // Distinguishes "already recorded" from a fresh completion so a re-scan or
+  // a returning visitor isn't told something new just happened when it
+  // didn't — both quest-progress call sites below share this outcome.
+  async function submitQuestProgress(token: string) {
     try {
-      const res = await fetch(`/api/quests/${questToken}/progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          locationId,
-          locationType: location.locationType,
-          sessionToken,
-        }),
-      })
-      if (res.ok) setQuestRecorded(true)
-    } catch {}
+      const { ok, data } = await postQuestProgress(token)
+      if (!ok) {
+        toast.error(data.error ?? 'Quest progress failed')
+        return
+      }
+      setQuestRecorded(true)
+      if (data.message === 'Already recorded') {
+        toast.success('Already recorded for this stop')
+      } else {
+        toast.success(data.completed ? 'Quest completed!' : 'Quest step recorded!')
+      }
+    } catch {
+      toast.error('Quest progress failed — check your connection')
+    }
+  }
+
+  async function recordQuestProgress() {
+    if (!questToken || !location) return
+    await submitQuestProgress(questToken)
   }
 
   async function handleQuestCardScanned(url: string) {
+    let token: string | undefined
     try {
-      const parsedUrl = new URL(url)
-      const token = parsedUrl.pathname.split('/quest/')[1]
-      if (!token || !location) return
-
-      const res = await fetch(`/api/quests/${token}/progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          locationId,
-          locationType: location.locationType,
-          sessionToken,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setQuestRecorded(true)
-        toast.success(data.completed ? 'Quest completed!' : 'Quest step recorded!')
-      } else {
-        toast.error(data.error ?? 'Quest progress failed')
-      }
+      token = new URL(url).pathname.split('/quest/')[1]
     } catch {
-      toast.error('Invalid quest card')
+      token = undefined
     }
+    if (!token || !location) {
+      toast.error('That doesn’t look like a quest card')
+      setStep('checkedIn')
+      return
+    }
+
+    await submitQuestProgress(token)
     setStep('checkedIn')
   }
 
@@ -815,7 +828,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 setActiveLogId(logId)
                 if (nextOpenLog) setOpenLog(nextOpenLog)
                 setActiveCheckIn(locationId, logId, true)
-                if (questToken) recordQuestProgress(logId)
+                if (questToken) recordQuestProgress()
                 setVisitorPasskeyRegistered(true)
                 setPasskeySavedThisVisit(false)
                 setCheckedInViaPasskey(true)

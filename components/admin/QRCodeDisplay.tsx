@@ -9,6 +9,7 @@ interface QRCodeDisplayProps {
   url: string
   label: string
   sublabel?: string
+  description?: string
   exportTitle?: string
   exportDescription?: string
 }
@@ -31,7 +32,7 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   link.remove()
 }
 
-export default function QRCodeDisplay({ url, label, sublabel, exportTitle = 'QR Code', exportDescription = 'Scan to open' }: QRCodeDisplayProps) {
+export default function QRCodeDisplay({ url, label, sublabel, description, exportTitle = 'QR Code', exportDescription = 'Scan to open' }: QRCodeDisplayProps) {
   const downloadButtonRef = useRef<HTMLButtonElement>(null)
 
   const handleDownloadPNG = async () => {
@@ -74,6 +75,7 @@ export default function QRCodeDisplay({ url, label, sublabel, exportTitle = 'QR 
       <div className="text-center">
         <p className="text-base font-semibold text-neutral-900">{label}</p>
         {sublabel && <p className="mt-0.5 text-sm text-neutral-500">{sublabel}</p>}
+        {description && <p className="mt-1.5 text-xs text-neutral-500 italic">{description}</p>}
         <p className="mt-2 max-w-full break-all rounded-xl bg-neutral-100 px-3 py-2 text-xs text-neutral-500">{url}</p>
       </div>
       <Button

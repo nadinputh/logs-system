@@ -17,6 +17,8 @@ export interface IQuestCard extends Document {
   steps: IQuestStep[];
   qrToken: string;
   isActive: boolean;
+  cardNumber: number;
+  batchSize: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,6 +48,12 @@ const QuestCardSchema = new Schema<IQuestCard>(
     steps: { type: [QuestStepSchema], default: [] },
     qrToken: { type: String, required: true, unique: true, index: true },
     isActive: { type: Boolean, default: true },
+    // 1-indexed position within its issuance batch, and the batch's total
+    // size — the only thing that lets staff tell "card 7 of 50" apart from
+    // its identical siblings once it's out of their hands. Defaults keep
+    // pre-migration documents valid as a batch of one.
+    cardNumber: { type: Number, default: 1 },
+    batchSize: { type: Number, default: 1 },
   },
   { timestamps: true },
 );

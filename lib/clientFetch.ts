@@ -38,3 +38,17 @@ export function fetchJsonOnce<T>(
   inFlightJsonRequests.set(key, request);
   return request;
 }
+
+/**
+ * Pulls a human-readable message out of a failed API response body. Every
+ * route in this app that rejects a request already writes one — the create
+ * flows for buildings/floors/rooms were the one place still discarding it in
+ * favor of a fixed "Failed to create X", which meant a referential-integrity
+ * rejection ("Floor does not belong to the supplied building") and a network
+ * hiccup were indistinguishable to the admin who hit either one.
+ */
+export function readApiError(payload: any, fallback: string): string {
+  if (typeof payload?.message === "string") return payload.message;
+  if (typeof payload?.error === "string") return payload.error;
+  return fallback;
+}

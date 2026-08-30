@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { QuestCard } from "@/lib/models/QuestCard";
+import { QuestProgress } from "@/lib/models/QuestProgress";
 import { requireTeamAccess } from "@/lib/middleware/auth";
 import { CreateQuestCardSchema } from "@/lib/validations/quest";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
@@ -17,7 +18,30 @@ export async function GET(req: NextRequest) {
   const quests = await QuestCard.find({ teamId: auth.teamId })
     .sort({ createdAt: -1 })
     .lean();
-  return NextResponse.json(quests);
+
+  // A lost card is only identifiable by how far it got — staff comparing a
+  // visitor's "I did 3 stops" against the list needs this without opening
+  // every identically-titled row from the same batch.
+  const progress = await QuestProgress.find({
+    teamId: auth.teamId,
+    questCardId: { $in: quests.map((q) => q._id) },
+  })
+    .select("questCardId completedSteps completedAt")
+    .lean();
+  const progressByCard = new Map(
+    progress.map((p) => [p.questCardId.toString(), p]),
+  );
+
+  const enriched = quests.map((q) => {
+    const p = progressByCard.get((q._id as any).toString());
+    return {
+      ...q,
+      completedCount: p?.completedSteps?.length ?? 0,
+      completedAt: p?.completedAt ?? null,
+    };
+  });
+
+  return NextResponse.json(enriched);
 }
 
 export async function POST(req: NextRequest) {
@@ -81,11 +105,13 @@ export async function POST(req: NextRequest) {
   }
 
   const cards = await QuestCard.insertMany(
-    Array.from({ length: count }, () => ({
+    Array.from({ length: count }, (_, i) => ({
       ...cardData,
       teamId: auth.teamId,
       issuedBy,
       qrToken: uuidv4(),
+      cardNumber: i + 1,
+      batchSize: count,
     })),
   );
 

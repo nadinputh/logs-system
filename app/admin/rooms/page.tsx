@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, DoorOpen, Plus, QrCode } from 'lucide-react'
+import { ArrowLeft, DoorOpen, Pencil, Plus, QrCode, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,11 +14,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
 import { toast } from '@/components/ui/sonner'
-import { fetchJsonOnce } from '@/lib/clientFetch'
+import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
 
 interface Building { _id: string; name: string }
 interface Floor { _id: string; name: string; number: number; buildingId: string }
-interface Room { _id: string; name: string; number: string; type?: string; floorId: string; buildingId: string; checkInMode?: 'click' | 'passkey' }
+interface Room { _id: string; name: string; number: string; type?: string; capacity?: number; description?: string; floorId: string; buildingId: string; checkInMode?: 'click' | 'passkey' }
 
 function RoomsContent() {
   const searchParams = useSearchParams()
@@ -37,6 +37,19 @@ function RoomsContent() {
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const [editing, setEditing] = useState<Room | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editNumber, setEditNumber] = useState('')
+  const [editType, setEditType] = useState('')
+  const [editCapacity, setEditCapacity] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+
+  function reloadRooms() {
+    return fetch('/api/rooms').then(r => r.json()).then(setRooms)
+  }
 
   useEffect(() => {
     Promise.all([
@@ -56,7 +69,12 @@ function RoomsContent() {
   }, [])
 
   const availableFloors = buildingId ? floors.filter(f => f.buildingId === buildingId) : floors
-  const filtered = floorFilter ? rooms.filter(r => r.floorId === floorFilter) : rooms
+  const scoped = floorFilter ? rooms.filter(r => r.floorId === floorFilter) : rooms
+  const filtered = scoped.filter(r => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return r.name.toLowerCase().includes(q) || r.number.toLowerCase().includes(q) || (r.type ?? '').toLowerCase().includes(q)
+  })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -72,15 +90,53 @@ function RoomsContent() {
           description: description || undefined,
         }),
       })
-      if (!res.ok) throw new Error()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(readApiError(data, 'Failed to create room'))
       toast.success('Room created')
       setOpen(false)
       setName(''); setNumber(''); setType(''); setCapacity(''); setDescription('')
-      fetch('/api/rooms').then(r => r.json()).then(setRooms)
-    } catch {
-      toast.error('Failed to create room')
+      reloadRooms()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create room')
     } finally {
       setSaving(false)
+    }
+  }
+
+  function openEdit(r: Room) {
+    setEditing(r)
+    setEditName(r.name)
+    setEditNumber(r.number)
+    setEditType(r.type ?? '')
+    setEditCapacity(r.capacity != null ? String(r.capacity) : '')
+    setEditDescription(r.description ?? '')
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editing) return
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/locations/${editing._id}?type=room`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName,
+          number: editNumber,
+          type: editType || undefined,
+          capacity: editCapacity ? parseInt(editCapacity) : undefined,
+          description: editDescription || undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(readApiError(data, 'Failed to update room'))
+      toast.success('Room updated')
+      setEditing(null)
+      reloadRooms()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update room')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -112,7 +168,7 @@ function RoomsContent() {
             <Skeleton className="mt-1.5 h-4 w-24" />
           ) : (
             <p className="text-sm text-muted mt-0.5">
-              {filtered.length} room{filtered.length !== 1 ? 's' : ''}
+              {scoped.length} room{scoped.length !== 1 ? 's' : ''}
               {floorFilter && filteredFloor && ` on ${getFloorName(filteredFloor._id)}`}
             </p>
           )}
@@ -175,6 +231,36 @@ function RoomsContent() {
         </Dialog>
       </div>
 
+      {/* Edit dialog */}
+      <Dialog open={!!editing} onOpenChange={(o: boolean) => { if (!o) setEditing(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Room</DialogTitle></DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Name</Label><Input value={editName} onChange={e => setEditName(e.target.value)} required placeholder="Conference A" /></div>
+              <div className="space-y-1.5"><Label>Number</Label><Input value={editNumber} onChange={e => setEditNumber(e.target.value)} required placeholder="101" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Type (optional)</Label><Input value={editType} onChange={e => setEditType(e.target.value)} placeholder="Office, Lab…" /></div>
+              <div className="space-y-1.5"><Label>Capacity (optional)</Label><Input type="number" value={editCapacity} onChange={e => setEditCapacity(e.target.value)} placeholder="20" /></div>
+            </div>
+            <div className="space-y-1.5"><Label>Description (optional)</Label><Textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} /></div>
+            <Button type="submit" variant="mono" className="w-full" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save Changes'}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
+        <Input
+          placeholder="Search by name, number or type…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       {/* Table */}
       <div>
         {loading ? (
@@ -184,7 +270,7 @@ function RoomsContent() {
               {!floorFilter && <TableHead className="hidden sm:table-cell">Floor</TableHead>}
               <TableHead className="hidden md:table-cell">Type</TableHead>
               <TableHead className="hidden lg:table-cell">Check-in</TableHead>
-              <TableHead className="text-right">QR</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 4 }).map((_, index) => (
@@ -201,18 +287,26 @@ function RoomsContent() {
                   {!floorFilter && <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-44" /></TableCell>}
                   <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
                   <TableCell className="hidden lg:table-cell"><Skeleton className="h-8 w-36 rounded-full" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="ml-auto h-8 w-14" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="ml-auto h-8 w-28" /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        ) : filtered.length === 0 ? (
+        ) : scoped.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <DoorOpen className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="font-medium text-foreground text-sm">No rooms yet</p>
             <p className="text-xs text-muted mt-1">Add a room to enable QR-based check-ins</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <Search className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
+            </div>
+            <p className="font-medium text-foreground text-sm">No matching rooms</p>
+            <p className="text-xs text-muted mt-1">Try a different search term</p>
           </div>
         ) : (
           <Table aria-label="Rooms table">
@@ -221,7 +315,7 @@ function RoomsContent() {
               {!floorFilter && <TableHead className="hidden sm:table-cell">Floor</TableHead>}
               <TableHead className="hidden md:table-cell">Type</TableHead>
               <TableHead className="hidden lg:table-cell">Check-in</TableHead>
-              <TableHead className="text-right">QR</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableHeader>
             <TableBody>
               {filtered.map(r => {
@@ -256,16 +350,27 @@ function RoomsContent() {
                       )}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <CheckInModeToggle locationId={r._id} value={r.checkInMode ?? 'click'} />
+                      <CheckInModeToggle locationId={r._id} locationType="room" value={r.checkInMode ?? 'click'} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link
-                        href={`/admin/qr/${r._id}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        <QrCode className="w-3.5 h-3.5" aria-hidden />
-                        QR
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(r)}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted bg-muted/40 hover:bg-muted/60 hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+                          title="Edit room"
+                        >
+                          <Pencil className="w-3.5 h-3.5" aria-hidden />
+                          Edit
+                        </button>
+                        <Link
+                          href={`/admin/qr/${r._id}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          <QrCode className="w-3.5 h-3.5" aria-hidden />
+                          QR
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )

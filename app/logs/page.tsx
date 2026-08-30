@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { EyeIcon, MapPin, UserRound } from 'lucide-react'
+import { ClipboardList, EyeIcon, MapPin, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -35,12 +35,6 @@ interface LogEntry {
     timestamp?: string
     autoCheckedOut?: boolean
   } | null
-}
-
-const typeColors: Record<string, string> = {
-  room: 'text-sky-500 bg-sky-500/10',
-  floor: 'text-cyan-500 bg-cyan-500/10',
-  building: 'text-amber-500 bg-amber-500/10',
 }
 
 function formatValue(value?: string | boolean | null) {
@@ -216,10 +210,8 @@ export default function LogsPage() {
           </Table>
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+              <ClipboardList className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="font-medium text-foreground text-sm">No logs yet</p>
             <p className="text-xs text-muted mt-1">Your check-in history will appear here</p>
@@ -236,14 +228,12 @@ export default function LogsPage() {
             </TableHeader>
             <TableBody>
               {logs.map(l => {
-                const typeKey = l.locationType?.toLowerCase() ?? ''
-                const typeBadge = typeColors[typeKey] ?? 'text-muted bg-muted'
                 const dur = durationLabel(l)
                 return (
                   <TableRow key={l._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent/20 to-cyan-600/20 flex items-center justify-center shrink-0 text-xs font-semibold text-accent">
+                        <div className="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center shrink-0 text-xs font-semibold text-accent">
                           {(l.visitorName ?? '?')[0].toUpperCase()}
                         </div>
                         <p className="font-medium text-sm text-foreground">{l.visitorName ?? 'Unknown'}</p>
@@ -258,14 +248,14 @@ export default function LogsPage() {
                       )}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${typeBadge}`}>
+                      <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-foreground bg-muted">
                         {l.locationType}
                       </span>
                     </TableCell>
                     <TableCell>
                       {!l.checkoutAt ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--status-success)] bg-[var(--status-success)]/10 px-2.5 py-0.5 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-[var(--status-success)] rounded-full animate-pulse" />
                           In
                         </span>
                       ) : (

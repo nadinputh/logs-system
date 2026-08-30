@@ -6,14 +6,16 @@ import { Button } from '@/components/ui/button'
 import { MousePointerClick, Fingerprint } from 'lucide-react'
 
 type Mode = 'click' | 'passkey'
+type LocationType = 'building' | 'floor' | 'room'
 
 interface Props {
   locationId: string
+  locationType: LocationType
   value: Mode
   onChange?: (mode: Mode) => void
 }
 
-export default function CheckInModeToggle({ locationId, value, onChange }: Props) {
+export default function CheckInModeToggle({ locationId, locationType, value, onChange }: Props) {
   const [mode, setMode] = useState<Mode>(value)
   const [saving, setSaving] = useState(false)
 
@@ -23,7 +25,7 @@ export default function CheckInModeToggle({ locationId, value, onChange }: Props
     setMode(next)
     setSaving(true)
     try {
-      const res = await fetch(`/api/locations/${locationId}`, {
+      const res = await fetch(`/api/locations/${locationId}?type=${locationType}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ checkInMode: next }),
