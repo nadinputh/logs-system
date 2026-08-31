@@ -22,6 +22,11 @@ interface SelectProps {
   disabled?: boolean
   required?: boolean
   variant?: "primary" | "secondary"
+  // Every existing call site relies on the default (true) for vertical form
+  // fields, where the trigger should span its container. Set false to size
+  // the trigger from its own className instead — for a Select sitting inline
+  // among other controls (e.g. a filter toolbar), not a form field.
+  fullWidth?: boolean
   children?: React.ReactNode
 }
 
@@ -33,6 +38,7 @@ function Select({
   disabled,
   required,
   variant = "secondary",
+  fullWidth = true,
   children,
 }: SelectProps) {
   const isControlled = value !== undefined
@@ -117,13 +123,17 @@ function Select({
       isRequired={required}
       aria-label={fallbackAriaLabel}
       variant={variant}
-      fullWidth
+      fullWidth={fullWidth}
     >
       <HeroSelect.Trigger
         id={triggerId}
         className={triggerClassName}
       >
-        <HeroSelect.Value>{resolvedValueChildren}</HeroSelect.Value>
+        {/* A long selected label (e.g. a nested location path) must clip, not
+            wrap the trigger taller than its row siblings. min-w-0 overrides
+            the flex item's default min-width:auto so it can actually shrink
+            below its content size and truncate. */}
+        <HeroSelect.Value className="min-w-0 flex-1 truncate text-left">{resolvedValueChildren}</HeroSelect.Value>
         <HeroSelect.Indicator />
       </HeroSelect.Trigger>
       <HeroSelect.Popover>

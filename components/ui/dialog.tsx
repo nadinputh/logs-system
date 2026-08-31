@@ -11,6 +11,11 @@ import { XIcon } from "lucide-react"
 type DialogState = {
   open: boolean
   setOpen: (open: boolean) => void
+  // Every dialog in this app renders a DialogTitle; wiring the dialog's
+  // accessible name to it (instead of the literal string "Dialog") means a
+  // screen reader announces "Guest Details" / "Manual checkout" / etc., not
+  // the same generic word for every dialog in the product.
+  titleId: string
 }
 
 type PressLikeEvent = {
@@ -51,8 +56,9 @@ function Dialog({
   onOpenChange: (open: boolean) => void
   children: React.ReactNode
 }) {
+  const titleId = React.useId()
   return (
-    <DialogContext.Provider value={{ open, setOpen: onOpenChange }}>
+    <DialogContext.Provider value={{ open, setOpen: onOpenChange, titleId }}>
       {children}
     </DialogContext.Provider>
   )
@@ -169,6 +175,7 @@ function DialogContent({
       <HeroModal.Container placement="center" scroll="inside" size={size}>
         <HeroModal.Dialog
           aria-label="Dialog"
+          aria-labelledby={context.titleId}
           className={className}
         >
           <DialogInnerContainer onClose={onClose} showCloseButton={showCloseButton}>
@@ -188,8 +195,9 @@ function DialogIcon(props: React.ComponentProps<typeof HeroModal.Icon>) {
   return <HeroModal.Icon {...props} />
 }
 
-function DialogTitle(props: React.ComponentProps<typeof HeroModal.Heading>) {
-  return <HeroModal.Heading {...props} />
+function DialogTitle({ id, ...props }: React.ComponentProps<typeof HeroModal.Heading>) {
+  const context = React.useContext(DialogContext)
+  return <HeroModal.Heading id={id ?? context?.titleId} {...props} />
 }
 
 function DialogBody(props: React.ComponentProps<typeof HeroModal.Body>) {

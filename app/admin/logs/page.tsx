@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { EyeIcon, LogOut, MapPin, RefreshCw, Search, ShieldCheck, UserRound } from 'lucide-react'
+import { ChevronDown, Download, EyeIcon, LogOut, MapPin, RefreshCw, Search, ShieldCheck, TriangleAlert, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
@@ -68,6 +69,12 @@ function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : '—'
 }
 
+function csvEscape(value: unknown) {
+  const text = String(value ?? '')
+  if (!/[",\n]/.test(text)) return text
+  return `"${text.replace(/"/g, '""')}"`
+}
+
 function durationLabel(entry: LogEntry) {
   if (!entry.checkoutAt) return 'Still checked in'
   const ms = new Date(entry.checkoutAt).getTime() - new Date(entry.timestamp).getTime()
@@ -77,21 +84,45 @@ function durationLabel(entry: LogEntry) {
   return hours ? `${hours}h ${rest}m` : `${rest}m`
 }
 
-function DetailItem({ label, value }: { label: string; value?: string | boolean | null }) {
+// `full` spans both grid columns once the dialog is wide enough to run two —
+// for values that run long (paths, emails, free text, ids) where a half-width
+// cell would wrap or crowd its neighbor.
+function DetailItem({ label, value, full }: { label: string; value?: string | boolean | null; full?: boolean }) {
   return (
-    <div className="min-w-0 rounded-xl bg-muted/40 px-3 py-2">
+    <div className={`min-w-0 rounded-xl bg-muted/40 px-3 py-2 ${full ? '@sm:col-span-2' : ''}`}>
       <p className="text-xs font-medium text-muted">{label}</p>
       <p className="mt-1 break-words text-sm leading-5 text-foreground">{formatValue(value)}</p>
     </div>
   )
 }
 
+// @sm here reacts to the dialog's own rendered width (via the @container on
+// its body), not the page viewport — at the dialog's mobile width the fields
+// stay single-column exactly as before; once the dialog itself has room
+// (tablet/desktop), short label/value pairs pair up instead of running one
+// per row all the way down what used to be several screens of scrolling.
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2.5">
       <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-      <div className="grid gap-2">{children}</div>
+      <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">{children}</div>
     </section>
+  )
+}
+
+// Raw identifiers (Location ID, Checkout log ID, Session token, device/IP/UA)
+// read at the same visual weight as Status/Duration, which flattens the
+// dialog into an undifferentiated data dump. Collapsed by default so the
+// facts an admin actually scans for aren't competing with ones they rarely need.
+function TechnicalDetails({ children }: { children: React.ReactNode }) {
+  return (
+    <details className="group space-y-2.5">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" aria-hidden />
+        Technical details
+      </summary>
+      <div className="grid grid-cols-1 gap-2 pt-2.5 @sm:grid-cols-2">{children}</div>
+    </details>
   )
 }
 
@@ -100,74 +131,93 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="sm" className="overflow-hidden bg-overlay [&>div]:flex [&>div]:max-h-[calc(100dvh-2rem)] [&>div]:min-h-0 [&>div]:flex-col">
+      {/* The dialog used to cap its content at a 282px mobile-card width no
+          matter the viewport, forcing every field onto its own row and
+          turning one log into several screens of scrolling on a desktop with
+          a thousand idle pixels beside it. It now grows with the page
+          (sm/lg breakpoints below), and @container lets the field grid react
+          to the dialog's own resolved width rather than the page's. */}
+      <DialogContent size="sm" className="overflow-hidden bg-overlay sm:max-w-lg lg:max-w-xl [&>div]:flex [&>div]:max-h-[calc(100dvh-2rem)] [&>div]:min-h-0 [&>div]:flex-col">
         <div className="p-5 pb-4 sm:p-6 sm:pb-4">
-          <div className="mx-auto w-full max-w-[17.625rem]">
-            <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-foreground text-background shadow-sm">
-                <UserRound className="size-5" aria-hidden />
-              </div>
-              <div className="min-w-0">
-                <DialogTitle className="text-base font-semibold text-foreground">Guest Details</DialogTitle>
-                <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
-                  <MapPin className="size-3.5 shrink-0" aria-hidden />
-                  <span className="truncate">{log.locationName ?? 'Unknown location'}</span>
-                </p>
-              </div>
+          <div className="flex items-start gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-foreground text-background shadow-sm">
+              <UserRound className="size-5" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-semibold text-foreground">Guest Details</DialogTitle>
+              <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
+                <MapPin className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{log.locationName ?? 'Unknown location'}</span>
+              </p>
             </div>
           </div>
         </div>
-        <DialogBody className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
-          <div className="mx-auto w-full max-w-[17.625rem] space-y-4">
+        <DialogBody className="@container min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
+          <div className="w-full space-y-4">
             <DetailSection title="Visitor">
               <DetailItem label="Name" value={log.visitorName} />
-              <DetailItem label="Email" value={log.visitorEmail} />
+              <DetailItem label="Email" value={log.visitorEmail} full />
               <DetailItem label="Phone" value={log.visitorPhone} />
               <DetailItem label="Gender" value={log.visitorGender} />
-              <DetailItem label="Purpose" value={log.visitPurpose} />
-              <DetailItem label="Session token" value={log.sessionToken} />
+              <DetailItem label="Purpose" value={log.visitPurpose} full />
             </DetailSection>
 
             <DetailSection title="Location">
               <DetailItem label="Name" value={log.locationName} />
-              <DetailItem label="Path" value={log.locationPath} />
               <DetailItem label="Type" value={log.locationType} />
-              <DetailItem label="Location ID" value={log.locationId} />
+              <DetailItem label="Path" value={log.locationPath} full />
             </DetailSection>
 
             <DetailSection title="Check-in / Check-out">
               <DetailItem label="Check-in" value={formatDate(log.timestamp)} />
               <DetailItem label="Check-out" value={formatDate(log.checkoutAt)} />
               <DetailItem label="Duration" value={durationLabel(log)} />
-              <DetailItem label="Auto checked out" value={log.checkoutLog?.autoCheckedOut ?? log.autoCheckedOut} />
               <DetailItem label="Passkey verified" value={log.passkeyVerified} />
-              <DetailItem label="Checkout log ID" value={log.checkoutLog?._id} />
+              {(log.checkoutLog?.autoCheckedOut ?? log.autoCheckedOut) && (
+                <div className="min-w-0 rounded-xl bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/25 px-3 py-2 @sm:col-span-2">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--status-warning)]">
+                    <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+                    Auto checked out
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-foreground">
+                    Nobody checked out — the system closed this visit automatically after 12 hours.
+                  </p>
+                </div>
+              )}
             </DetailSection>
 
-            <DetailSection title="Request context">
-              <DetailItem label="Device ID" value={log.deviceId} />
+            <TechnicalDetails>
+              <DetailItem label="Location ID" value={log.locationId} />
+              <DetailItem label="Checkout log ID" value={log.checkoutLog?._id} />
               <DetailItem label="IP address" value={log.ipAddress} />
               <DetailItem label="Geofence matched" value={log.geofenceStatus} />
-              <DetailItem label="User agent" value={log.userAgent} />
-            </DetailSection>
+              <DetailItem label="Session token" value={log.sessionToken} full />
+              <DetailItem label="Device ID" value={log.deviceId} full />
+              <DetailItem label="User agent" value={log.userAgent} full />
+            </TechnicalDetails>
 
             {/* The ledger is append-only, so a correction never overwrites
                 this log — but Product Principle 1 requires it be surfaced,
                 never silent. Only rendered when a correction actually
                 exists, so an ordinary, uncorrected log stays exactly as
-                terse as it was before this section existed. */}
+                terse as it was before this section existed. Corrections are
+                read as a timeline, not compact fields, so this section stays
+                single-column even where its siblings now pair up. */}
             {!!log.corrections?.length && (
-              <DetailSection title="Correction">
-                {log.corrections.map((c, i) => (
-                  <div key={i} className="min-w-0 rounded-xl bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/25 px-3 py-2">
-                    <p className="text-xs font-medium text-[var(--status-warning)]">
-                      {CORRECTION_FIELD_LABELS[c.field] ?? c.field} · {formatDate(c.timestamp)}
-                    </p>
-                    <p className="mt-1 break-words text-sm leading-5 text-foreground">{c.reasonForChange}</p>
-                    <p className="mt-1 text-xs text-muted">By {c.modifiedByName ?? 'Unknown user'}</p>
-                  </div>
-                ))}
-              </DetailSection>
+              <section className="space-y-2.5">
+                <h2 className="text-sm font-semibold text-foreground">Correction</h2>
+                <div className="grid gap-2">
+                  {log.corrections.map((c, i) => (
+                    <div key={i} className="min-w-0 rounded-xl bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/25 px-3 py-2">
+                      <p className="text-xs font-medium text-[var(--status-warning)]">
+                        {CORRECTION_FIELD_LABELS[c.field] ?? c.field} · {formatDate(c.timestamp)}
+                      </p>
+                      <p className="mt-1 break-words text-sm leading-5 text-foreground">{c.reasonForChange}</p>
+                      <p className="mt-1 text-xs text-muted">By {c.modifiedByName ?? 'Unknown user'}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
           </div>
         </DialogBody>
@@ -176,6 +226,9 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
   )
 }
 
+const PAGE_SIZE = 50
+const EXPORT_LIMIT = 5000
+
 export default function AdminLogsPage() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
@@ -183,26 +236,110 @@ export default function AdminLogsPage() {
   const [manualCheckoutReason, setManualCheckoutReason] = useState('')
   const [manualCheckoutLoading, setManualCheckoutLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in' | 'out'>('all')
+  const [locationFilter, setLocationFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [locations, setLocations] = useState<{ id: string; label: string }[]>([])
+  const [page, setPage] = useState(1)
+  const [pageCount, setPageCount] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  // Typing shouldn't fire a request per keystroke; settle for 300ms first.
+  // Resetting the page in the same batch as the debounced value (React 18
+  // batches both) means fetchLogs' dependencies change once, not twice — a
+  // separate "reset page on filter change" effect would fire a wasted fetch
+  // at the old page before the corrected one landed.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  function buildLogsParams(overrides: { page?: number; limit?: number } = {}) {
+    const params = new URLSearchParams({ page: String(overrides.page ?? page), limit: String(overrides.limit ?? PAGE_SIZE) })
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (locationFilter !== 'all') params.set('locationId', locationFilter)
+    if (dateFrom) params.set('from', dateFrom)
+    if (dateTo) params.set('to', dateTo)
+    return params
+  }
 
   const fetchLogs = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
 
     try {
-      const data = await fetchJsonOnce<{ logs?: LogEntry[] }>('/api/logs')
+      const data = await fetchJsonOnce<{ logs?: LogEntry[]; total?: number; pages?: number; distinctLocations?: { id: string; label: string }[] }>(
+        `/api/logs?${buildLogsParams()}`
+      )
       setLogs(data.logs ?? [])
+      setTotalCount(data.total ?? 0)
+      setPageCount(Math.max(1, data.pages ?? 1))
+      if (data.distinctLocations) setLocations(data.distinctLocations)
+      setError(false)
+      // A filter change (or a realtime deletion) can leave `page` past the
+      // new last page — land on the last real page instead of an empty one.
+      const lastPage = Math.max(1, data.pages ?? 1)
+      if (page > lastPage) setPage(lastPage)
     } catch {
+      setError(true)
     } finally {
       if (showLoading) setLoading(false)
     }
-  }, [])
+  }, [page, debouncedSearch, statusFilter, locationFilter, dateFrom, dateTo])
 
   useEffect(() => { void fetchLogs() }, [fetchLogs])
   useLogRealtime(() => { void fetchLogs(false) })
 
-  const filtered = logs.filter(l =>
-    !search || (l.visitorName ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+  const hasActiveFilters = !!search || statusFilter !== 'all' || locationFilter !== 'all' || !!dateFrom || !!dateTo
+
+  function clearFilters() {
+    setSearch('')
+    setStatusFilter('all')
+    setLocationFilter('all')
+    setDateFrom('')
+    setDateTo('')
+    setPage(1)
+  }
+
+  async function exportCsv() {
+    setExporting(true)
+    try {
+      const data = await fetchJsonOnce<{ logs?: LogEntry[] }>(`/api/logs?${buildLogsParams({ page: 1, limit: EXPORT_LIMIT })}`)
+      const rows = data.logs ?? []
+      const headers = ['Visitor', 'Email', 'Location', 'Type', 'Status', 'Check-in', 'Check-out', 'Duration', 'Corrected']
+      const csvRows = rows.map(l => [
+        l.visitorName ?? '',
+        l.visitorEmail ?? '',
+        l.locationPath ?? l.locationName ?? '',
+        l.locationType,
+        l.checkoutAt ? 'Out' : 'In',
+        formatDate(l.timestamp),
+        formatDate(l.checkoutAt),
+        durationLabel(l),
+        l.corrections?.length ? 'Yes' : 'No',
+      ])
+      const csv = [headers, ...csvRows].map(row => row.map(csvEscape).join(',')).join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `logs-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Export failed — could not fetch logs')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   function openManualCheckout(log: LogEntry) {
     setManualCheckoutLog(log)
@@ -248,30 +385,112 @@ export default function AdminLogsPage() {
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
-            <p className="text-sm text-muted mt-0.5">{logs.length} entries total</p>
+            <p className="text-sm text-muted mt-0.5" aria-live="polite">
+              {totalCount} {totalCount === 1 ? 'entry' : 'entries'} total
+              {pageCount > 1 && ` · page ${page} of ${pageCount}`}
+            </p>
           )}
         </div>
-        <Button
-          type="button"
-          onClick={() => { void fetchLogs() }}
-          disabled={loading}
-          variant="outline"
-          size="sm"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
-          {loading ? 'Loading…' : 'Refresh'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            onClick={exportCsv}
+            disabled={loading || exporting || totalCount === 0}
+            variant="outline"
+            size="sm"
+          >
+            <Download className={`w-4 h-4 ${exporting ? 'animate-pulse' : ''}`} aria-hidden />
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => { void fetchLogs() }}
+            disabled={loading}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+            {loading ? 'Loading…' : 'Refresh'}
+          </Button>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
-        <Input
-          placeholder="Filter by visitor name…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Search + filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
+          <Input
+            placeholder="Filter by visitor name…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {search && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearch('')}
+              className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-muted/60 hover:text-foreground"
+            >
+              <X className="w-4 h-4" aria-hidden />
+            </button>
+          )}
+        </div>
+        <Select
+          value={statusFilter}
+          onValueChange={v => { setStatusFilter((v as 'all' | 'in' | 'out') ?? 'all'); setPage(1) }}
+          fullWidth={false}
+        >
+          <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="in">Currently in</SelectItem>
+            <SelectItem value="out">Checked out</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={locationFilter}
+          onValueChange={v => { setLocationFilter(v ?? 'all'); setPage(1) }}
+          fullWidth={false}
+        >
+          <SelectTrigger className="w-48"><SelectValue placeholder="Location" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All locations</SelectItem>
+            {locations.map(loc => (
+              <SelectItem key={loc.id} value={loc.id}>{loc.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-1.5">
+          <Input
+            id="checkin-from"
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={e => { setDateFrom(e.target.value); setPage(1) }}
+            className="w-[9.5rem]"
+            aria-label="Check-in from"
+          />
+          <span className="text-xs text-muted" aria-hidden>to</span>
+          <Input
+            id="checkin-to"
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={e => { setDateTo(e.target.value); setPage(1) }}
+            className="w-[9.5rem]"
+            aria-label="Check-in to"
+          />
+        </div>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="ml-1 border-l border-border pl-3 py-2 text-xs font-medium text-muted hover:text-foreground underline underline-offset-2"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -314,13 +533,30 @@ export default function AdminLogsPage() {
               ))}
             </TableBody>
           </Table>
-        ) : filtered.length === 0 ? (
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--status-warning)]/10 flex items-center justify-center mb-3">
+              <TriangleAlert className="w-6 h-6 text-[var(--status-warning)]" strokeWidth={1.75} aria-hidden />
+            </div>
+            <p className="font-medium text-foreground text-sm">Couldn&apos;t load logs</p>
+            <p className="text-xs text-muted mt-1">Something went wrong fetching the audit log — this isn&apos;t the same as an empty ledger.</p>
+            <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => { void fetchLogs() }}>
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+              Try again
+            </Button>
+          </div>
+        ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <ShieldCheck className="w-6 h-6 text-muted/50" strokeWidth={1.75} aria-hidden />
             </div>
-            <p className="font-medium text-foreground text-sm">{search ? 'No matching logs' : 'No logs yet'}</p>
-            <p className="text-xs text-muted mt-1">{search ? 'Try a different search term' : 'Logs will appear here as visitors check in'}</p>
+            <p className="font-medium text-foreground text-sm">{hasActiveFilters ? 'No matching logs' : 'No logs yet'}</p>
+            <p className="text-xs text-muted mt-1">{hasActiveFilters ? 'Try different filters' : 'Logs will appear here as visitors check in'}</p>
+            {hasActiveFilters && (
+              <Button type="button" variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
           </div>
         ) : (
           <Table aria-label="Admin logs table">
@@ -334,7 +570,7 @@ export default function AdminLogsPage() {
               <TableHead>Actions</TableHead>
             </TableHeader>
             <TableBody>
-              {filtered.map(l => {
+              {logs.map(l => {
                 const isIn = !l.checkoutAt
                 return (
                   <TableRow key={l._id}>
@@ -344,7 +580,18 @@ export default function AdminLogsPage() {
                           {(l.visitorName ?? '?')[0].toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-sm text-foreground">{l.visitorName ?? 'Unknown visitor'}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-sm text-foreground truncate">{l.visitorName ?? 'Unknown visitor'}</p>
+                            {!!l.corrections?.length && (
+                              <span
+                                title={`${l.corrections.length} correction${l.corrections.length !== 1 ? 's' : ''} on this log — see Guest Details`}
+                                className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--status-warning)] bg-[var(--status-warning)]/10 px-1.5 py-0.5 rounded-full"
+                              >
+                                <TriangleAlert className="size-3" aria-hidden />
+                                Corrected
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted mt-0.5 truncate max-w-[200px] md:hidden">{l.locationPath ?? l.locationName ?? 'Unknown location'}</p>
                         </div>
                       </div>
@@ -395,6 +642,7 @@ export default function AdminLogsPage() {
                           variant="ghost"
                           size="icon-sm"
                           aria-label={`View details for ${l.visitorName ?? 'log'}`}
+                          title="View details"
                           onClick={() => setSelectedLog(l)}
                         >
                           <EyeIcon className="h-4 w-4" aria-hidden />
@@ -420,6 +668,32 @@ export default function AdminLogsPage() {
           </Table>
         )}
       </div>
+
+      {!loading && !error && pageCount > 1 && (
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-muted">Page {page} of {pageCount}</p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page >= pageCount}
+              onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
       <LogDetailsDialog
         log={selectedLog}
         open={selectedLog !== null}

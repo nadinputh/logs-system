@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { AuditLog } from "@/lib/models/AuditLog";
@@ -20,6 +21,13 @@ import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
+// Escapes regex metacharacters in a user-supplied search string before it
+// reaches a Mongo $regex — otherwise a visitor name like "a.*" is a regex,
+// not a literal substring, and can degrade into a ReDoS on crafted input.
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireTeamPermission("logs.read");
   if (auth.error) return auth.error;
@@ -34,17 +42,104 @@ export async function GET(req: NextRequest) {
   }
 
   const userId = (auth.session.user as any).id;
-  // Team admins/owners see the whole team's check-ins; members see only their own.
-  const canViewTeam = hasMinimumTeamRole(
-    ((auth.membership as any)?.role as TeamRole) ?? "member",
-    "admin",
-  );
+  // Team admins/owners see the whole team's check-ins by default; members
+  // always see only their own. `scope=mine` overrides that for an admin too —
+  // "My Logs" and "All Logs" both call this route, and without this param an
+  // admin's "My Logs" silently rendered the entire team's data under a header
+  // that said otherwise.
+  const mineOnly = req.nextUrl.searchParams.get("scope") === "mine";
+  const canViewTeam =
+    !mineOnly &&
+    hasMinimumTeamRole(
+      ((auth.membership as any)?.role as TeamRole) ?? "member",
+      "admin",
+    );
 
-  const query = canViewTeam
+  const baseQuery = canViewTeam
     ? { teamId: auth.teamId, action: "in" as const }
     : { teamId: auth.teamId, userId, action: "in" as const };
+
+  // distinctLocations is scoped to baseQuery only (role scope), never to the
+  // filters below — the dropdown should always list every location this
+  // viewer can filter by, not just the ones matching what they've already
+  // typed, or its own options would shift under the user as they filter.
+  //
+  // Unlike .find(), .aggregate()'s $match does no schema-based casting: the
+  // string ids from requireTeamPermission must become real ObjectIds here or
+  // this silently matches nothing against the ObjectId-typed teamId/userId
+  // fields, and distinctLocations comes back empty with no error at all.
+  const aggregateMatch: Record<string, unknown> = {
+    ...baseQuery,
+    teamId: new Types.ObjectId(auth.teamId),
+  };
+  if ("userId" in aggregateMatch) {
+    aggregateMatch.userId = new Types.ObjectId(userId);
+  }
+  const distinctLocationRefs = await Log.aggregate([
+    { $match: aggregateMatch },
+    { $group: { _id: { locationType: "$locationType", locationId: "$locationId" } } },
+  ]);
+  const distinctLocationLabels = await resolveLocationLabels(
+    distinctLocationRefs.map((r) => ({
+      locationType: r._id.locationType,
+      locationId: r._id.locationId,
+    })),
+    auth.teamId,
+  );
+  const distinctLocations = distinctLocationRefs
+    .map((r) => {
+      const key = `${r._id.locationType}:${r._id.locationId.toString()}`;
+      const label = distinctLocationLabels.get(key);
+      return {
+        id: r._id.locationId.toString(),
+        label: label?.path ?? label?.name ?? r._id.locationId.toString(),
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const query: Record<string, unknown> = { ...baseQuery };
+
+  const search = req.nextUrl.searchParams.get("search");
+  if (search) {
+    query.visitorName = { $regex: escapeRegex(search), $options: "i" };
+  }
+
+  const locationId = req.nextUrl.searchParams.get("locationId");
+  if (locationId) {
+    query.locationId = locationId;
+  }
+
+  const from = req.nextUrl.searchParams.get("from");
+  const to = req.nextUrl.searchParams.get("to");
+  if (from || to) {
+    const timestamp: Record<string, Date> = {};
+    if (from) timestamp.$gte = new Date(`${from}T00:00:00`);
+    if (to) timestamp.$lte = new Date(`${to}T23:59:59.999`);
+    query.timestamp = timestamp;
+  }
+
+  // "in" / "out" isn't a field on the check-in document itself — it's
+  // whether a paired action:"out" Log exists for it. distinct() finds every
+  // check-in id that already has a checkout, then $in/$nin on _id filters by
+  // that, without rewriting this route onto an aggregation pipeline.
+  const status = req.nextUrl.searchParams.get("status");
+  if (status === "in" || status === "out") {
+    const checkedOutIds = await Log.distinct("relatedLogId", {
+      teamId: auth.teamId,
+      action: "out",
+      relatedLogId: { $ne: null },
+    });
+    query._id = status === "in" ? { $nin: checkedOutIds } : { $in: checkedOutIds };
+  }
+
   const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1");
-  const limit = 50;
+  // Paginated table view stays at 50/page; a caller that needs every
+  // matching row for export (see /settings/team's own CSV export) can raise
+  // this up to the same 5000-row ceiling used there.
+  const limit = Math.min(
+    Math.max(parseInt(req.nextUrl.searchParams.get("limit") ?? "50", 10) || 50, 1),
+    5000,
+  );
 
   const [logs, total] = await Promise.all([
     Log.find(query)
@@ -127,6 +222,7 @@ export async function GET(req: NextRequest) {
     total,
     page,
     pages: Math.ceil(total / limit),
+    distinctLocations,
   });
 }
 
