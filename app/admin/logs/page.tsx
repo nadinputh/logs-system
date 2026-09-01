@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ChevronDown, Download, EyeIcon, LogOut, MapPin, RefreshCw, Search, ShieldCheck, TriangleAlert, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -229,7 +230,11 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
 const PAGE_SIZE = 50
 const EXPORT_LIMIT = 5000
 
-export default function AdminLogsPage() {
+function AdminLogsContent() {
+  // Top Locations on the dashboard links here with ?locationId=... so a click
+  // lands pre-filtered instead of making the admin re-navigate and rebuild
+  // the filter by hand.
+  const searchParams = useSearchParams()
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [manualCheckoutLog, setManualCheckoutLog] = useState<LogEntry | null>(null)
@@ -238,7 +243,7 @@ export default function AdminLogsPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'in' | 'out'>('all')
-  const [locationFilter, setLocationFilter] = useState('all')
+  const [locationFilter, setLocationFilter] = useState(() => searchParams.get('locationId') ?? 'all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [locations, setLocations] = useState<{ id: string; label: string }[]>([])
@@ -753,5 +758,9 @@ export default function AdminLogsPage() {
       </Dialog>
     </div>
   )
+}
+
+export default function AdminLogsPage() {
+  return <Suspense><AdminLogsContent /></Suspense>
 }
 
