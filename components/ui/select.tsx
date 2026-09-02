@@ -27,6 +27,10 @@ interface SelectProps {
   // the trigger from its own className instead — for a Select sitting inline
   // among other controls (e.g. a filter toolbar), not a form field.
   fullWidth?: boolean
+  // For a trigger with no visible placeholder and no associated <Label for>
+  // (e.g. one Select per table row, where a static label can't distinguish
+  // rows). Only needed when neither of those already names the control.
+  ariaLabel?: string
   children?: React.ReactNode
 }
 
@@ -39,6 +43,7 @@ function Select({
   required,
   variant = "secondary",
   fullWidth = true,
+  ariaLabel,
   children,
 }: SelectProps) {
   const isControlled = value !== undefined
@@ -113,7 +118,16 @@ function Select({
     currentValue === ""
       ? (valueChildren ?? placeholder)
       : (valueChildren ?? selectedItemLabel)
-  const fallbackAriaLabel = placeholder ?? "Select option"
+  // An explicit aria-label always wins the accessible-name computation, so
+  // only emit one when actually needed: an explicit ariaLabel/placeholder, or
+  // — as a last resort — when there's no triggerId a <Label> could target at
+  // all. Otherwise defer to aria-labelledby, the same `${htmlFor}-label` id
+  // the Label adapter already derives for the Input adapter, so a real
+  // associated <Label> supplies the name instead of every instance on a page
+  // announcing the same generic fallback string.
+  const resolvedAriaLabel = ariaLabel ?? placeholder
+  const labelledBy = !resolvedAriaLabel && triggerId ? `${triggerId}-label` : undefined
+  const finalAriaLabel = resolvedAriaLabel ?? (labelledBy ? undefined : "Select option")
 
   return (
     <HeroSelect.Root
@@ -121,7 +135,8 @@ function Select({
       onSelectionChange={handleSelectionChange}
       isDisabled={disabled}
       isRequired={required}
-      aria-label={fallbackAriaLabel}
+      aria-label={finalAriaLabel}
+      aria-labelledby={labelledBy}
       variant={variant}
       fullWidth={fullWidth}
     >
@@ -139,7 +154,7 @@ function Select({
       <HeroSelect.Popover>
         <ListBox.Root
           selectionMode="single"
-          aria-label={fallbackAriaLabel}
+          aria-label={finalAriaLabel ?? "Select option"}
           selectedKeys={currentValue === "" ? new Set() : new Set([currentValue])}
           onSelectionChange={(selection) => {
             if (selection === "all") {

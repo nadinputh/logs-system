@@ -1,14 +1,24 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { ArrowRightLeft, ChevronDown, MailX, UserMinus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogIcon,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from '@/components/ui/sonner'
 import { AddUserDirect } from './AddUserDirect'
 
@@ -102,19 +112,22 @@ const AUDIT_ACTION_OPTIONS: Array<{ value: 'all' | TeamAuditAction; label: strin
   { value: 'ownership_transferred', label: 'Ownership transferred' },
 ]
 
+// Deliberately off cyan/sky (reserved for the One Signal Rule) and off emerald
+// (reserved for the "Active" occupancy/team-status pill, which this badge sits
+// next to). Every hue carries a light/dark foreground pair per DESIGN.md.
 function roleBadgeClass(role: TeamRole) {
   switch (role) {
     case 'owner':
-      return 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+      return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
     case 'admin':
-      return 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20'
+      return 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
     case 'manager':
-      return 'bg-sky-500/10 text-sky-500 border-sky-500/20'
+      return 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
     case 'auditor':
       return 'bg-default text-muted border-border'
     case 'member':
     default:
-      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+      return 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
   }
 }
 
@@ -137,10 +150,80 @@ function displayActor(actor: TeamAuditActor | null) {
   return actor.name ?? actor.email ?? actor.id
 }
 
+// Known audit metadata shapes get a human sentence; anything else falls back
+// to the raw pairs in the caller so no metadata is ever silently hidden.
+function describeAuditMetadata(action: TeamAuditAction, metadata: Record<string, unknown>): string | null {
+  if (action === 'member_role_changed' && 'previousRole' in metadata && 'newRole' in metadata) {
+    return `Role changed from ${metadata.previousRole} to ${metadata.newRole}`
+  }
+  if (action === 'member_status_changed' && 'previousStatus' in metadata && 'newStatus' in metadata) {
+    return `Status changed from ${metadata.previousStatus} to ${metadata.newStatus}`
+  }
+  if (action === 'member_removed' && 'previousRole' in metadata && 'previousStatus' in metadata) {
+    return `Was ${metadata.previousRole}, ${metadata.previousStatus}, at the time of removal`
+  }
+  if (
+    action === 'ownership_transferred' &&
+    'previousOwnerNewRole' in metadata &&
+    'newOwnerPreviousRole' in metadata
+  ) {
+    return `Previous owner is now ${metadata.previousOwnerNewRole}; new owner was previously ${metadata.newOwnerPreviousRole}`
+  }
+  return null
+}
+
+// One shape covers all three destructive/high-stakes confirmations on this
+// page (remove member, revoke invite, transfer ownership), so they render
+// through a single Dialog instead of three near-identical copies.
+type ConfirmState =
+  | { kind: 'remove-member'; member: TeamMemberRow }
+  | { kind: 'revoke-invite'; invite: TeamInviteRow }
+  | { kind: 'transfer-ownership'; targetLabel: string }
+
+// A collapsed-by-default section for the page's occasional-use, setup-style
+// cards (audit trail, team creation, ownership transfer, invites, direct
+// add). Keeping these closed on load is what makes "Active team context" and
+// "Members" — the two things a daily admin actually opens this page for —
+// the only things competing for attention on load.
+function CollapsibleSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <details open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+            <div>
+              <p className="text-sm font-semibold text-foreground">{title}</p>
+              {description && <p className="max-w-2xl text-xs text-muted">{description}</p>}
+            </div>
+            <ChevronDown
+              className={`mt-0.5 h-4 w-4 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
+          </summary>
+          <div className="space-y-4 px-4 pb-4">{children}</div>
+        </details>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function TeamSettingsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const nextPath = searchParams.get('next') ?? '/dashboard'
+  // Only a real redirect (someone bounced here from a page that needed an
+  // active team) earns the "Continue to requested page" button — the default
+  // fallback below is where the click lands, not a signal the button should show.
+  const explicitNextPath = searchParams.get('next')
+  const nextPath = explicitNextPath ?? '/dashboard'
   const redirectReason = searchParams.get('reason') as
     | 'no_active_team'
     | 'removed'
@@ -214,6 +297,7 @@ export default function TeamSettingsPage() {
    * as a hash, and for a set-password link it is the account's sole way in.
    */
   const [pendingLink, setPendingLink] = useState<{ label: string; url: string } | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
   const [auditActionFilter, setAuditActionFilter] = useState<'all' | TeamAuditAction>('all')
   const [auditFromDate, setAuditFromDate] = useState('')
   const [auditToDate, setAuditToDate] = useState('')
@@ -526,6 +610,7 @@ export default function TeamSettingsPage() {
       }
 
       setMembers((current) => current.filter((row) => row.userId !== member.userId))
+      setConfirmState(null)
       toast.success('Member removed')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to remove member')
@@ -654,6 +739,7 @@ export default function TeamSettingsPage() {
       }
 
       setInvites((current) => current.filter((invite) => invite.id !== inviteId))
+      setConfirmState(null)
       toast.success('Invite revoked')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke invite')
@@ -705,7 +791,7 @@ export default function TeamSettingsPage() {
     }
   }
 
-  async function transferOwnership(e: React.FormEvent) {
+  function requestTransferOwnership(e: React.FormEvent) {
     e.preventDefault()
     if (!activeTeam || !transferTargetUserId) return
 
@@ -713,10 +799,11 @@ export default function TeamSettingsPage() {
       (member) => member.userId === transferTargetUserId,
     )
     const targetLabel = targetMember?.name ?? targetMember?.email ?? 'selected member'
-    const confirmed = window.confirm(
-      `Transfer ownership of ${activeTeam.name} to ${targetLabel}? This action demotes your owner role to admin.`,
-    )
-    if (!confirmed) return
+    setConfirmState({ kind: 'transfer-ownership', targetLabel })
+  }
+
+  async function performTransferOwnership() {
+    if (!activeTeam || !transferTargetUserId) return
 
     setTransferringOwnership(true)
     try {
@@ -734,6 +821,7 @@ export default function TeamSettingsPage() {
       }
 
       setTransferTargetUserId('')
+      setConfirmState(null)
       await Promise.all([
         loadTeams(),
         loadMembers(activeTeam.id),
@@ -746,6 +834,113 @@ export default function TeamSettingsPage() {
     } finally {
       setTransferringOwnership(false)
     }
+  }
+
+  // Shared between the desktop table row and the mobile card layout below —
+  // same control, two different surrounding markup shapes.
+  function renderMemberRoleControl(member: TeamMemberRow, isEditable: boolean, currentDraftRole: TeamRole) {
+    if (!isEditable) {
+      return (
+        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(member.teamRole)}`}>
+          {member.teamRole}
+        </span>
+      )
+    }
+    return (
+      <Select
+        value={currentDraftRole}
+        onValueChange={(value) =>
+          setDraftRole((current) => ({
+            ...current,
+            [member.userId]: (value ?? member.teamRole) as TeamRole,
+          }))
+        }
+        ariaLabel={`Role for ${member.name ?? member.email ?? 'this member'}`}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {ROLE_OPTIONS.filter((option) => option.value !== 'owner').map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
+  }
+
+  function renderMemberStatusControl(member: TeamMemberRow, isEditable: boolean, currentDraftStatus: TeamStatus) {
+    if (!isEditable) {
+      return <span className="text-sm text-muted">{member.status}</span>
+    }
+    return (
+      <Select
+        value={currentDraftStatus}
+        onValueChange={(value) =>
+          setDraftStatus((current) => ({
+            ...current,
+            [member.userId]: (value ?? member.status) as TeamStatus,
+          }))
+        }
+        ariaLabel={`Status for ${member.name ?? member.email ?? 'this member'}`}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">active</SelectItem>
+          <SelectItem value="suspended">suspended</SelectItem>
+        </SelectContent>
+      </Select>
+    )
+  }
+
+  function renderMemberActions(member: TeamMemberRow, isEditable: boolean) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {isEditable ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void saveMember(member)}
+              disabled={savingMemberUserId === member.userId}
+            >
+              {savingMemberUserId === member.userId ? 'Saving...' : 'Save'}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setConfirmState({ kind: 'remove-member', member })}
+              disabled={removingMemberUserId === member.userId}
+            >
+              {removingMemberUserId === member.userId ? 'Removing...' : 'Remove'}
+            </Button>
+          </>
+        ) : (
+          <span className="text-xs text-muted">
+            {member.isSelf
+              ? 'Current user'
+              : member.teamRole === 'owner'
+                ? 'Owner — use Ownership Transfer below'
+                : 'No permission'}
+          </span>
+        )}
+        {member.awaitingPassword && canManageMembers && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void resendSetPassword(member)}
+            disabled={resendingUserId === member.userId}
+            aria-label={`Resend set-password link to ${member.email ?? member.name ?? 'this user'}`}
+          >
+            {resendingUserId === member.userId ? 'Sending...' : 'Resend set-password'}
+          </Button>
+        )}
+      </div>
+    )
   }
 
   useEffect(() => {
@@ -786,6 +981,15 @@ export default function TeamSettingsPage() {
     })
   }, [isOwner, ownershipCandidates])
 
+  const confirmBusy =
+    confirmState?.kind === 'remove-member'
+      ? removingMemberUserId === confirmState.member.userId
+      : confirmState?.kind === 'revoke-invite'
+        ? revokingInviteId === confirmState.invite.id
+        : confirmState?.kind === 'transfer-ownership'
+          ? transferringOwnership
+          : false
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 sm:p-8">
       <Link
@@ -800,7 +1004,7 @@ export default function TeamSettingsPage() {
 
       <div className="space-y-1">
         <h1 className="text-2xl font-bold text-foreground">Team & Access</h1>
-        <p className="text-sm text-muted">
+        <p className="max-w-2xl text-sm text-muted">
           Switch active team, manage members, and control invite access for locations, guests, and logs.
         </p>
       </div>
@@ -856,7 +1060,7 @@ export default function TeamSettingsPage() {
               <p className="text-sm font-semibold text-foreground">Active team context</p>
               <p className="text-xs text-muted">Your APIs and dashboards use this team by default.</p>
             </div>
-            {nextPath && (
+            {explicitNextPath && (
               <Button
                 variant="outline"
                 onClick={() => router.push(nextPath)}
@@ -893,7 +1097,7 @@ export default function TeamSettingsPage() {
                   </div>
                   <div className="mt-3">
                     {team.isActive ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                         Active
                       </span>
                     ) : (
@@ -914,70 +1118,66 @@ export default function TeamSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">Team Audit Trail</p>
-              <p className="text-xs text-muted">
-                Immutable timeline for role changes, ownership transfers, and member removals.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="audit-action-filter">Action (optional)</Label>
-                <Select
-                  value={auditActionFilter}
-                  onValueChange={(value) => setAuditActionFilter((value ?? 'all') as 'all' | TeamAuditAction)}
-                  disabled={!canViewAudit}
-                >
-                  <SelectTrigger id="audit-action-filter" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AUDIT_ACTION_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="audit-from-date">From (optional)</Label>
-                <Input
-                  id="audit-from-date"
-                  type="date"
-                  value={auditFromDate}
-                  onChange={(e) => setAuditFromDate(e.target.value)}
-                  disabled={!canViewAudit}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="audit-to-date">To (optional)</Label>
-                <Input
-                  id="audit-to-date"
-                  type="date"
-                  value={auditToDate}
-                  onChange={(e) => setAuditToDate(e.target.value)}
-                  disabled={!canViewAudit}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="opacity-0">Export</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!canViewAudit || exportingAuditCsv || !activeTeam}
-                  onClick={() => void exportAuditCsv()}
-                >
-                  {exportingAuditCsv ? 'Exporting...' : 'Export CSV'}
-                </Button>
-              </div>
-            </div>
+      <CollapsibleSection
+        title="Team Audit Trail"
+        description="Immutable timeline for role changes, ownership transfers, and member removals."
+      >
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="audit-action-filter">Action (optional)</Label>
+            <Select
+              value={auditActionFilter}
+              onValueChange={(value) => setAuditActionFilter((value ?? 'all') as 'all' | TeamAuditAction)}
+              disabled={!canViewAudit}
+            >
+              <SelectTrigger id="audit-action-filter" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUDIT_ACTION_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="audit-from-date">From (optional)</Label>
+            <Input
+              id="audit-from-date"
+              type="date"
+              value={auditFromDate}
+              onChange={(e) => setAuditFromDate(e.target.value)}
+              disabled={!canViewAudit}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="audit-to-date">To (optional)</Label>
+            <Input
+              id="audit-to-date"
+              type="date"
+              value={auditToDate}
+              onChange={(e) => setAuditToDate(e.target.value)}
+              disabled={!canViewAudit}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="hidden opacity-0 sm:block" aria-hidden>
+              Export
+            </Label>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canViewAudit || exportingAuditCsv || !activeTeam}
+              onClick={() => void exportAuditCsv()}
+            >
+              {exportingAuditCsv ? 'Exporting...' : 'Export CSV'}
+            </Button>
+          </div>
+        </div>
 
-          {!activeTeam ? (
+        {!activeTeam ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
               Select an active team first.
             </div>
@@ -1018,12 +1218,17 @@ export default function TeamSettingsPage() {
                         <span className="font-semibold text-foreground">Target:</span> {displayActor(event.target)}
                       </p>
                     )}
-                    {event.metadata && Object.keys(event.metadata).length > 0 && (
-                      <p className="break-all">
-                        <span className="font-semibold text-foreground">Metadata:</span>{' '}
-                        {JSON.stringify(event.metadata)}
-                      </p>
-                    )}
+                    {event.metadata && Object.keys(event.metadata).length > 0 && (() => {
+                      const summary = describeAuditMetadata(event.action, event.metadata as Record<string, unknown>)
+                      return summary ? (
+                        <p>{summary}</p>
+                      ) : (
+                        <p className="break-all font-mono text-xs">
+                          <span className="font-sans font-semibold text-foreground">Metadata:</span>{' '}
+                          {JSON.stringify(event.metadata)}
+                        </p>
+                      )
+                    })()}
                   </div>
                 </div>
               ))}
@@ -1044,29 +1249,22 @@ export default function TeamSettingsPage() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </CollapsibleSection>
 
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Create team</p>
-            <p className="text-xs text-muted">Add a new tenant and become its owner.</p>
-          </div>
-          <form className="flex flex-col gap-3 sm:flex-row" onSubmit={createTeam}>
-            <Input
-              value={newTeamName}
-              onChange={(e) => setNewTeamName(e.target.value)}
-              placeholder="Team name"
-              aria-label="Team name"
-              required
-            />
-            <Button type="submit" disabled={creatingTeam || !newTeamName.trim()}>
-              {creatingTeam ? 'Creating...' : 'Create Team'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <CollapsibleSection title="Create team" description="Add a new tenant and become its owner.">
+        <form className="flex flex-col gap-3 sm:flex-row" onSubmit={createTeam}>
+          <Input
+            value={newTeamName}
+            onChange={(e) => setNewTeamName(e.target.value)}
+            placeholder="Team name"
+            aria-label="Team name"
+            required
+          />
+          <Button type="submit" disabled={creatingTeam || !newTeamName.trim()}>
+            {creatingTeam ? 'Creating...' : 'Create Team'}
+          </Button>
+        </form>
+      </CollapsibleSection>
 
       <Card>
         <CardContent className="space-y-4 p-4">
@@ -1092,205 +1290,139 @@ export default function TeamSettingsPage() {
               No members found for this team.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-y-2">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-muted">
-                    <th className="px-2">Member</th>
-                    <th className="px-2">Role</th>
-                    <th className="px-2">Status</th>
-                    <th className="px-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((member) => {
-                    const currentDraftRole = draftRole[member.userId] ?? member.teamRole
-                    const currentDraftStatus = draftStatus[member.userId] ?? member.status
-                    const isEditable = canManageMembers && !member.isSelf && member.teamRole !== 'owner'
-
-                    return (
-                      <tr key={member.userId} className="rounded-xl border border-border bg-background">
-                        <td className="px-2 py-2">
-                          <p className="text-sm font-medium text-foreground">{member.name ?? 'Unnamed user'}</p>
-                          <p className="text-xs text-muted">{member.email ?? 'No email'}</p>
-                        </td>
-                        <td className="px-2 py-2">
-                          {isEditable ? (
-                            <Select
-                              value={currentDraftRole}
-                              onValueChange={(value) =>
-                                setDraftRole((current) => ({
-                                  ...current,
-                                  [member.userId]: (value ?? member.teamRole) as TeamRole,
-                                }))
-                              }
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {ROLE_OPTIONS
-                                  .filter((option) => option.value !== 'owner')
-                                  .map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(member.teamRole)}`}>
-                              {member.teamRole}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2">
-                          {isEditable ? (
-                            <Select
-                              value={currentDraftStatus}
-                              onValueChange={(value) =>
-                                setDraftStatus((current) => ({
-                                  ...current,
-                                  [member.userId]: (value ?? member.status) as TeamStatus,
-                                }))
-                              }
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="active">active</SelectItem>
-                                <SelectItem value="suspended">suspended</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <span className="text-sm text-muted">{member.status}</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {isEditable ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => void saveMember(member)}
-                                  disabled={savingMemberUserId === member.userId}
-                                >
-                                  {savingMemberUserId === member.userId ? 'Saving...' : 'Save'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => void removeMember(member)}
-                                  disabled={removingMemberUserId === member.userId}
-                                >
-                                  {removingMemberUserId === member.userId ? 'Removing...' : 'Remove'}
-                                </Button>
-                              </>
-                            ) : (
-                              <span className="text-xs text-muted">
-                                {member.isSelf ? 'Current user' : 'No permission'}
-                              </span>
-                            )}
-                            {member.awaitingPassword && canManageMembers && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void resendSetPassword(member)}
-                                disabled={resendingUserId === member.userId}
-                                aria-label={`Resend set-password link to ${member.email ?? member.name ?? 'this user'}`}
-                              >
-                                {resendingUserId === member.userId ? 'Sending...' : 'Resend set-password'}
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Ownership Transfer</p>
-            <p className="text-xs text-muted">
-              Move resource ownership of this team to another active member.
-            </p>
-          </div>
-
-          {!activeTeam ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              Select an active team first.
-            </div>
-          ) : !isOwner ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              Only current team owner can transfer ownership.
-            </div>
-          ) : ownershipCandidates.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              Add another active member before transferring ownership.
-            </div>
-          ) : (
-            <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={transferOwnership}>
-              <div className="space-y-1.5">
-                <Label htmlFor="ownership-target-user">New owner</Label>
-                <Select
-                  value={transferTargetUserId}
-                  onValueChange={(value) => setTransferTargetUserId(value ?? '')}
-                  required
-                >
-                  <SelectTrigger id="ownership-target-user" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ownershipCandidates.map((member) => (
-                      <SelectItem key={member.userId} value={member.userId}>
-                        {(member.name ?? member.email ?? member.userId) +
-                          ` (${member.teamRole})`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="opacity-0">Transfer</Label>
-                <Button
-                  type="submit"
-                  variant="destructive"
-                  disabled={transferringOwnership || !transferTargetUserId}
-                >
-                  {transferringOwnership ? 'Transferring...' : 'Transfer Ownership'}
-                </Button>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Invites</p>
-            <p className="text-xs text-muted">Invite users by email to this team.</p>
-          </div>
-
-          {!activeTeam ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              Select an active team to manage invites.
-            </div>
-          ) : !canManageInvites ? (
-            <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              You need team admin or owner role to manage invites.
-            </div>
-          ) : (
             <>
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="min-w-full border-separate border-spacing-y-2">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-muted">
+                      <th className="px-2">Member</th>
+                      <th className="px-2">Role</th>
+                      <th className="px-2">Status</th>
+                      <th className="px-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((member) => {
+                      const currentDraftRole = draftRole[member.userId] ?? member.teamRole
+                      const currentDraftStatus = draftStatus[member.userId] ?? member.status
+                      const isEditable = canManageMembers && !member.isSelf && member.teamRole !== 'owner'
+
+                      return (
+                        <tr key={member.userId} className="rounded-xl border border-border bg-background">
+                          <td className="px-2 py-2">
+                            <p className="max-w-[220px] truncate text-sm font-medium text-foreground">
+                              {member.name ?? 'Unnamed user'}
+                            </p>
+                            <p className="max-w-[220px] truncate text-xs text-muted">{member.email ?? 'No email'}</p>
+                          </td>
+                          <td className="px-2 py-2">{renderMemberRoleControl(member, isEditable, currentDraftRole)}</td>
+                          <td className="px-2 py-2">{renderMemberStatusControl(member, isEditable, currentDraftStatus)}</td>
+                          <td className="px-2 py-2">{renderMemberActions(member, isEditable)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Below `sm`, the table's Actions column clips off-canvas with
+                  no scroll affordance — an admin removing access from a phone
+                  couldn't reach it. A stacked card keeps every control visible. */}
+              <div className="space-y-2 sm:hidden">
+                {members.map((member) => {
+                  const currentDraftRole = draftRole[member.userId] ?? member.teamRole
+                  const currentDraftStatus = draftStatus[member.userId] ?? member.status
+                  const isEditable = canManageMembers && !member.isSelf && member.teamRole !== 'owner'
+
+                  return (
+                    <div key={member.userId} className="space-y-3 rounded-xl border border-border bg-background p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{member.name ?? 'Unnamed user'}</p>
+                        <p className="truncate text-xs text-muted">{member.email ?? 'No email'}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Role</p>
+                          {renderMemberRoleControl(member, isEditable, currentDraftRole)}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Status</p>
+                          {renderMemberStatusControl(member, isEditable, currentDraftStatus)}
+                        </div>
+                      </div>
+                      {renderMemberActions(member, isEditable)}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <CollapsibleSection
+        title="Ownership Transfer"
+        description="Move resource ownership of this team to another active member."
+      >
+        {!activeTeam ? (
+          <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
+            Select an active team first.
+          </div>
+        ) : !isOwner ? (
+          <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
+            Only current team owner can transfer ownership.
+          </div>
+        ) : ownershipCandidates.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
+            Add another active member before transferring ownership.
+          </div>
+        ) : (
+          <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={requestTransferOwnership}>
+            <div className="space-y-1.5">
+              <Label htmlFor="ownership-target-user">New owner</Label>
+              <Select
+                value={transferTargetUserId}
+                onValueChange={(value) => setTransferTargetUserId(value ?? '')}
+                required
+              >
+                <SelectTrigger id="ownership-target-user" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ownershipCandidates.map((member) => (
+                    <SelectItem key={member.userId} value={member.userId}>
+                      {(member.name ?? member.email ?? member.userId) +
+                        ` (${member.teamRole})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="hidden opacity-0 md:block" aria-hidden>
+                Transfer
+              </Label>
+              {/* Red is reserved for the confirm dialog's actual point of no
+                  return — this trigger only opens that dialog. */}
+              <Button type="submit" disabled={!transferTargetUserId}>
+                Transfer Ownership
+              </Button>
+            </div>
+          </form>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Invites" description="Invite users by email to this team.">
+        {!activeTeam ? (
+          <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
+            Select an active team to manage invites.
+          </div>
+        ) : !canManageInvites ? (
+          <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
+            You need team admin or owner role to manage invites.
+          </div>
+        ) : (
+          <>
               <form className="grid gap-3 md:grid-cols-[1fr_auto_auto]" onSubmit={createInvite}>
                 <div className="space-y-1.5">
                   <Label htmlFor="invite-email">Email</Label>
@@ -1323,7 +1455,9 @@ export default function TeamSettingsPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="opacity-0">Send</Label>
+                  <Label className="hidden opacity-0 md:block" aria-hidden>
+                    Send
+                  </Label>
                   <Button type="submit" disabled={creatingInvite || !inviteEmail.trim()}>
                     {creatingInvite ? 'Creating...' : 'Create invite'}
                   </Button>
@@ -1364,7 +1498,7 @@ export default function TeamSettingsPage() {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => void revokeInvite(invite.id)}
+                          onClick={() => setConfirmState({ kind: 'revoke-invite', invite })}
                           disabled={revokingInviteId === invite.id}
                         >
                           {revokingInviteId === invite.id ? 'Revoking...' : 'Revoke'}
@@ -1376,15 +1510,119 @@ export default function TeamSettingsPage() {
               )}
             </>
           )}
-        </CardContent>
-      </Card>
+      </CollapsibleSection>
 
       {activeTeam && (
-        <AddUserDirect
-          canManage={Boolean(activeTeam.canManageMembers)}
-          isOwner={activeTeam.role === 'owner'}
-        />
+        <CollapsibleSection
+          title="Add user directly"
+          description="Creates the account now and emails a set-password link (active on the current team)."
+        >
+          <AddUserDirect
+            canManage={Boolean(activeTeam.canManageMembers)}
+            isOwner={activeTeam.role === 'owner'}
+          />
+        </CollapsibleSection>
       )}
+
+      <Dialog
+        open={Boolean(confirmState)}
+        onOpenChange={(open) => {
+          if (!open && !confirmBusy) setConfirmState(null)
+        }}
+      >
+        <DialogContent size="xs">
+          {confirmState?.kind === 'remove-member' && (
+            <>
+              <DialogHeader>
+                <DialogIcon className="size-12 rounded-full bg-[var(--status-danger)]/10 text-[var(--status-danger)]">
+                  <UserMinus className="size-5" aria-hidden />
+                </DialogIcon>
+                <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
+                  Remove {confirmState.member.name ?? confirmState.member.email ?? 'this member'}?
+                </DialogTitle>
+              </DialogHeader>
+              <DialogBody className="mt-3 text-sm leading-6 text-muted">
+                They lose access to this team&apos;s locations, logs, and settings immediately. You can
+                re-invite them later.
+              </DialogBody>
+              <DialogFooter className="mt-5 gap-2">
+                <Button variant="outline" size="sm" onPress={() => setConfirmState(null)} isDisabled={confirmBusy}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onPress={() => void removeMember(confirmState.member)}
+                  isLoading={confirmBusy}
+                  loadingBehavior="busy"
+                >
+                  Remove member
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+          {confirmState?.kind === 'revoke-invite' && (
+            <>
+              <DialogHeader>
+                <DialogIcon className="size-12 rounded-full bg-[var(--status-danger)]/10 text-[var(--status-danger)]">
+                  <MailX className="size-5" aria-hidden />
+                </DialogIcon>
+                <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
+                  Revoke the invite to {confirmState.invite.email}?
+                </DialogTitle>
+              </DialogHeader>
+              <DialogBody className="mt-3 text-sm leading-6 text-muted">
+                The invite link stops working immediately. You can send a new one from this page any time.
+              </DialogBody>
+              <DialogFooter className="mt-5 gap-2">
+                <Button variant="outline" size="sm" onPress={() => setConfirmState(null)} isDisabled={confirmBusy}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onPress={() => void revokeInvite(confirmState.invite.id)}
+                  isLoading={confirmBusy}
+                  loadingBehavior="busy"
+                >
+                  Revoke invite
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+          {confirmState?.kind === 'transfer-ownership' && (
+            <>
+              <DialogHeader>
+                <DialogIcon className="size-12 rounded-full bg-[var(--status-warning)]/10 text-[var(--status-warning)]">
+                  <ArrowRightLeft className="size-5" aria-hidden />
+                </DialogIcon>
+                <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
+                  Transfer ownership to {confirmState.targetLabel}?
+                </DialogTitle>
+              </DialogHeader>
+              <DialogBody className="mt-3 text-sm leading-6 text-muted">
+                {activeTeam?.name ?? 'This team'}&apos;s ownership moves to {confirmState.targetLabel}. Your own
+                role becomes admin — you keep managing members and invites, just not transferring ownership
+                again yourself.
+              </DialogBody>
+              <DialogFooter className="mt-5 gap-2">
+                <Button variant="outline" size="sm" onPress={() => setConfirmState(null)} isDisabled={confirmBusy}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onPress={() => void performTransferOwnership()}
+                  isLoading={confirmBusy}
+                  loadingBehavior="busy"
+                >
+                  Transfer ownership
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

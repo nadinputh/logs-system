@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,21 +58,13 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-4 p-4">
-        <div>
-          <p className="text-sm font-semibold text-foreground">Add user directly</p>
-          <p className="text-xs text-muted">
-            Creates the account now and emails a set-password link (active on the current team).
-          </p>
-        </div>
-
-        {!canManage ? (
-          <p className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-            You need team admin or owner role to add users.
-          </p>
-        ) : (
-          <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]" onSubmit={handleSubmit}>
+    <>
+      {!canManage ? (
+        <p className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
+          You need team admin or owner role to add users.
+        </p>
+      ) : (
+        <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
               <Label htmlFor="direct-name">Name</Label>
               <Input id="direct-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
@@ -140,7 +131,6 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+    </>
   )
 }
