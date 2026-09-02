@@ -42,17 +42,22 @@ export async function GET(req: NextRequest) {
   }
 
   const userId = (auth.session.user as any).id;
-  // Team admins/owners see the whole team's check-ins by default; members
-  // always see only their own. `scope=mine` overrides that for an admin too —
-  // "My Logs" and "All Logs" both call this route, and without this param an
-  // admin's "My Logs" silently rendered the entire team's data under a header
-  // that said otherwise.
+  // Managers, admins, and owners see the whole team's check-ins by default;
+  // members always see only their own. This must stay in lockstep with who can
+  // even reach the "All Logs" page: NavBar's `isAdmin` gate and the /admin
+  // layout's requireTeamPageAccess() both admit manager+, and logs.manualCheckout
+  // (TEAM_PERMISSION_MIN_ROLE) already lets a manager check out any log in the
+  // team — they need to see the team's open check-ins to use that, not just
+  // their own. `scope=mine` overrides this for a manager/admin too — "My Logs"
+  // and "All Logs" both call this route, and without this param a manager's
+  // "My Logs" silently rendered the entire team's data under a header that
+  // said otherwise.
   const mineOnly = req.nextUrl.searchParams.get("scope") === "mine";
   const canViewTeam =
     !mineOnly &&
     hasMinimumTeamRole(
       ((auth.membership as any)?.role as TeamRole) ?? "member",
-      "admin",
+      "manager",
     );
 
   const baseQuery = canViewTeam
