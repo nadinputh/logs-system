@@ -70,10 +70,21 @@ function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : '—'
 }
 
+// A cell starting with =, +, -, @, or a tab/CR is a live formula to Excel/
+// Sheets on open — and several exported columns (Purpose, User agent, Device
+// ID) are client-supplied free text. Prefixing with a bare quote forces
+// text interpretation without changing what the cell displays.
+const CSV_FORMULA_TRIGGER = /^[=+\-@\t\r]/
+
 function csvEscape(value: unknown) {
-  const text = String(value ?? '')
+  let text = String(value ?? '')
+  if (CSV_FORMULA_TRIGGER.test(text)) text = `'${text}`
   if (!/[",\n]/.test(text)) return text
   return `"${text.replace(/"/g, '""')}"`
+}
+
+function csvBool(value?: boolean) {
+  return value === undefined || value === null ? '' : value ? 'Yes' : 'No'
 }
 
 function durationLabel(entry: LogEntry) {
@@ -319,16 +330,35 @@ function AdminLogsContent() {
     try {
       const data = await fetchJsonOnce<{ logs?: LogEntry[] }>(`/api/logs?${buildLogsParams({ page: 1, limit: EXPORT_LIMIT })}`)
       const rows = data.logs ?? []
-      const headers = ['Visitor', 'Email', 'Location', 'Type', 'Status', 'Check-in', 'Check-out', 'Duration', 'Corrected']
+      // Mirrors LogDetailsDialog's own section order (Visitor → Location →
+      // Check-in/out → Technical details) so the export reads the same way
+      // the dialog does — this is all data the row already fetched for the
+      // dialog, just never surfaced in the CSV.
+      const headers = [
+        'Visitor', 'Email', 'Phone', 'Gender', 'Purpose',
+        'Location', 'Type', 'Status', 'Check-in', 'Check-out', 'Duration',
+        'Passkey Verified', 'Auto Checked Out',
+        'Device ID', 'IP Address', 'Geofence Matched', 'User Agent',
+        'Corrected',
+      ]
       const csvRows = rows.map(l => [
         l.visitorName ?? '',
         l.visitorEmail ?? '',
+        l.visitorPhone ?? '',
+        l.visitorGender ?? '',
+        l.visitPurpose ?? '',
         l.locationPath ?? l.locationName ?? '',
         l.locationType,
         l.checkoutAt ? 'Out' : 'In',
         formatDate(l.timestamp),
         formatDate(l.checkoutAt),
         durationLabel(l),
+        csvBool(l.passkeyVerified),
+        csvBool(l.checkoutLog?.autoCheckedOut ?? l.autoCheckedOut),
+        l.deviceId ?? '',
+        l.ipAddress ?? '',
+        csvBool(l.geofenceStatus),
+        l.userAgent ?? '',
         l.corrections?.length ? 'Yes' : 'No',
       ])
       const csv = [headers, ...csvRows].map(row => row.map(csvEscape).join(',')).join('\n')

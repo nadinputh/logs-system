@@ -345,3 +345,34 @@ identical to the 12-error baseline (0 new, confirmed on a clean `.next`), 124/12
 every fix confirmed live — the Steps card and Reissue button via a fresh dark-mode screenshot,
 `aria-pressed`/`role="group"` via direct DOM inspection, and the table inset via
 `getComputedStyle` (8px on all sides).
+
+## Audit — CSV export enriched with visitor and check-in device fields (2026-09-03)
+
+`/impeccable audit` was pointed at the All Logs CSV export specifically, asked whether more
+visitor and check-in-device info could be included. `exportCsv()` in `app/admin/logs/page.tsx`
+re-fetches the same enriched `GET /api/logs` payload a row's own Guest Details dialog already
+renders — `visitorPhone`, `visitorGender`, `visitPurpose`, `deviceId`, `ipAddress`, `userAgent`,
+`geofenceStatus`, `passkeyVerified`, and the paired checkout log's `autoCheckedOut` were all
+already in the fetched object and simply never reached the CSV, which exported only 9 of the
+~18 available columns. Widened to 18 headers in the dialog's own section order (Visitor →
+Location → Check-in/out → Technical details) — no backend or API change, since every field was
+already in scope for this route's `logs.read` permission.
+
+While touching `csvEscape`, hardened it against CSV/formula injection: a cell starting with
+`=`, `+`, `-`, `@`, tab, or CR is a live formula to Excel/Sheets on open, and several newly
+exported columns (Purpose, User agent, Device ID) are client-supplied free text that previously
+went straight through unescaped (as did the pre-existing Visitor/Email columns). Prefixes a
+bare quote when the trigger pattern matches, which forces text interpretation without changing
+what the cell displays; the existing quote/comma/newline escaping is untouched.
+
+Verified: typecheck introduces zero new errors in this file (surrounding baseline errors are
+pre-existing and unrelated), 124/124 tests pass, detector clean (`[]`). Live in the browser as
+the seed admin: fetched the real `GET /api/logs` payload for the team's 19 seeded rows and ran
+the exact export logic against it in-page — device ID, IP address, user agent, gender, and
+purpose all came back populated with real values, not blank; the formula-injection guard was
+confirmed against `=1+1`, `+SUM(A1:A9)`, `@cmd`, and a literal `-2` (all correctly
+quote-prefixed), while ordinary comma-bearing text passed through unescaped-except-for-quoting
+as before. A literal file-save through the automated Chrome session hit Chrome's own
+repeated-automatic-download throttle after the first click (not a code defect — that first real
+click did produce a download, confirming the button/blob/anchor mechanism itself works); the
+in-page logic replay against live data is the verification of record for the new columns.
