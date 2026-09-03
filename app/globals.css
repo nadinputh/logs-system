@@ -465,7 +465,18 @@ summary:focus-visible,
   outline-offset: 2px;
 }
 
-[data-custom-focus]:focus-visible {
+/* Every HeroUI control — Input, Button, Select, Dropdown.Trigger,
+   Dropdown.Item/Menu.Item — is react-aria-components underneath and carries
+   its `data-rac` marker. Each already draws its own accent ring on
+   focus-visible via HeroUI's `status-focused`/`status-focused-field`
+   utilities (verified: every HeroUI component stylesheet but the
+   non-focusable group wrappers implements one). The blanket rule above still
+   matched them too — same accent color, offset 2px further out — so every
+   Input and Dropdown/Menu item rendered two concentric rings on focus. This
+   opts the whole react-aria-components surface out in one place instead of
+   hand-annotating `data-custom-focus` on each adapter. */
+[data-custom-focus]:focus-visible,
+[data-rac]:focus-visible {
   outline: none;
 }
 
