@@ -1,14 +1,18 @@
 import { connectDB } from '@/lib/db'
+import { PasskeyCredential } from '@/lib/models/PasskeyCredential'
 import { SessionInventory } from '@/lib/models/SessionInventory'
+import { User } from '@/lib/models/User'
 import { requireSession } from '@/lib/server/requireSession'
 import Link from 'next/link'
+import PasskeyManager from '@/app/settings/passkeys/PasskeyManager'
 import { Card, CardContent } from '@/components/ui/card'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { SessionsList, type SessionRow } from './SessionsList'
-import { ShieldCheck } from 'lucide-react'
+import { ShieldCheck, Fingerprint } from 'lucide-react'
 
 export const metadata = {
-  title: 'Security — Kamnotheat',
-  description: 'Every device signed in on this account, with per-device revoke.',
+  title: 'Account & Security — Kamnotheat',
+  description: 'Passkeys and every device signed in on this account, in one place.',
   robots: { index: false },
 }
 
@@ -19,12 +23,19 @@ export default async function SecuritySettingsPage() {
   const currentJti = ((session.user as any).sid as string | undefined) ?? null
 
   await connectDB()
-  const rows = await SessionInventory.find({ userId })
-    .select('jti createdAt lastSeenAt ipAddress userAgent provider')
-    .sort({ createdAt: -1 })
-    .lean()
+  const [user, passkeys, rows] = await Promise.all([
+    User.findById(userId).select('name email role createdAt').lean(),
+    PasskeyCredential.find({ userId }).select('-publicKey').sort({ createdAt: -1 }).lean(),
+    SessionInventory.find({ userId })
+      .select('jti createdAt lastSeenAt ipAddress userAgent provider')
+      .sort({ createdAt: -1 })
+      .lean(),
+  ])
 
-  const initial: SessionRow[] = rows.map((r: any) => ({
+  const u = user as any
+  const initials = (u?.name ?? u?.email ?? '?')[0].toUpperCase()
+
+  const initialSessions: SessionRow[] = rows.map((r: any) => ({
     id: r._id.toString(),
     jti: r.jti as string,
     createdAt: (r.createdAt as Date).toISOString(),
@@ -53,13 +64,63 @@ export default async function SecuritySettingsPage() {
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Security</h1>
-        <p className="text-sm text-muted mt-0.5">
-          Every device signed in on this account. The ledger that Kamnotheat keeps for
-          every check-in — IP, device, when — now runs for your own sessions too.
+        <h1 className="text-2xl font-bold text-foreground">Account &amp; Security</h1>
+        <p className="text-sm text-muted mt-0.5 max-w-md">
+          Your sign-in methods and every device signed in on this account — the same
+          ledger Kamnotheat keeps for every check-in, now covering your own account.
         </p>
       </div>
 
+      {/* Identity card */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            <Avatar color="accent" size="lg" variant="soft">
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-semibold text-foreground truncate">{u?.name}</p>
+              <p className="text-sm text-muted truncate">{u?.email}</p>
+              <div className="mt-1.5 flex items-center gap-2">
+                <span
+                  className={
+                    u?.role === 'admin'
+                      ? 'inline-flex items-center text-xs font-medium text-cyan-500 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full'
+                      : 'inline-flex items-center text-xs font-medium text-muted bg-default border border-border px-2 py-0.5 rounded-full'
+                  }
+                >
+                  {u?.role === 'admin' ? 'Admin' : 'Staff'}
+                </span>
+                {u?.createdAt && (
+                  <span className="text-xs text-muted">
+                    Member since {new Date(u.createdAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Passkeys */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-4">
+          <div className="mb-4 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
+              <Fingerprint className="w-4 h-4 text-sky-500" strokeWidth={2.2} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-foreground">Passkeys</h2>
+              <p className="text-xs text-muted mt-0.5 max-w-md">
+                Use your device biometrics or PIN to verify your identity — no password needed.
+              </p>
+            </div>
+          </div>
+          <PasskeyManager initialPasskeys={JSON.parse(JSON.stringify(passkeys))} />
+        </CardContent>
+      </Card>
+
+      {/* Active sessions */}
       <Card className="overflow-hidden">
         <CardContent className="p-4">
           <div className="mb-4 flex items-start gap-3">
@@ -68,7 +129,7 @@ export default async function SecuritySettingsPage() {
             </div>
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-foreground">Active sessions</h2>
-              <p className="text-xs text-muted mt-0.5">
+              <p className="text-xs text-muted mt-0.5 max-w-md">
                 Revoke one row to end that device only. Every session is a JWT stamped
                 with a session-inventory row (jti) and the account&apos;s{' '}
                 <span className="font-mono text-xs">sessionsVersion</span>; either
@@ -76,7 +137,7 @@ export default async function SecuritySettingsPage() {
               </p>
             </div>
           </div>
-          <SessionsList initial={initial} />
+          <SessionsList initial={initialSessions} />
         </CardContent>
       </Card>
     </div>

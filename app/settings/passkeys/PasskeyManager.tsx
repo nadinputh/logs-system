@@ -86,43 +86,47 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
         </Button>
       </div>
 
-      {passkeys.map((pk) => (
-        <div key={pk._id} className="flex items-center justify-between p-3.5 rounded-xl border border-border/60 bg-muted/20 hover:bg-muted/40 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
-              <KeyRound className="w-4 h-4 text-sky-500" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {pk.deviceType === 'multiDevice' ? 'Synced passkey' : 'Device-bound passkey'}
-              </p>
-              <p className="text-xs text-muted">
-                Added {new Date(pk.createdAt).toLocaleDateString()} · Last used{' '}
-                {new Date(pk.lastUsedAt).toLocaleDateString()}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {pk.backedUp && (
-              <span className="inline-flex items-center text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Backed up</span>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-red-500 hover:text-red-400 hover:bg-red-500/10"
-              aria-label="Remove passkey"
-              onPress={() => setPasskeyToDelete(pk)}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      ))}
+      {passkeys.length > 0 && (
+        <ul className="divide-y divide-border/60" role="list">
+          {passkeys.map((pk) => (
+            <li key={pk._id} className="flex items-center justify-between gap-3 py-3.5">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
+                  <KeyRound className="w-4 h-4 text-sky-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {pk.deviceType === 'multiDevice' ? 'Synced passkey' : 'Device-bound passkey'}
+                  </p>
+                  <p className="text-xs text-muted truncate">
+                    Added {new Date(pk.createdAt).toLocaleDateString()} · Last used{' '}
+                    {new Date(pk.lastUsedAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {pk.backedUp && (
+                  <span className="inline-flex items-center text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Backed up</span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-[var(--status-danger)] hover:text-[var(--status-danger)] hover:bg-[var(--status-danger)]/10"
+                  aria-label={`Remove ${pk.deviceType === 'multiDevice' ? 'synced' : 'device-bound'} passkey added ${new Date(pk.createdAt).toLocaleDateString()}`}
+                  onPress={() => setPasskeyToDelete(pk)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <Dialog open={Boolean(passkeyToDelete)} onOpenChange={(open) => !open && setPasskeyToDelete(null)}>
         <DialogContent size="xs">
           <DialogHeader>
-            <DialogIcon className="size-12 rounded-full bg-red-500/10 text-red-500">
+            <DialogIcon className="size-12 rounded-full bg-[var(--status-danger)]/10 text-[var(--status-danger)]">
               <Trash2 className="size-5" aria-hidden />
             </DialogIcon>
             <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">Remove passkey?</DialogTitle>
