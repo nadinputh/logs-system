@@ -4,8 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
-import { Avatar, Chip, Dropdown, Separator } from '@heroui/react'
-import { Button } from '@/components/ui/button'
+import { Avatar, Chip, Dropdown, Header, Separator } from '@heroui/react'
 import { toast } from '@/components/ui/sonner'
 import type { LucideIcon } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -16,7 +15,6 @@ import {
   ChevronDown,
   ClipboardList,
   DoorOpen,
-  Fingerprint,
   Home,
   Layers3,
   LogOut,
@@ -60,17 +58,13 @@ const adminItems: NavigationItem[] = [
   { href: '/admin/logs', label: 'All Logs', description: 'Audit every check-in', Icon: ShieldCheck },
 ]
 
-const passkeyItem: NavigationItem = {
-  href: '/settings/passkeys',
-  label: 'Passkeys',
-  description: 'Device authentication',
-  Icon: Fingerprint,
-}
-
+// Passkeys and Security used to be two separate settings pages reached from
+// two separate menu items; they shared one mental model ("how do I get into
+// my account") and are now one merged page at /settings/security.
 const securityItem: NavigationItem = {
   href: '/settings/security',
   label: 'Security',
-  description: 'Active sessions on every device',
+  description: 'Passkeys and active sessions',
   Icon: ShieldCheck,
 }
 
@@ -87,7 +81,7 @@ function isRouteActive(pathname: string, href: string) {
 
 function navigationClass(active: boolean) {
   return [
-    'group inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-accent/30 [&_svg]:text-current',
+    'group inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-accent/30 [&_svg]:text-current',
     active
       ? 'bg-accent/10 text-accent ring-1 ring-accent/15'
       : 'text-muted hover:bg-accent/10 hover:text-accent hover:ring-1 hover:ring-accent/10 data-[hovered]:bg-accent/10 data-[hovered]:text-accent data-[hovered]:ring-1 data-[hovered]:ring-accent/10',
@@ -120,7 +114,6 @@ function useHoverDropdown(
   const triggerRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const pointerRef = useRef({ x: 0, y: 0 })
-  const suppressHoverOpenRef = useRef(false)
   const isOpen = openDropdown === key
 
   function clearCloseTimer() {
@@ -168,25 +161,41 @@ function useHoverDropdown(
 
   function handleHoverEnter(event: ReactMouseEvent | ReactPointerEvent) {
     updatePointerPosition(event)
-
-    if (suppressHoverOpenRef.current) return
-
     open()
   }
 
   function handleHoverLeave(event: ReactMouseEvent | ReactPointerEvent) {
     updatePointerPosition(event)
-    suppressHoverOpenRef.current = false
     closeSoon()
   }
 
+  // react-aria's own MenuTrigger owns press (click/tap/Enter/Space), Escape,
+  // and outside-click dismissal for a controlled Dropdown — this only needs
+  // to react to those calls, never to intercept pointerdown itself. An
+  // earlier version hijacked pointerdown at the window level to hand-roll
+  // click-to-toggle, which fought the library's own dismiss handling and
+  // could leave a popover open with the rest of the page unresponsive to
+  // clicks. Focus-restore-on-close is NOT handled by the library here (live-
+  // verified: a real Escape after a real keyboard-driven open still leaves
+  // focus on <body>, not the trigger) — likely because the popover is
+  // conditionally unmounted by our own `isOpen &&` render rather than kept
+  // mounted and hidden, which is what the library's own restore-focus effect
+  // expects to still be there when it runs. Restoring it explicitly here.
   function handleOpenChange(openState: boolean) {
     clearCloseTimer()
-    suppressHoverOpenRef.current = false
     setOpenDropdown((current) => {
       if (openState) return key
       return current === key ? null : current
     })
+    if (!openState) {
+      // A synchronous focus() call here loses a race with react-aria's own
+      // FocusScope unmount cleanup (it runs after this callback returns, and
+      // unconditionally moves focus itself) — deferring to a macrotask lets
+      // our call run last and actually stick. Captured now, before the
+      // popover — and this ref's target — could change on the next render.
+      const button = triggerRef.current?.querySelector<HTMLButtonElement>('[data-slot="dropdown-trigger"]')
+      if (button) setTimeout(() => button.focus(), 0)
+    }
   }
 
   useEffect(() => {
@@ -220,35 +229,6 @@ function useHoverDropdown(
       clearCloseTimer()
     }
   }, [isOpen])
-
-  useEffect(() => {
-    function handleTriggerPointerDown(event: PointerEvent) {
-      updatePointerPosition(event)
-
-      if (!isPointInside(triggerRef.current, 0)) return
-
-      event.preventDefault()
-      event.stopPropagation()
-      clearCloseTimer()
-      triggerRef.current?.querySelector<HTMLButtonElement>('[data-slot="dropdown-trigger"]')?.focus()
-      setOpenDropdown((current) => {
-        if (current === key) {
-          suppressHoverOpenRef.current = true
-          return null
-        }
-
-        suppressHoverOpenRef.current = false
-        return key
-      })
-    }
-
-    window.addEventListener('pointerdown', handleTriggerPointerDown, true)
-
-    return () => {
-      window.removeEventListener('pointerdown', handleTriggerPointerDown, true)
-      clearCloseTimer()
-    }
-  }, [])
 
   return {
     isOpen,
@@ -317,7 +297,12 @@ function DropdownNavigationItem({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{item.label}</span>
-          <span className={`block truncate text-xs ${active ? 'text-accent/75' : 'text-muted group-hover:text-foreground/70 group-data-[hovered]:text-foreground/70'}`}>{item.description}</span>
+          {/* Hidden below `sm`: at real phone widths (~390px) the mobile
+              menu's popover leaves too little room for this line and it
+              truncates to an unreadable fragment ("Device authe…"). Desktop's
+              three dropdowns only ever render at the `xl:` breakpoint and
+              above, so this never hides their descriptions. */}
+          <span className={`hidden truncate text-xs sm:block ${active ? 'text-accent/75' : 'text-muted group-hover:text-foreground/70 group-data-[hovered]:text-foreground/70'}`}>{item.description}</span>
         </span>
       </div>
     </Dropdown.Item>
@@ -336,12 +321,12 @@ const TEAM_ROLE_RANK: Record<TeamSummary['role'], number> = {
 export default function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { data: session, update } = useSession()
+  const { data: session } = useSession()
   const userEmail = session?.user?.email ?? ''
   const userName = (session?.user?.name ?? userEmail) || 'Account'
   const initials = userEmail ? userEmail[0].toUpperCase() : 'LM'
   const isLocationActive = locationItems.some((item) => isRouteActive(pathname, item.href))
-  const accountMenuItems = [passkeyItem, securityItem, teamAccessItem]
+  const accountMenuItems = [securityItem, teamAccessItem]
   const [teams, setTeams] = useState<TeamSummary[]>([])
   const [teamsLoaded, setTeamsLoaded] = useState(false)
   const [switchingTeamId, setSwitchingTeamId] = useState<string | null>(null)
@@ -355,9 +340,6 @@ export default function NavBar() {
   const teamRole = activeTeam?.role ?? null
   const roleLabel = teamRole ? teamRole.charAt(0).toUpperCase() + teamRole.slice(1) : 'Member'
   const isAdmin = teamRole ? TEAM_ROLE_RANK[teamRole] >= TEAM_ROLE_RANK.manager : false
-  const mobileMenuItems = isAdmin
-    ? [...primaryItems, ...locationItems, ...adminItems]
-    : [...primaryItems]
 
   useEffect(() => {
     if (!session?.user) return
@@ -413,14 +395,21 @@ export default function NavBar() {
         current.map((team) => ({ ...team, isActive: team.id === teamId })),
       )
 
-      try {
-        await update?.({ activeTeamId: teamId } as any)
-      } catch {
-        // Keep UI responsive even if session token refresh fails.
-      }
-
-      router.refresh()
+      // router.refresh() only invalidates Server Component data — every page
+      // in this app (Dashboard, My Logs, Admin Logs, Locations, Quests, ...)
+      // is a 'use client' component that fetches its own data in a mount-only
+      // useEffect, so refresh() was a silent no-op for all of it: the switch
+      // "succeeded" (the DB write and the toast both happened) while the
+      // screen kept showing the old team's data. A hard reload is what
+      // components/settings/passkeys/PasskeyManager.tsx already does after a
+      // comparable session-state change, and it's the only thing guaranteed
+      // to re-mount every page's data fetch regardless of how each one is
+      // written. The NextAuth session `update()` this replaced is redundant
+      // here — requireTeamAccess/requireTeamPermission (lib/middleware/auth.ts)
+      // always re-read User.activeTeamId fresh from the DB rather than
+      // trusting the JWT, and a full reload re-fetches the session anyway.
       toast.success('Switched active team')
+      window.location.reload()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to switch team'
       toast.error(message)
@@ -512,7 +501,7 @@ export default function NavBar() {
           <ThemeToggle />
           <div {...accountDropdown.triggerProps}>
             <Dropdown isOpen={accountDropdown.isOpen} onOpenChange={accountDropdown.onOpenChange}>
-              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-10 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label="Open account menu">
+              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-11 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label="Open account menu">
                 <Avatar color="accent" size="sm" variant="soft" className="shadow-sm shadow-accent/20">
                   <Avatar.Fallback>{initials}</Avatar.Fallback>
                 </Avatar>
@@ -547,47 +536,56 @@ export default function NavBar() {
                           onSelect={navigateTo}
                         />
                       ))}
-                      {teams.length > 1 && (
-                        <>
-                          <div className="px-3 pb-1 pt-2">
-                            <p className="text-xs font-semibold uppercase tracking-widest text-muted">Switch Team</p>
-                          </div>
-                          {teams.map((team) => (
-                            <Dropdown.Item
-                              key={team.id}
-                              id={`team-${team.id}`}
-                              textValue={`Switch to ${team.name}`}
-                              onAction={() => void switchTeam(team.id)}
-                              className="rounded-xl px-3 py-2 outline-none transition-colors hover:bg-accent/10 focus:bg-accent/10"
-                            >
-                              <div className="flex items-center justify-between gap-3 text-sm">
-                                <span className="truncate font-semibold text-foreground">{team.name}</span>
-                                {team.isActive ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                                    Active
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-muted">
-                                    {switchingTeamId === team.id ? 'Switching...' : 'Switch'}
-                                  </span>
-                                )}
-                              </div>
-                            </Dropdown.Item>
-                          ))}
-                        </>
-                      )}
+                      {/* A bare `cond && (...)` here evaluates to the boolean
+                          `false` when teams.length <= 1, and a stray `false`
+                          sitting in Dropdown.Menu's children silently breaks
+                          react-aria's Collection for every item after it —
+                          live-verified: Sign Out below vanished from the DOM
+                          entirely whenever this evaluated to `false`, with no
+                          console error. `[] : [...]` always yields an array,
+                          which Collection handles correctly regardless of
+                          length. */}
+                      {teams.length > 1
+                        ? [
+                            <Dropdown.Section key="switch-team">
+                              <Header className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted">Switch Team</Header>
+                              {teams.map((team) => (
+                                <Dropdown.Item
+                                  key={team.id}
+                                  id={`team-${team.id}`}
+                                  textValue={`Switch to ${team.name}`}
+                                  onAction={() => void switchTeam(team.id)}
+                                  className="rounded-xl px-3 py-2 outline-none transition-colors hover:bg-accent/10 focus:bg-accent/10"
+                                >
+                                  <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="truncate font-semibold text-foreground">{team.name}</span>
+                                    {team.isActive ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                                        Active
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted">
+                                        {switchingTeamId === team.id ? 'Switching...' : 'Switch'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </Dropdown.Item>
+                              ))}
+                            </Dropdown.Section>,
+                          ]
+                        : []}
+                      <Dropdown.Item
+                        id="sign-out"
+                        textValue="Sign out"
+                        onAction={handleSignOut}
+                        className="mt-1 rounded-xl border border-danger/30 px-3 py-2 text-danger outline-none transition-colors hover:bg-danger/10 focus:bg-danger/10 data-[hovered]:bg-danger/10"
+                      >
+                        <div className="flex items-center gap-2">
+                          <LogOut className="size-4" strokeWidth={2.2} />
+                          <span className="text-sm font-semibold">Sign out</span>
+                        </div>
+                      </Dropdown.Item>
                     </Dropdown.Menu>
-
-                    <Separator className="my-2 bg-border/70" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleSignOut}
-                      className="w-full justify-start gap-2 border-danger/30 text-danger hover:bg-danger/10 hover:text-danger"
-                    >
-                      <LogOut className="size-4" strokeWidth={2.2} />
-                      Sign out
-                    </Button>
                   </div>
                 </Dropdown.Popover>
               )}
@@ -596,7 +594,7 @@ export default function NavBar() {
 
           <div {...menuDropdown.triggerProps}>
             <Dropdown isOpen={menuDropdown.isOpen} onOpenChange={menuDropdown.onOpenChange}>
-              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-10 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label="Open navigation menu">
+              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-11 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label="Open navigation menu">
                 <Menu className="size-5" strokeWidth={2.4} />
               </Dropdown.Trigger>
               {menuDropdown.isOpen && (
@@ -611,12 +609,6 @@ export default function NavBar() {
                     </div>
                     <Dropdown.Menu aria-label="Mobile navigation" className="space-y-1">
                       <DropdownNavigationItem
-                        item={passkeyItem}
-                        active={isRouteActive(pathname, passkeyItem.href)}
-                        onSelect={navigateTo}
-                        className="sm:hidden"
-                      />
-                      <DropdownNavigationItem
                         item={securityItem}
                         active={isRouteActive(pathname, securityItem.href)}
                         onSelect={navigateTo}
@@ -628,7 +620,7 @@ export default function NavBar() {
                         onSelect={navigateTo}
                         className="sm:hidden"
                       />
-                      {mobileMenuItems.map((item) => (
+                      {primaryItems.map((item) => (
                         <DropdownNavigationItem
                           key={item.href}
                           item={item}
@@ -636,6 +628,29 @@ export default function NavBar() {
                           onSelect={navigateTo}
                         />
                       ))}
+                      {isAdmin && (
+                        <>
+                          <Dropdown.Section>
+                            <Header className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted">Locations</Header>
+                            {locationItems.map((item) => (
+                              <DropdownNavigationItem
+                                key={item.href}
+                                item={item}
+                                active={isRouteActive(pathname, item.href)}
+                                onSelect={navigateTo}
+                              />
+                            ))}
+                          </Dropdown.Section>
+                          {adminItems.map((item) => (
+                            <DropdownNavigationItem
+                              key={item.href}
+                              item={item}
+                              active={isRouteActive(pathname, item.href)}
+                              onSelect={navigateTo}
+                            />
+                          ))}
+                        </>
+                      )}
                       <Dropdown.Item
                         id="mobile-account"
                         textValue="Account"
