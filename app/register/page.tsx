@@ -1,4 +1,7 @@
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { RegisterForm } from './RegisterForm'
 
@@ -8,7 +11,13 @@ export const metadata: Metadata = {
   robots: { index: false },
 }
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  // Registering while signed in mints a wholly separate account — it does not
+  // add a workspace to the current user — so an authenticated visitor here is
+  // steered back to their existing dashboard instead of an orphaned account.
+  const session = await getServerSession(authOptions)
+  if (session) redirect('/dashboard')
+
   return (
     <AuthLayout
       headline={

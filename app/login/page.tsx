@@ -1,5 +1,8 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { LoginForm } from './LoginForm'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,6 +21,13 @@ export const metadata: Metadata = {
   robots: { index: false },
 }
 
+// Only ever redirect within the app — an absolute or protocol-relative `next`
+// would turn an already-authenticated visit into an open redirect.
+function safeNext(next: string | undefined): string {
+  if (next && next.startsWith('/') && !next.startsWith('//')) return next
+  return '/dashboard'
+}
+
 function FormSkeleton() {
   return (
     <div className="space-y-7">
@@ -34,7 +44,17 @@ function FormSkeleton() {
   )
 }
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>
+}) {
+  const session = await getServerSession(authOptions)
+  if (session) {
+    const { next } = await searchParams
+    redirect(safeNext(next))
+  }
+
   return (
     <AuthLayout
       headline={
