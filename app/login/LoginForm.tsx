@@ -43,6 +43,7 @@ const REASON_KEYS: Record<
 
 export function LoginForm() {
   const t = useTranslations('login')
+  const tCommon = useTranslations('common')
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextUrl = searchParams.get('next') || '/dashboard'
@@ -77,12 +78,12 @@ export function LoginForm() {
         return
       }
       if (!res.ok) {
-        setError(t('errorRequestLinkFailed'))
+        setError(tCommon('errorRequestLinkFailed'))
         return
       }
       setResent(true)
     } catch {
-      setError(t('errorRequestLinkFailed'))
+      setError(tCommon('errorRequestLinkFailed'))
     }
   }
 

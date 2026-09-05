@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { getTranslations } from 'next-intl/server'
+import { useTranslations } from 'next-intl'
 import { LockKeyhole, Server, ShieldCheck } from 'lucide-react'
 import { LogoTile } from '@/components/Logo'
 import { ParticleField } from '@/components/ParticleField'
@@ -25,7 +25,14 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher'
  * zoom, enlarged text — the page scrolls normally rather than hiding anything.
  */
 
-export async function AuthLayout({
+// Rendered from both Server Components (login/register pages) and, via
+// ForgotPasswordForm / ResetPasswordPage, from inside a 'use client' subtree —
+// whichever imports it first pulls it into that bundle. `useTranslations`
+// from the base 'next-intl' package (not the async next-intl/server
+// getTranslations) is the one API that works correctly in both: async
+// Client Components aren't supported at all, and getTranslations throws when
+// it ends up bundled for the client.
+export function AuthLayout({
   children,
   headline,
   subhead,
@@ -37,7 +44,7 @@ export async function AuthLayout({
   headline: ReactNode
   subhead: string
 }) {
-  const t = await getTranslations('common')
+  const t = useTranslations('common')
 
   /** The same three factual anchors the landing uses. No new claims. */
   const anchors = [

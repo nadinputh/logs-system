@@ -15,9 +15,11 @@ const inter = localFont({
 
 // Inter has no Khmer glyphs, so Khmer text would otherwise fall back to the
 // platform's default (inconsistent weight/metrics across OSes and often
-// missing subscript consonant shaping). Loaded unconditionally rather than
-// only under the Khmer locale — the two-locale toggle here is cookie-based
-// with no route split, so there's no per-locale bundle to defer this into.
+// missing subscript consonant shaping). next/font still generates this at
+// build time regardless of locale (the loader call itself can't be
+// conditional), but applying `.variable` to <html> only under the km locale
+// (below) means English-only sessions never get the preload link or the
+// font-face request — the audit's P2 finding on shipping four unused weights.
 const notoSansKhmer = Noto_Sans_Khmer({
   subsets: ['khmer'],
   weight: ['400', '500', '600', '700'],
@@ -52,7 +54,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang={locale}
-      className={`${inter.variable} ${notoSansKhmer.variable} ${geistMono.variable}`}
+      className={`${inter.variable} ${locale === 'km' ? notoSansKhmer.variable : ''} ${geistMono.variable}`}
       suppressHydrationWarning
     >
       <body className="font-sans antialiased bg-background text-foreground">

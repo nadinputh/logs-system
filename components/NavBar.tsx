@@ -331,6 +331,14 @@ const TEAM_ROLE_RANK: Record<TeamSummary['role'], number> = {
   owner: 4,
 }
 
+const ROLE_LABEL_KEYS: Record<TeamSummary['role'], string> = {
+  owner: 'roleOwner',
+  admin: 'roleAdmin',
+  manager: 'roleManager',
+  auditor: 'roleAuditor',
+  member: 'roleMember',
+}
+
 export default function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -364,7 +372,7 @@ export default function NavBar() {
   // Management affordances follow the team role (TeamMember.role): a self-signup
   // owner is the admin of their own workspace even though their global role is 'staff'.
   const teamRole = activeTeam?.role ?? null
-  const roleLabel = teamRole ? teamRole.charAt(0).toUpperCase() + teamRole.slice(1) : 'Member'
+  const roleLabel = tCommon(teamRole ? ROLE_LABEL_KEYS[teamRole] : 'roleMember')
   const isAdmin = teamRole ? TEAM_ROLE_RANK[teamRole] >= TEAM_ROLE_RANK.manager : false
 
   useEffect(() => {
@@ -524,7 +532,15 @@ export default function NavBar() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <LanguageSwitcher className="hidden sm:inline-flex" />
+          {/* Deliberately visible at every width, not hidden below `sm`: a
+              second instance used to live inside the mobile hamburger menu's
+              own open Popover, and nesting one react-aria overlay trigger
+              inside another's already-open content was an unverified risk
+              this environment's tooling couldn't confirm either way (no real
+              narrow-viewport test available). One always-visible instance
+              here removes the nesting question entirely instead of arguing
+              it's probably fine. */}
+          <LanguageSwitcher />
           <ThemeToggle />
           <div {...accountDropdown.triggerProps}>
             <Dropdown isOpen={accountDropdown.isOpen} onOpenChange={accountDropdown.onOpenChange}>
@@ -632,10 +648,11 @@ export default function NavBar() {
                         <p className="text-sm font-bold text-foreground">{t('menu')}</p>
                         <p className="text-xs text-muted">{t('menuSubtitle')}</p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <LanguageSwitcher className="sm:hidden" />
-                        {isAdmin && <RolePill isAdmin={isAdmin} label={roleLabel} />}
-                      </div>
+                      {isAdmin && (
+                        <div className="flex shrink-0 items-center gap-2">
+                          <RolePill isAdmin={isAdmin} label={roleLabel} />
+                        </div>
+                      )}
                     </div>
                     <Dropdown.Menu aria-label={t('mobileNavLabel')} className="space-y-1">
                       <DropdownNavigationItem

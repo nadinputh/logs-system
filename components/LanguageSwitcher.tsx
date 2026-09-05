@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import { useTransition } from 'react'
 import { Languages } from 'lucide-react'
 import { Dropdown } from '@heroui/react'
-import { locales, localeNames, type Locale } from '@/i18n/config'
+import { locales, localeNames, localeShortNames, type Locale } from '@/i18n/config'
 import { setUserLocale } from '@/i18n/locale'
 
 // Cookie-based, not route-based: there is no /en or /km segment, so switching
@@ -28,12 +28,15 @@ export function LanguageSwitcher({ className = '' }: { className?: string }) {
   return (
     <Dropdown>
       <Dropdown.Trigger
-        aria-label={t('language')}
+        aria-label={`${t('language')}: ${localeNames[locale]}`}
         isDisabled={isPending}
-        className={`inline-flex h-11 items-center gap-1.5 rounded-full border border-border/80 bg-overlay/80 px-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent disabled:opacity-60 [&_svg]:text-current ${className}`}
+        className={`inline-flex h-11 items-center gap-1 rounded-full border border-border/80 bg-overlay/80 px-2.5 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent disabled:opacity-60 [&_svg]:text-current ${className}`}
       >
         <Languages className="size-4 shrink-0" strokeWidth={2.2} />
-        <span>{localeNames[locale]}</span>
+        {/* Short code (EN/KM), not the full localeName — this trigger sits in
+            tight chrome (landing header, NavBar) with no room to spare; the
+            full name still shows for each option inside the popover. */}
+        <span>{localeShortNames[locale]}</span>
       </Dropdown.Trigger>
       <Dropdown.Popover placement="bottom end" className="w-40 rounded-2xl border border-border/70 bg-overlay p-2 shadow-xl shadow-slate-900/10">
         <Dropdown.Menu aria-label={t('language')} className="space-y-1">

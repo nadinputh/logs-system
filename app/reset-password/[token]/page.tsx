@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn } from 'next-auth/react'
+import { useTranslations } from 'next-intl'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,8 @@ import { Label } from '@/components/ui/label'
  * password and a verified email; this replaces the password).
  */
 export default function ResetPasswordPage() {
+  const t = useTranslations('resetPassword')
+  const tCommon = useTranslations('common')
   const params = useParams<{ token: string }>()
   const router = useRouter()
   const [password, setPassword] = useState('')
@@ -58,7 +61,7 @@ export default function ResetPasswordPage() {
       })
       setResent(true)
     } catch {
-      setError('Could not request a new link just now. Try again in a moment.')
+      setError(tCommon('errorRequestLinkFailed'))
     } finally {
       setResending(false)
     }
@@ -68,7 +71,7 @@ export default function ResetPasswordPage() {
     e.preventDefault()
     setError('')
     if (password !== confirm) {
-      setError('Passwords do not match')
+      setError(t('passwordsDontMatch'))
       return
     }
     setBusy(true)
@@ -87,8 +90,8 @@ export default function ResetPasswordPage() {
           typeof data?.error === 'string'
             ? data.error
             : res.status === 400
-              ? 'Check the details you entered and try again.'
-              : 'Could not reset password. Try again in a moment.'
+              ? tCommon('errorCheckDetails')
+              : t('errorGeneric')
         throw new Error(detail)
       }
 
@@ -104,7 +107,7 @@ export default function ResetPasswordPage() {
         router.refresh()
       }
     } catch (err: any) {
-      setError(err?.message ?? 'Could not reset password')
+      setError(err?.message ?? t('errorGeneric'))
     } finally {
       setBusy(false)
     }
@@ -114,32 +117,32 @@ export default function ResetPasswordPage() {
     <AuthLayout
       headline={
         <>
-          Forgot your password?
+          {t('headlineLine1')}
           <br />
-          <span className="gradient-text">Choose a new one.</span>
+          <span className="gradient-text">{t('headlineLine2')}</span>
         </>
       }
-      subhead="Reset links are single-use and expire in one hour. Setting a new password signs you in and ends every other active session on this account."
+      subhead={t('authSubhead')}
     >
       <div className="auth-stack">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {status === 'expired' ? 'This link has expired' : 'Reset your password'}
+            {status === 'expired' ? t('linkExpiredTitle') : t('resetYourPasswordTitle')}
           </h1>
           <p className="mt-1.5 text-sm text-muted">
             {status === 'checking'
-              ? 'Checking your link…'
+              ? t('checkingLink')
               : status === 'expired'
-                ? 'Reset links last 1 hour. Request a new one and it will arrive at the same address.'
-                : 'Choose a new password. Signing in ends every other active session on this account.'}
+                ? t('expiredBody')
+                : t('validBody')}
           </p>
         </div>
 
         <div aria-live="polite" className="empty:hidden">
           {error && <FormNotice tone="danger" title={error} />}
           {status === 'expired' && resent && (
-            <FormNotice tone="success" title="A new link is on its way">
-              If an account exists for {tokenEmail || 'this address'}, a reset link is on its way.
+            <FormNotice tone="success" title={t('newLinkOnWay')}>
+              {t('resetLinkOnWayTo', { email: tokenEmail || t('fallbackThisAddress') })}
             </FormNotice>
           )}
         </div>
@@ -153,19 +156,19 @@ export default function ResetPasswordPage() {
             loadingBehavior="busy"
             onPress={() => void requestNewLink()}
           >
-            {resending ? 'Sending…' : 'Email me a new link'}
+            {resending ? tCommon('sending') : t('emailMeNewLink')}
           </Button>
         )}
 
         {status === 'valid' && (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="password">New password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" />
+            <Label htmlFor="password">{t('newPasswordLabel')}</Label>
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" placeholder={t('newPasswordPlaceholder')} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="confirm">Confirm new password</Label>
-            <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} autoComplete="new-password" placeholder="Re-enter password" />
+            <Label htmlFor="confirm">{t('confirmPasswordLabel')}</Label>
+            <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} autoComplete="new-password" placeholder={t('confirmPasswordPlaceholder')} />
           </div>
           <Button
             size="touch"
@@ -175,7 +178,7 @@ export default function ResetPasswordPage() {
             isLoading={busy}
             loadingBehavior="busy"
           >
-            {busy ? 'Resetting…' : 'Reset password & sign in'}
+            {busy ? t('resetting') : t('resetAndSignIn')}
           </Button>
         </form>
         )}
@@ -185,7 +188,7 @@ export default function ResetPasswordPage() {
             href="/login"
             className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
           >
-            Back to sign in
+            {tCommon('backToSignIn')}
           </Link>
         </p>
       </div>

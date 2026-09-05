@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { ArrowLeft, Loader2, MailCheck, MailWarning } from 'lucide-react'
 import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,9 @@ import { Label } from '@/components/ui/label'
 const MIN_PASSWORD = 8
 
 export function RegisterForm() {
+  const t = useTranslations('register')
+  const tLogin = useTranslations('login')
+  const tCommon = useTranslations('common')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -48,8 +52,8 @@ export function RegisterForm() {
           typeof data?.error === 'string'
             ? data.error
             : res.status === 400
-              ? 'Check the details you entered and try again.'
-              : 'Something went wrong creating your account. Try again in a moment.'
+              ? tCommon('errorCheckDetails')
+              : t('errorGeneric')
         throw new Error(detail)
       }
       setDelivered(data?.delivered !== false)
@@ -59,7 +63,7 @@ export function RegisterForm() {
       setError(
         typeof message === 'string' && message
           ? message
-          : 'Something went wrong creating your account. Try again in a moment.',
+          : t('errorGeneric'),
       )
     } finally {
       setLoading(false)
@@ -108,34 +112,28 @@ export function RegisterForm() {
         </span>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {delivered ? 'Check your email' : 'Your workspace is ready'}
+            {delivered ? tCommon('checkYourEmail') : t('workspaceReady')}
           </h1>
           <p className="mt-2 text-sm text-muted">
             {delivered ? (
-              <>
-                If that address can be registered, a verification link is on its way to{' '}
-                <span className="font-semibold text-foreground">{email}</span>. It expires in one
-                hour. Verify it, then sign in.
-              </>
+              t.rich('verificationOnWayTo', {
+                email,
+                em: (chunks) => <span className="font-semibold text-foreground">{chunks}</span>,
+              })
             ) : (
-              <>
-                Your account was created, but this server could not send the verification email
-                to <span className="font-semibold text-foreground">{email}</span>. Ask your
-                administrator to check the mail settings — your account is safe in the meantime,
-                and you can request a new link once mail is working.
-              </>
+              t.rich('accountCreatedMailFailed', {
+                email,
+                em: (chunks) => <span className="font-semibold text-foreground">{chunks}</span>,
+              })
             )}
           </p>
         </div>
         {delivered ? (
           <div className="space-y-2 text-sm text-muted">
-            <p>
-              Nothing arrived? Check your spam folder first — if it still isn't there in a
-              minute or two, ask us to send it again.
-            </p>
+            <p>{t('nothingArrived')}</p>
             {resent ? (
               <p className="text-[var(--status-success)]">
-                Another link was requested. It should arrive shortly.
+                {t('linkRequestedAgain')}
               </p>
             ) : (
               // "Try a different address" used to sit here — but changing only the
@@ -149,7 +147,7 @@ export function RegisterForm() {
                 disabled={resending}
                 className="font-semibold text-[var(--accent)] hover:underline disabled:opacity-60"
               >
-                {resending ? 'Sending…' : `Resend the link to ${email}`}
+                {resending ? tCommon('sending') : t('resendLinkTo', { email })}
               </button>
             )}
           </div>
@@ -158,8 +156,7 @@ export function RegisterForm() {
           // failed for a server-side reason, so a second attempt would only
           // orphan another account.
           <p className="text-sm text-muted">
-            Trying a different address will not help — the problem is the mail server, not your
-            address.
+            {t('tryDifferentAddressWontHelp')}
           </p>
         )}
         <Link
@@ -167,7 +164,7 @@ export function RegisterForm() {
           className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:underline"
         >
           <ArrowLeft className="size-4" strokeWidth={2.4} />
-          Back to sign in
+          {tCommon('backToSignIn')}
         </Link>
       </div>
     )
@@ -176,37 +173,37 @@ export function RegisterForm() {
   return (
     <div className="animate-panel-swap auth-stack">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Create your workspace</h1>
-        <p className="mt-1.5 text-sm text-muted">Start a new team — you will be its owner.</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+        <p className="mt-1.5 text-sm text-muted">{t('subtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="auth-fields">
         <div className="space-y-1.5">
-          <Label htmlFor="name">Your name</Label>
+          <Label htmlFor="name">{t('nameLabel')}</Label>
           <Input
             id="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
             autoComplete="name"
-            placeholder="Jane Doe"
+            placeholder={t('namePlaceholder')}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="teamName">Team name</Label>
+          <Label htmlFor="teamName">{t('teamNameLabel')}</Label>
           <Input
             id="teamName"
             value={teamName}
             onChange={(e) => setTeamName(e.target.value)}
             required
             autoComplete="organization"
-            placeholder="Acme HQ"
+            placeholder={t('teamNamePlaceholder')}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email address</Label>
+          <Label htmlFor="email">{tLogin('emailLabel')}</Label>
           <Input
             id="email"
             type="email"
@@ -214,7 +211,7 @@ export function RegisterForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
-            placeholder="you@company.com"
+            placeholder={tLogin('emailPlaceholder')}
           />
         </div>
 
@@ -222,9 +219,9 @@ export function RegisterForm() {
           {/* The requirement sits on the label row, so it is read before typing
               rather than after — and it costs no extra line of height. */}
           <div className="flex items-baseline justify-between gap-3">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{tLogin('passwordLabel')}</Label>
             <span id="password-hint" className="text-xs text-muted">
-              {MIN_PASSWORD}+ characters
+              {t('passwordHint', { min: MIN_PASSWORD })}
             </span>
           </div>
           <Input
@@ -236,7 +233,7 @@ export function RegisterForm() {
             minLength={MIN_PASSWORD}
             autoComplete="new-password"
             aria-describedby="password-hint"
-            placeholder="Choose a password"
+            placeholder={t('passwordPlaceholder')}
           />
         </div>
 
@@ -248,18 +245,18 @@ export function RegisterForm() {
           {loading ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
-              Creating your workspace…
+              {t('creatingWorkspace')}
             </>
           ) : (
-            'Create account'
+            t('createAccount')
           )}
         </Button>
       </form>
 
       <p className="text-sm text-muted">
-        Already have an account?{' '}
+        {t('alreadyHaveAccount')}{' '}
         <Link href="/login" className="font-semibold text-[var(--accent)] hover:underline">
-          Sign in
+          {tLogin('signIn')}
         </Link>
       </p>
     </div>

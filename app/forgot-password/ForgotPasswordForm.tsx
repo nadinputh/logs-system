@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { MailCheck, MailWarning } from 'lucide-react'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { FormNotice } from '@/components/auth/FormNotice'
@@ -21,6 +22,9 @@ import { Label } from '@/components/ui/label'
  * cannot send.
  */
 export function ForgotPasswordForm() {
+  const t = useTranslations('forgotPassword')
+  const tLogin = useTranslations('login')
+  const tCommon = useTranslations('common')
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -42,14 +46,14 @@ export function ForgotPasswordForm() {
         throw new Error(
           typeof data.error === 'string'
             ? data.error
-            : 'Too many attempts. Try again in a few minutes.',
+            : t('errorTooManyAttempts'),
         )
       }
-      if (!res.ok) throw new Error('Could not request a reset link. Try again in a moment.')
+      if (!res.ok) throw new Error(t('errorRequestFailed'))
       setMailConfigured(data?.mailConfigured !== false)
       setDone(true)
     } catch (err: any) {
-      setError(err?.message ?? 'Could not request a reset link. Try again in a moment.')
+      setError(err?.message ?? t('errorRequestFailed'))
     } finally {
       setBusy(false)
     }
@@ -60,12 +64,12 @@ export function ForgotPasswordForm() {
       <AuthLayout
         headline={
           <>
-            Check your email.
+            {t('headlineCheckEmailLine1')}
             <br />
-            <span className="gradient-text">If it's here, it's here.</span>
+            <span className="gradient-text">{t('headlineCheckEmailLine2')}</span>
           </>
         }
-        subhead="For accounts that exist and are already signed in once, a reset link arrives at the address on file."
+        subhead={t('subheadDone')}
       >
         <div className="auth-stack">
           <span
@@ -83,22 +87,15 @@ export function ForgotPasswordForm() {
           </span>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              {mailConfigured ? 'Check your email' : 'The mail server is not sending'}
+              {mailConfigured ? tCommon('checkYourEmail') : t('mailNotSendingTitle')}
             </h1>
             <p className="mt-2 text-sm text-muted">
-              {mailConfigured ? (
-                <>
-                  If an account exists for{' '}
-                  <span className="font-semibold text-foreground">{email}</span>, a reset link is
-                  on its way. It's single-use and expires in one hour.
-                </>
-              ) : (
-                <>
-                  This server is not configured to send mail, so no reset link was sent. Contact
-                  your administrator — they can reissue the account's set-password link from the
-                  members list.
-                </>
-              )}
+              {mailConfigured
+                ? t.rich('resetLinkOnWay', {
+                    email,
+                    em: (chunks) => <span className="font-semibold text-foreground">{chunks}</span>,
+                  })
+                : t('mailNotConfiguredBody')}
             </p>
           </div>
           <p className="text-sm text-muted">
@@ -106,7 +103,7 @@ export function ForgotPasswordForm() {
               href="/login"
               className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
             >
-              Back to sign in
+              {tCommon('backToSignIn')}
             </Link>
           </p>
         </div>
@@ -118,19 +115,18 @@ export function ForgotPasswordForm() {
     <AuthLayout
       headline={
         <>
-          Forgot your password?
+          {t('headlineLine1')}
           <br />
-          <span className="gradient-text">Get a reset link.</span>
+          <span className="gradient-text">{t('headlineLine2')}</span>
         </>
       }
-      subhead="Enter the address you sign in with. If it maps to an account, a one-hour, single-use reset link goes to that inbox."
+      subhead={t('authSubhead')}
     >
       <div className="auth-stack">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reset your password</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
           <p className="mt-1.5 text-sm text-muted">
-            We answer the same way for every address, so this page never confirms or denies
-            whether an account exists.
+            {t('subtitle')}
           </p>
         </div>
 
@@ -140,7 +136,7 @@ export function ForgotPasswordForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email">Email address</Label>
+            <Label htmlFor="email">{tLogin('emailLabel')}</Label>
             <Input
               id="email"
               type="email"
@@ -148,7 +144,7 @@ export function ForgotPasswordForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              placeholder="you@company.com"
+              placeholder={tLogin('emailPlaceholder')}
             />
           </div>
           <Button
@@ -160,17 +156,17 @@ export function ForgotPasswordForm() {
             loadingBehavior="busy"
             isDisabled={!email.trim()}
           >
-            {busy ? 'Sending…' : 'Email me a reset link'}
+            {busy ? tCommon('sending') : t('emailMeResetLink')}
           </Button>
         </form>
 
         <p className="text-sm text-muted">
-          Remembered it?{' '}
+          {t('rememberedIt')}{' '}
           <Link
             href="/login"
             className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
           >
-            Back to sign in
+            {tCommon('backToSignIn')}
           </Link>
         </p>
       </div>

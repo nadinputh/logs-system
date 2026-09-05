@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
+import { getTranslations } from 'next-intl/server'
 import { authOptions } from '@/lib/auth'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { RegisterForm } from './RegisterForm'
@@ -18,16 +19,18 @@ export default async function RegisterPage() {
   const session = await getServerSession(authOptions)
   if (session) redirect('/dashboard')
 
+  const t = await getTranslations('register')
+
   return (
     <AuthLayout
       headline={
         <>
-          One ledger for
+          {t('headlineLine1')}
           <br />
-          <span className="gradient-text">everyone who walks in.</span>
+          <span className="gradient-text">{t('headlineLine2')}</span>
         </>
       }
-      subhead="Create a team, model your buildings and rooms, and start recording entries that cannot be quietly rewritten."
+      subhead={t('authSubhead')}
     >
       <RegisterForm />
     </AuthLayout>
