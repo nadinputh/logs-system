@@ -1,5 +1,8 @@
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import createNextIntlPlugin from 'next-intl/plugin'
+
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts')
 
 /** @type {import('next').NextConfig} */
 const appPort = process.env.PORT || '4000'
@@ -27,4 +30,4 @@ const nextConfig = {
   serverExternalPackages: ['mongoose', 'nodemailer'],
 }
 
-export default nextConfig
+export default withNextIntl(nextConfig)

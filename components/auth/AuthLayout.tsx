@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { getTranslations } from 'next-intl/server'
 import { LockKeyhole, Server, ShieldCheck } from 'lucide-react'
 import { LogoTile } from '@/components/Logo'
 import { ParticleField } from '@/components/ParticleField'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 
 /**
  * The shared frame for /login and /register.
@@ -23,14 +25,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
  * zoom, enlarged text — the page scrolls normally rather than hiding anything.
  */
 
-/** The same three factual anchors the landing uses. No new claims. */
-const anchors = [
-  { Icon: ShieldCheck, label: 'Append-only by construction' },
-  { Icon: Server, label: 'Runs in your MongoDB Atlas' },
-  { Icon: LockKeyhole, label: 'Role-scoped access' },
-]
-
-export function AuthLayout({
+export async function AuthLayout({
   children,
   headline,
   subhead,
@@ -42,6 +37,15 @@ export function AuthLayout({
   headline: ReactNode
   subhead: string
 }) {
+  const t = await getTranslations('common')
+
+  /** The same three factual anchors the landing uses. No new claims. */
+  const anchors = [
+    { Icon: ShieldCheck, label: t('factAppendOnly') },
+    { Icon: Server, label: t('factMongo') },
+    { Icon: LockKeyhole, label: t('factRoleScoped') },
+  ]
+
   return (
     <div className="min-h-screen-safe relative flex flex-col overflow-x-clip bg-background text-foreground">
       {/* Sized to the frame, never beyond it. */}
@@ -54,23 +58,24 @@ export function AuthLayout({
         href="#main"
         className="glass sr-only rounded-full px-4 py-2 text-sm font-semibold focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
       >
-        Skip to content
+        {t('skipToContent')}
       </a>
 
       <header className="relative z-10 shrink-0 border-b border-[var(--panel-border)]">
         <nav aria-label="Primary" className="shell flex h-16 items-center gap-3 sm:h-[4.5rem]">
           <Link
             href="/landing"
-            aria-label="Kamnotheat — home"
+            aria-label={t('homeAriaLabel')}
             className="group flex items-center gap-3 rounded-2xl"
           >
             <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
             <span className="hidden sm:block">
               <span className="block text-sm font-bold tracking-tight">Kamnotheat</span>
-              <span className="block text-xs text-muted">Secure check-in logging</span>
+              <span className="block text-xs text-muted">{t('tagline')}</span>
             </span>
           </Link>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <LanguageSwitcher />
             <ThemeToggle />
           </div>
         </nav>

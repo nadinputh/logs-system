@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { startAuthentication } from '@simplewebauthn/browser'
 import { Fingerprint, Loader2 } from 'lucide-react'
 import { FormNotice } from '@/components/auth/FormNotice'
@@ -19,31 +20,29 @@ function isRedirectReason(v: string | null): v is RedirectReason {
   )
 }
 
-const REASON_COPY: Record<
+const REASON_KEYS: Record<
   RedirectReason,
-  { tone: 'success' | 'warning'; title: string; body: string }
+  { tone: 'success' | 'warning'; titleKey: string; bodyKey: string }
 > = {
   signed_out_others: {
     tone: 'success',
-    title: 'Every other session on this account has ended.',
-    body:
-      'Sign in again to continue on this device. Every browser and phone with an old cookie will land here on its next request — usually within a minute of you pressing the button.',
+    titleKey: 'reasonSignedOutOthersTitle',
+    bodyKey: 'reasonSignedOutOthersBody',
   },
   session_expired: {
     tone: 'warning',
-    title: "You've been signed out on this device.",
-    body:
-      'Your session ended — either the 14-day sign-in expired or someone on this account ended every session. Sign back in to continue.',
+    titleKey: 'reasonSessionExpiredTitle',
+    bodyKey: 'reasonSessionExpiredBody',
   },
   session_revoked: {
     tone: 'warning',
-    title: 'This session was ended.',
-    body:
-      "The session on this device was revoked from Settings → Security. If that wasn't you, sign in and end every session immediately.",
+    titleKey: 'reasonSessionRevokedTitle',
+    bodyKey: 'reasonSessionRevokedBody',
   },
 }
 
 export function LoginForm() {
+  const t = useTranslations('login')
   const router = useRouter()
   const searchParams = useSearchParams()
   const nextUrl = searchParams.get('next') || '/dashboard'
@@ -73,24 +72,24 @@ export function LoginForm() {
         setError(
           typeof data?.error === 'string'
             ? data.error
-            : 'Too many attempts. Try again in a few minutes.',
+            : t('errorRateLimited429'),
         )
         return
       }
       if (!res.ok) {
-        setError('Could not request a new link just now. Try again in a moment.')
+        setError(t('errorRequestLinkFailed'))
         return
       }
       setResent(true)
     } catch {
-      setError('Could not request a new link just now. Try again in a moment.')
+      setError(t('errorRequestLinkFailed'))
     }
   }
 
   async function handlePasskeyLogin() {
     setError('')
     if (!email) {
-      setError('Enter your email address first, then sign in with your passkey.')
+      setError(t('errorEnterEmailFirst'))
       return
     }
     setPasskeyLoading(true)
@@ -102,7 +101,7 @@ export function LoginForm() {
       })
       if (!optRes.ok) {
         const data = await optRes.json().catch(() => ({}))
-        throw new Error(data.error ?? 'No passkey is registered for this account.')
+        throw new Error(data.error ?? t('errorNoPasskeyRegistered'))
       }
       const { userId, ...options } = await optRes.json()
 
@@ -115,13 +114,13 @@ export function LoginForm() {
       })
       if (!verRes.ok) {
         const data = await verRes.json().catch(() => ({}))
-        throw new Error(data.error ?? 'That passkey could not be verified.')
+        throw new Error(data.error ?? t('errorPasskeyVerifyFailed'))
       }
       const { preAuthToken } = await verRes.json()
 
       const result = await signIn('passkey-token', { preAuthToken, redirect: false })
       if (result?.error) {
-        setError('Passkey sign-in failed. Try your password instead.')
+        setError(t('errorPasskeySignInFailed'))
       } else {
         router.push(nextUrl)
         router.refresh()
@@ -131,7 +130,7 @@ export function LoginForm() {
       if ((err as { name?: string })?.name !== 'NotAllowedError') {
         setError(
           (err as { message?: string })?.message ??
-            'Passkey sign-in failed. Try your password instead.',
+            t('errorPasskeySignInFailed'),
         )
       }
     } finally {
@@ -157,7 +156,7 @@ export function LoginForm() {
         // a targeted attempt on this address. The message deliberately doesn't
         // name which axis: telling an attacker which axis they hit tells them
         // how to spread the attack.
-        setError('Too many sign-in attempts. Try again in a few minutes.')
+        setError(t('errorTooManyAttempts'))
       } else if (result.error.includes('PASSWORD_NOT_SET')) {
         // The account was created by an administrator and has never had a
         // password. Resend issues a set-password link for exactly this case.
@@ -165,7 +164,7 @@ export function LoginForm() {
       } else if (result.error.includes('EMAIL_NOT_VERIFIED')) {
         setNeedsVerify(true)
       } else {
-        setError('That email and password do not match an account.')
+        setError(t('errorNoMatch'))
       }
     } else {
       router.push(nextUrl)
@@ -178,13 +177,13 @@ export function LoginForm() {
   return (
     <div className="auth-stack">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
-        <p className="mt-1.5 text-sm text-muted">Staff and admin access to the console.</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t('welcomeBack')}</h1>
+        <p className="mt-1.5 text-sm text-muted">{t('subhead')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="auth-fields">
         <div className="space-y-1.5">
-          <Label htmlFor="email">Email address</Label>
+          <Label htmlFor="email">{t('emailLabel')}</Label>
           <Input
             id="email"
             type="email"
@@ -192,18 +191,18 @@ export function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
-            placeholder="you@company.com"
+            placeholder={t('emailPlaceholder')}
           />
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-3">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t('passwordLabel')}</Label>
             <Link
               href="/forgot-password"
               className="text-xs font-semibold text-[var(--accent)] hover:underline"
             >
-              Forgot password?
+              {t('forgotPassword')}
             </Link>
           </div>
           <Input
@@ -213,7 +212,7 @@ export function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            placeholder="Your password"
+            placeholder={t('passwordPlaceholder')}
           />
         </div>
 
@@ -221,42 +220,40 @@ export function LoginForm() {
             announced. A region created at the same time as its content is not. */}
         <div aria-live="polite" className="empty:hidden space-y-3">
           {reason && !error && (
-            <FormNotice tone={REASON_COPY[reason].tone} title={REASON_COPY[reason].title}>
-              {REASON_COPY[reason].body}
+            <FormNotice tone={REASON_KEYS[reason].tone} title={t(REASON_KEYS[reason].titleKey)}>
+              {t(REASON_KEYS[reason].bodyKey)}
             </FormNotice>
           )}
           {error && <FormNotice tone="danger" title={error} />}
           {needsPassword && (
-            <FormNotice tone="warning" title="This account has no password yet">
+            <FormNotice tone="warning" title={t('noPasswordYetTitle')}>
               {resent ? (
-                <span>A link to set your password is on its way to {email}.</span>
+                <span>{t('linkOnWayTo', { email })}</span>
               ) : (
                 <>
-                  <span>
-                    An administrator created it for you. Set a password to sign in.{' '}
-                  </span>
+                  <span>{t('noPasswordYetBodyAdmin')} </span>
                   <button
                     type="button"
                     onClick={handleResend}
                     className="font-semibold text-[var(--accent)] hover:underline"
                   >
-                    Email me a link
+                    {t('emailMeLink')}
                   </button>
                 </>
               )}
             </FormNotice>
           )}
           {needsVerify && (
-            <FormNotice tone="warning" title="Verify your email before signing in">
+            <FormNotice tone="warning" title={t('verifyEmailTitle')}>
               {resent ? (
-                <span>A new verification link is on its way to {email}.</span>
+                <span>{t('newVerificationOnWay', { email })}</span>
               ) : (
                 <button
                   type="button"
                   onClick={handleResend}
                   className="font-semibold text-[var(--accent)] hover:underline"
                 >
-                  Resend the verification email
+                  {t('resendVerification')}
                 </button>
               )}
             </FormNotice>
@@ -275,16 +272,16 @@ export function LoginForm() {
           {loading ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
-              Signing in…
+              {t('signingIn')}
             </>
           ) : (
-            'Sign in'
+            t('signIn')
           )}
         </Button>
 
         <div className="flex items-center gap-4">
           <span className="h-px flex-1 bg-[var(--panel-border)]" />
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">or</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{t('or')}</span>
           <span className="h-px flex-1 bg-[var(--panel-border)]" />
         </div>
 
@@ -301,21 +298,21 @@ export function LoginForm() {
           {passkeyLoading ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
-              Waiting for your passkey…
+              {t('waitingForPasskey')}
             </>
           ) : (
             <>
               <Fingerprint className="size-4" strokeWidth={2.3} />
-              Sign in with a passkey
+              {t('signInWithPasskey')}
             </>
           )}
         </Button>
       </form>
 
       <p className="text-sm text-muted">
-        New here?{' '}
+        {t('newHere')}{' '}
         <Link href="/register" className="font-semibold text-[var(--accent)] hover:underline">
-          Create a workspace
+          {t('createWorkspace')}
         </Link>
       </p>
     </div>

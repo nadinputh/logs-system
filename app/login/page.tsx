@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
+import { getTranslations } from 'next-intl/server'
 import { authOptions } from '@/lib/auth'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { LoginForm } from './LoginForm'
@@ -55,16 +56,19 @@ export default async function LoginPage({
     redirect(safeNext(next))
   }
 
+  const t = await getTranslations('landing')
+  const tLogin = await getTranslations('login')
+
   return (
     <AuthLayout
       headline={
         <>
-          Zero-friction check-ins.
+          {t('heroTitleLine1')}
           <br />
-          <span className="gradient-text">Cryptographic certainty.</span>
+          <span className="gradient-text">{t('heroTitleLine2')}</span>
         </>
       }
-      subhead="Sign in to manage locations, audit the ledger, and invite your team."
+      subhead={tLogin('authSubhead')}
     >
       <Suspense fallback={<FormSkeleton />}>
         <LoginForm />

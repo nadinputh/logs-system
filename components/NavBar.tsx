@@ -5,9 +5,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from 'react'
 import { Avatar, Chip, Dropdown, Header, Separator } from '@heroui/react'
+import { useTranslations } from 'next-intl'
 import { toast } from '@/components/ui/sonner'
 import type { LucideIcon } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { LogoTile } from '@/components/Logo'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -32,6 +34,17 @@ type NavigationItem = {
   Icon: LucideIcon
 }
 
+// Raw defs carry translation keys, not strings — the array itself lives at
+// module scope (outside the component) so it isn't rebuilt every render, but
+// resolving labelKey/descriptionKey into actual text needs useTranslations,
+// which only works inside the component. See resolveNavItem() below.
+type NavigationItemDef = {
+  href: string
+  labelKey: string
+  descriptionKey: string
+  Icon: LucideIcon
+}
+
 type DropdownKey = 'locations' | 'account' | 'menu'
 
 type TeamSummary = {
@@ -42,36 +55,36 @@ type TeamSummary = {
   isActive: boolean
 }
 
-const primaryItems: NavigationItem[] = [
-  { href: '/dashboard', label: 'Dashboard', description: 'Overview and activity', Icon: Home },
-  { href: '/logs', label: 'My Logs', description: 'Personal check-ins', Icon: ClipboardList },
+const primaryItemDefs: NavigationItemDef[] = [
+  { href: '/dashboard', labelKey: 'dashboard', descriptionKey: 'dashboardDesc', Icon: Home },
+  { href: '/logs', labelKey: 'myLogs', descriptionKey: 'myLogsDesc', Icon: ClipboardList },
 ]
 
-const locationItems: NavigationItem[] = [
-  { href: '/admin/buildings', label: 'Buildings', description: 'Campuses and sites', Icon: Building2 },
-  { href: '/admin/floors', label: 'Floors', description: 'Levels and wings', Icon: Layers3 },
-  { href: '/admin/rooms', label: 'Rooms', description: 'Rooms and check-in spots', Icon: DoorOpen },
+const locationItemDefs: NavigationItemDef[] = [
+  { href: '/admin/buildings', labelKey: 'buildings', descriptionKey: 'buildingsDesc', Icon: Building2 },
+  { href: '/admin/floors', labelKey: 'floors', descriptionKey: 'floorsDesc', Icon: Layers3 },
+  { href: '/admin/rooms', labelKey: 'rooms', descriptionKey: 'roomsDesc', Icon: DoorOpen },
 ]
 
-const adminItems: NavigationItem[] = [
-  { href: '/admin/quests', label: 'Quests', description: 'Quest cards and routes', Icon: Sparkles },
-  { href: '/admin/logs', label: 'All Logs', description: 'Audit every check-in', Icon: ShieldCheck },
+const adminItemDefs: NavigationItemDef[] = [
+  { href: '/admin/quests', labelKey: 'quests', descriptionKey: 'questsDesc', Icon: Sparkles },
+  { href: '/admin/logs', labelKey: 'allLogs', descriptionKey: 'allLogsDesc', Icon: ShieldCheck },
 ]
 
 // Passkeys and Security used to be two separate settings pages reached from
 // two separate menu items; they shared one mental model ("how do I get into
 // my account") and are now one merged page at /settings/security.
-const securityItem: NavigationItem = {
+const securityItemDef: NavigationItemDef = {
   href: '/settings/security',
-  label: 'Security',
-  description: 'Passkeys and active sessions',
+  labelKey: 'security',
+  descriptionKey: 'securityDesc',
   Icon: ShieldCheck,
 }
 
-const teamAccessItem: NavigationItem = {
+const teamAccessItemDef: NavigationItemDef = {
   href: '/settings/team',
-  label: 'Team & Access',
-  description: 'Switch team and manage members',
+  labelKey: 'teamAccess',
+  descriptionKey: 'teamAccessDesc',
   Icon: Users,
 }
 
@@ -321,10 +334,23 @@ const TEAM_ROLE_RANK: Record<TeamSummary['role'], number> = {
 export default function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
+  const t = useTranslations('nav')
+  const tCommon = useTranslations('common')
   const { data: session } = useSession()
   const userEmail = session?.user?.email ?? ''
-  const userName = (session?.user?.name ?? userEmail) || 'Account'
+  const userName = (session?.user?.name ?? userEmail) || t('account')
   const initials = userEmail ? userEmail[0].toUpperCase() : 'LM'
+
+  function resolveNavItem(def: NavigationItemDef): NavigationItem {
+    return { href: def.href, label: t(def.labelKey), description: t(def.descriptionKey), Icon: def.Icon }
+  }
+
+  const primaryItems = primaryItemDefs.map(resolveNavItem)
+  const locationItems = locationItemDefs.map(resolveNavItem)
+  const adminItems = adminItemDefs.map(resolveNavItem)
+  const securityItem = resolveNavItem(securityItemDef)
+  const teamAccessItem = resolveNavItem(teamAccessItemDef)
+
   const isLocationActive = locationItems.some((item) => isRouteActive(pathname, item.href))
   const accountMenuItems = [securityItem, teamAccessItem]
   const [teams, setTeams] = useState<TeamSummary[]>([])
@@ -388,7 +414,7 @@ export default function NavBar() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(payload?.error ?? 'Failed to switch team')
+        throw new Error(payload?.error ?? t('switchTeamFailed'))
       }
 
       setTeams((current) =>
@@ -408,10 +434,10 @@ export default function NavBar() {
       // here — requireTeamAccess/requireTeamPermission (lib/middleware/auth.ts)
       // always re-read User.activeTeamId fresh from the DB rather than
       // trusting the JWT, and a full reload re-fetches the session anyway.
-      toast.success('Switched active team')
+      toast.success(t('switchedTeam'))
       window.location.reload()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to switch team'
+      const message = error instanceof Error ? error.message : t('switchTeamFailed')
       toast.error(message)
     } finally {
       setSwitchingTeamId(null)
@@ -426,7 +452,7 @@ export default function NavBar() {
           <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
           <span className="hidden min-w-0 sm:block">
             <span className="block truncate text-sm font-bold tracking-tight text-foreground">Kamnotheat</span>
-            <span className="block truncate text-xs font-medium text-muted">Secure check-in logging</span>
+            <span className="block truncate text-xs font-medium text-muted">{tCommon('tagline')}</span>
           </span>
         </Link>
 
@@ -455,18 +481,18 @@ export default function NavBar() {
                 <span aria-hidden="true" className="mx-1 h-5 w-px self-center rounded-full bg-border/70" />
                 <div {...locationDropdown.triggerProps}>
                   <Dropdown isOpen={locationDropdown.isOpen} onOpenChange={locationDropdown.onOpenChange}>
-                    <Dropdown.Trigger {...locationDropdown.triggerButtonProps} className={`${navigationClass(isLocationActive)} pr-2`} aria-label="Open location management menu">
+                    <Dropdown.Trigger {...locationDropdown.triggerButtonProps} className={`${navigationClass(isLocationActive)} pr-2`} aria-label={t('openLocationMenu')}>
                       <Building2 className="size-4 shrink-0" strokeWidth={2.2} />
-                      Locations
+                      {t('locations')}
                       <ChevronDown className="size-3.5 shrink-0 transition-transform group-data-[open]:rotate-180" strokeWidth={2.5} />
                     </Dropdown.Trigger>
                     {locationDropdown.isOpen && (
                       <Dropdown.Popover placement="bottom start" className="w-64 rounded-2xl border border-border/70 bg-overlay p-2 shadow-xl shadow-slate-900/10">
                         <div {...locationDropdown.popoverProps}>
                           <div className="px-3 pb-2 pt-1">
-                            <p className="text-xs font-semibold uppercase tracking-widest text-muted">Locations</p>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-muted">{t('locations')}</p>
                           </div>
-                          <Dropdown.Menu aria-label="Location management navigation" className="space-y-1">
+                          <Dropdown.Menu aria-label={t('locationMenuLabel')} className="space-y-1">
                             {locationItems.map((item) => (
                               <DropdownNavigationItem
                                 key={item.href}
@@ -498,10 +524,11 @@ export default function NavBar() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <LanguageSwitcher className="hidden sm:inline-flex" />
           <ThemeToggle />
           <div {...accountDropdown.triggerProps}>
             <Dropdown isOpen={accountDropdown.isOpen} onOpenChange={accountDropdown.onOpenChange}>
-              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-11 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label="Open account menu">
+              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-11 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label={t('openAccountMenu')}>
                 <Avatar color="accent" size="sm" variant="soft" className="shadow-sm shadow-accent/20">
                   <Avatar.Fallback>{initials}</Avatar.Fallback>
                 </Avatar>
@@ -520,14 +547,14 @@ export default function NavBar() {
                           <p className="truncate text-sm font-semibold text-foreground">{userName}</p>
                           <RolePill isAdmin={isAdmin} label={roleLabel} className="shrink-0" />
                         </div>
-                        <p className="truncate text-xs text-muted">{userEmail || 'Signed in'}</p>
+                        <p className="truncate text-xs text-muted">{userEmail || t('signedIn')}</p>
                         {activeTeam && (
-                          <p className="truncate text-xs text-accent/80">Team: {activeTeam.name}</p>
+                          <p className="truncate text-xs text-accent/80">{t('team', { name: activeTeam.name })}</p>
                         )}
                       </div>
                     </div>
                     <Separator className="my-2 bg-border/70" />
-                    <Dropdown.Menu aria-label="Account actions" className="space-y-1">
+                    <Dropdown.Menu aria-label={t('accountActionsLabel')} className="space-y-1">
                       {accountMenuItems.map((item) => (
                         <DropdownNavigationItem
                           key={item.href}
@@ -548,12 +575,12 @@ export default function NavBar() {
                       {teams.length > 1
                         ? [
                             <Dropdown.Section key="switch-team">
-                              <Header className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted">Switch Team</Header>
+                              <Header className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted">{t('switchTeam')}</Header>
                               {teams.map((team) => (
                                 <Dropdown.Item
                                   key={team.id}
                                   id={`team-${team.id}`}
-                                  textValue={`Switch to ${team.name}`}
+                                  textValue={team.name}
                                   onAction={() => void switchTeam(team.id)}
                                   className="rounded-xl px-3 py-2 outline-none transition-colors hover:bg-accent/10 focus:bg-accent/10"
                                 >
@@ -561,11 +588,11 @@ export default function NavBar() {
                                     <span className="truncate font-semibold text-foreground">{team.name}</span>
                                     {team.isActive ? (
                                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                                        Active
+                                        {t('active')}
                                       </span>
                                     ) : (
                                       <span className="text-xs text-muted">
-                                        {switchingTeamId === team.id ? 'Switching...' : 'Switch'}
+                                        {switchingTeamId === team.id ? t('switching') : t('switch')}
                                       </span>
                                     )}
                                   </div>
@@ -576,13 +603,13 @@ export default function NavBar() {
                         : []}
                       <Dropdown.Item
                         id="sign-out"
-                        textValue="Sign out"
+                        textValue={t('signOut')}
                         onAction={handleSignOut}
                         className="mt-1 rounded-xl border border-danger/30 px-3 py-2 text-danger outline-none transition-colors hover:bg-danger/10 focus:bg-danger/10 data-[hovered]:bg-danger/10"
                       >
                         <div className="flex items-center gap-2">
                           <LogOut className="size-4" strokeWidth={2.2} />
-                          <span className="text-sm font-semibold">Sign out</span>
+                          <span className="text-sm font-semibold">{t('signOut')}</span>
                         </div>
                       </Dropdown.Item>
                     </Dropdown.Menu>
@@ -594,20 +621,23 @@ export default function NavBar() {
 
           <div {...menuDropdown.triggerProps}>
             <Dropdown isOpen={menuDropdown.isOpen} onOpenChange={menuDropdown.onOpenChange}>
-              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-11 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label="Open navigation menu">
+              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-11 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label={t('openNavMenu')}>
                 <Menu className="size-5" strokeWidth={2.4} />
               </Dropdown.Trigger>
               {menuDropdown.isOpen && (
                 <Dropdown.Popover placement="bottom end" className="max-h-[calc(100vh-5.5rem)] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-border/70 bg-overlay p-2 shadow-xl shadow-slate-900/10">
                   <div {...menuDropdown.popoverProps}>
-                    <div className="flex items-center justify-between px-3 pb-2 pt-1">
-                      <div>
-                        <p className="text-sm font-bold text-foreground">Menu</p>
-                        <p className="text-xs text-muted">Navigation and account</p>
+                    <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-1">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-foreground">{t('menu')}</p>
+                        <p className="text-xs text-muted">{t('menuSubtitle')}</p>
                       </div>
-                      {isAdmin && <RolePill isAdmin={isAdmin} label={roleLabel} />}
+                      <div className="flex shrink-0 items-center gap-2">
+                        <LanguageSwitcher className="sm:hidden" />
+                        {isAdmin && <RolePill isAdmin={isAdmin} label={roleLabel} />}
+                      </div>
                     </div>
-                    <Dropdown.Menu aria-label="Mobile navigation" className="space-y-1">
+                    <Dropdown.Menu aria-label={t('mobileNavLabel')} className="space-y-1">
                       <DropdownNavigationItem
                         item={securityItem}
                         active={isRouteActive(pathname, securityItem.href)}
@@ -631,7 +661,7 @@ export default function NavBar() {
                       {isAdmin && (
                         <>
                           <Dropdown.Section>
-                            <Header className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted">Locations</Header>
+                            <Header className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-widest text-muted">{t('locations')}</Header>
                             {locationItems.map((item) => (
                               <DropdownNavigationItem
                                 key={item.href}
@@ -653,7 +683,7 @@ export default function NavBar() {
                       )}
                       <Dropdown.Item
                         id="mobile-account"
-                        textValue="Account"
+                        textValue={t('account')}
                         onAction={() => undefined}
                         className="group rounded-xl px-3 py-2 text-foreground outline-none hover:bg-accent/10 hover:text-accent focus:bg-accent/10 focus:text-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:hidden [&_svg]:text-current"
                       >
@@ -664,18 +694,18 @@ export default function NavBar() {
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold">{userName}</span>
                             <span className="mt-1 flex items-center gap-2">
-                              <span className="truncate text-xs text-muted">{userEmail || 'Signed in'}</span>
+                              <span className="truncate text-xs text-muted">{userEmail || t('signedIn')}</span>
                               <RolePill isAdmin={isAdmin} label={roleLabel} className="shrink-0" />
                             </span>
                             {activeTeam && (
-                              <span className="block truncate text-xs text-accent/80">Team: {activeTeam.name}</span>
+                              <span className="block truncate text-xs text-accent/80">{t('team', { name: activeTeam.name })}</span>
                             )}
                           </span>
                         </div>
                       </Dropdown.Item>
                       <Dropdown.Item
                         id="mobile-sign-out"
-                        textValue="Sign out"
+                        textValue={t('signOut')}
                         onAction={handleSignOut}
                         className="rounded-xl px-3 py-2 text-danger outline-none transition-colors hover:bg-danger/10 focus:bg-danger/10"
                       >
@@ -683,7 +713,7 @@ export default function NavBar() {
                           <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger">
                             <LogOut className="size-4" strokeWidth={2.2} />
                           </span>
-                          <span className="text-sm font-semibold">Sign out</span>
+                          <span className="text-sm font-semibold">{t('signOut')}</span>
                         </div>
                       </Dropdown.Item>
                     </Dropdown.Menu>

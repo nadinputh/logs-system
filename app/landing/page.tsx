@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { ParticleField } from '@/components/ParticleField'
 import { RecordPanel } from '@/components/landing/RecordPanel'
 import { LogoTile } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import {
   ArrowRight,
   CheckCircle2,
@@ -43,39 +45,41 @@ export const metadata: Metadata = {
   },
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Data — every value here is a real system constant (PRODUCT.md: never       */
-/*  fabricate proof, so there are no adoption or customer numbers).            */
-/* -------------------------------------------------------------------------- */
-
-const parameters = [
-  { label: 'Auto-checkout window', value: '12', unit: 'hours' },
-  { label: 'Kiosk QR lifetime', value: '15', unit: 'seconds' },
-  { label: 'Idempotency key', value: '256', unit: 'bit sha-256' },
-  { label: 'Ledger writes', value: 'Append', unit: 'only, always' },
-]
-
 type PairingItem = { Icon: LucideIcon; label: string; detail: string }
-
-const frictionless: PairingItem[] = [
-  { Icon: Fingerprint, label: 'Passkeys & FIDO2', detail: 'Secure enclave, no password' },
-  { Icon: QrCode, label: 'Static & dynamic QR', detail: 'Printed room codes or live kiosk' },
-  { Icon: RadioTower, label: 'Rotating kiosk loop', detail: 'Signed token, 15s lifetime' },
-  { Icon: Smartphone, label: 'Reverse-scan terminal', detail: 'Your QR, their scanner' },
-]
-
-const certainty: PairingItem[] = [
-  { Icon: LockKeyhole, label: 'Append-only ledger', detail: 'No update path exists' },
-  { Icon: CheckCircle2, label: 'Idempotent writes', detail: 'Retries can never double-log' },
-  { Icon: Clock, label: 'Server-authoritative time', detail: 'Client clocks are ignored' },
-  { Icon: ShieldCheck, label: 'Separate audit trail', detail: 'Corrections never overwrite' },
-]
 
 /* -------------------------------------------------------------------------- */
 /*  Page                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const t = await getTranslations('landing')
+  const tCommon = await getTranslations('common')
+
+  // Data — every value here is a real system constant (PRODUCT.md: never
+  // fabricate proof, so there are no adoption or customer numbers). Built
+  // inside the component (not at module scope) because translating the
+  // labels needs the request-scoped `t`.
+  const parameters = [
+    { label: t('paramAutoCheckout'), value: '12', unit: t('paramAutoCheckoutUnit') },
+    { label: t('paramKioskQr'), value: '15', unit: t('paramKioskQrUnit') },
+    { label: t('paramIdempotency'), value: '256', unit: t('paramIdempotencyUnit') },
+    { label: t('paramLedger'), value: t('paramLedgerValue'), unit: t('paramLedgerUnit') },
+  ]
+
+  const frictionless: PairingItem[] = [
+    { Icon: Fingerprint, label: t('passkeys'), detail: t('passkeysDetail') },
+    { Icon: QrCode, label: t('qr'), detail: t('qrDetail') },
+    { Icon: RadioTower, label: t('kioskLoop'), detail: t('kioskLoopDetail') },
+    { Icon: Smartphone, label: t('reverseScan'), detail: t('reverseScanDetail') },
+  ]
+
+  const certainty: PairingItem[] = [
+    { Icon: LockKeyhole, label: t('ledgerAppendOnly'), detail: t('ledgerAppendOnlyDetail') },
+    { Icon: CheckCircle2, label: t('idempotentWrites'), detail: t('idempotentWritesDetail') },
+    { Icon: Clock, label: t('serverTime'), detail: t('serverTimeDetail') },
+    { Icon: ShieldCheck, label: t('auditTrail'), detail: t('auditTrailDetail') },
+  ]
+
   return (
     <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
       {/* Atmosphere, in two layers: one washed ground, and the locating field over
@@ -100,34 +104,40 @@ export default function LandingPage() {
           href="#main"
           className="glass sr-only rounded-full px-4 py-2 text-sm font-semibold focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
         >
-          Skip to content
+          {tCommon('skipToContent')}
         </a>
 
         {/* ------------------------------------------------------------- Nav */}
         <header className="sticky top-0 z-40 border-b border-[var(--panel-border)] bg-background/70 backdrop-blur-xl">
           <nav
-            aria-label="Primary"
+            aria-label={t('primaryNavLabel')}
             className="shell flex h-16 items-center gap-3 sm:h-[4.5rem]"
           >
             <Link
               href="/landing"
-              aria-label="Kamnotheat — home"
+              aria-label={tCommon('homeAriaLabel')}
               className="group flex items-center gap-3 rounded-2xl"
             >
               <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
               <span className="hidden sm:block">
                 <span className="block text-sm font-bold tracking-tight">Kamnotheat</span>
-                <span className="block text-xs text-muted">Secure check-in logging</span>
+                <span className="block text-xs text-muted">{tCommon('tagline')}</span>
               </span>
             </Link>
 
             <div className="ml-auto flex items-center gap-2">
+              {/* Unlike NavBar (which falls back to a hamburger menu), this
+                  header has no mobile overflow menu, so the switcher stays
+                  visible at every width rather than hiding below `sm` — a
+                  hidden-on-mobile switcher here would leave phone visitors
+                  with no way to change language at all. */}
+              <LanguageSwitcher />
               <ThemeToggle />
               <Link
                 href="/login"
                 className="gradient-cta shadow-signal press inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold text-[var(--accent-foreground)] hover:scale-[1.03]"
               >
-                Open the console
+                {tCommon('openConsole')}
                 <ArrowRight className="size-4" strokeWidth={2.4} />
               </Link>
             </div>
@@ -139,15 +149,13 @@ export default function LandingPage() {
           <section className="shell grid items-center gap-14 py-16 sm:py-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:gap-20 lg:py-28">
             <div>
               <h1 className="text-balance text-[clamp(2.5rem,6vw,4.25rem)] font-extrabold leading-[1.03] tracking-[-0.025em]">
-                Zero-friction check-ins.
+                {t('heroTitleLine1')}
                 <br />
-                <span className="gradient-text">Cryptographic certainty.</span>
+                <span className="gradient-text">{t('heroTitleLine2')}</span>
               </h1>
 
               <p className="mt-7 max-w-[54ch] text-pretty text-lg leading-relaxed text-muted">
-                An immutable check-in/out ledger. Passkeys, QR and kiosk flows make
-                entry effortless; server-authoritative time and a tamper-evident audit
-                trail make the record impossible to quietly rewrite.
+                {t('heroSubhead')}
               </p>
 
               <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -155,7 +163,7 @@ export default function LandingPage() {
                   href="/login"
                   className="gradient-cta shadow-signal press inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-sm font-semibold text-[var(--accent-foreground)] hover:scale-[1.02]"
                 >
-                  Open the console
+                  {tCommon('openConsole')}
                   <ArrowRight className="size-4" strokeWidth={2.4} />
                 </Link>
               </div>
@@ -169,13 +177,12 @@ export default function LandingPage() {
                   routing now says what the product actually does: the code at
                   the door first, this page's scanner as the recovery. */}
               <p className="mt-6 max-w-[52ch] text-sm text-muted">
-                Here to check in? Point your phone&apos;s camera at the QR code posted at
-                your location — it opens your check-in directly.{' '}
+                {t('visitorPrompt')}{' '}
                 <Link
                   href="/scan"
                   className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
                 >
-                  If it doesn&apos;t open, scan it here
+                  {t('visitorScanLink')}
                 </Link>
                 .
               </p>
@@ -186,18 +193,18 @@ export default function LandingPage() {
                     className="size-4 text-[var(--accent)]"
                     strokeWidth={2.4}
                   />
-                  Append-only by construction
+                  {tCommon('factAppendOnly')}
                 </li>
                 <li className="inline-flex items-center gap-2">
                   <Server className="size-4 text-[var(--accent)]" strokeWidth={2.4} />
-                  Runs in your MongoDB Atlas
+                  {tCommon('factMongo')}
                 </li>
                 <li className="inline-flex items-center gap-2">
                   <LockKeyhole
                     className="size-4 text-[var(--accent)]"
                     strokeWidth={2.4}
                   />
-                  Role-scoped access
+                  {tCommon('factRoleScoped')}
                 </li>
               </ul>
             </div>
@@ -211,7 +218,7 @@ export default function LandingPage() {
             className="border-y border-[var(--panel-border)]"
           >
             <h2 id="parameters-heading" className="sr-only">
-              Operating parameters
+              {t('parametersHeading')}
             </h2>
             <dl className="shell grid grid-cols-2 gap-x-8 gap-y-8 py-10 sm:py-12 lg:grid-cols-4">
               {/* Rule above rather than beside, so every column starts on the same
@@ -236,17 +243,15 @@ export default function LandingPage() {
           <section className="shell grid gap-x-10 gap-y-14 py-20 sm:py-28 lg:grid-cols-3">
             <div>
               <h2 className="text-balance text-3xl font-extrabold tracking-[-0.02em] sm:text-4xl">
-                Frictionless at the door. Certain in the record.
+                {t('pairingHeading')}
               </h2>
               <p className="mt-5 text-pretty text-lg text-muted">
-                Most systems trade one for the other — a fast turnstile with a soft log,
-                or a rigorous log nobody wants to use. The same event is both here, and
-                that pairing is the whole product.
+                {t('pairingSubhead')}
               </p>
             </div>
 
-            <PairingColumn title="Frictionless entry" items={frictionless} />
-            <PairingColumn title="Cryptographic certainty" items={certainty} />
+            <PairingColumn title={t('frictionlessTitle')} items={frictionless} />
+            <PairingColumn title={t('certaintyTitle')} items={certainty} />
           </section>
         </main>
 
@@ -258,7 +263,7 @@ export default function LandingPage() {
               <span className="text-sm font-semibold">Kamnotheat</span>
             </div>
             <p className="text-sm text-muted">
-              Secure check-in logging · Immutable by design
+              {t('footerTagline')}
             </p>
           </div>
         </footer>

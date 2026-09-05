@@ -489,3 +489,17 @@ summary:focus-visible,
   height: auto !important;
   display: block;
 }
+
+/* Inter carries no Khmer glyphs, so `.font-sans` (var(--font-sans), set by
+   next/font on <html>) silently fell through to the platform's own Khmer
+   fallback — inconsistent weight and metrics across OSes. `:lang(km)` matches
+   every element once <html lang="km"> is set (language propagates to
+   descendants for :lang() purposes), so this needs no per-component class.
+   Deliberately unlayered: `.font-sans` and every `.leading-*` utility live in
+   Tailwind's `@layer utilities`, which always outranks a same-specificity
+   rule inside `@layer base` regardless of source order (see the HeroUI note
+   at the top of this file) — unlayered is the one thing that outranks every
+   layer, so this is the only place this override can actually win. */
+:lang(km) {
+  font-family: var(--font-khmer), var(--font-sans), ui-sans-serif, sans-serif;
+}
