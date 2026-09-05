@@ -112,13 +112,18 @@ const AUDIT_ACTION_OPTIONS: Array<{ value: 'all' | TeamAuditAction; label: strin
   { value: 'ownership_transferred', label: 'Ownership transferred' },
 ]
 
-// Deliberately off cyan/sky (reserved for the One Signal Rule) and off emerald
-// (reserved for the "Active" occupancy/team-status pill, which this badge sits
-// next to). Every hue carries a light/dark foreground pair per DESIGN.md.
+// Deliberately off cyan/sky/teal (brand, reserved for the One Signal Rule) and
+// off every Semantic Status hue documented in DESIGN.md — emerald (Success),
+// amber (Warning), and slate (Neutral Track) — so a role badge never reads as
+// a live state. Owner previously reused amber (identical class combo to the
+// warning banners on the dashboard/check-in flow) and member previously reused
+// slate (the completion-bar "Neutral Track" hue); both are role identity, not
+// state, per the Status-Is-Not-Brand Rule, so they've moved to rose and zinc.
+// Every hue still carries a light/dark foreground pair per DESIGN.md.
 function roleBadgeClass(role: TeamRole) {
   switch (role) {
     case 'owner':
-      return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+      return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
     case 'admin':
       return 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
     case 'manager':
@@ -127,7 +132,7 @@ function roleBadgeClass(role: TeamRole) {
       return 'bg-default text-muted border-border'
     case 'member':
     default:
-      return 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
+      return 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
   }
 }
 

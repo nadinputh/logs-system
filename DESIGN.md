@@ -140,6 +140,19 @@ These are *state* colors, not brand colors — they report live-occupancy, compl
 
 **Foreground pairs are mandatory.** Use the light value on light, the dark value on dark (`text-emerald-700 dark:text-emerald-300`); the raw `-500` hue is for graphic fills (bars, dots, icon tiles) only, never for text.
 
+### Role Identity
+Team role badges (`roleBadgeClass()`, `app/settings/team/page.tsx`) are *identity*, not state — they must never borrow a Semantic Status or brand hue, or a role badge starts reading as a live condition instead of a fixed label. Each carries the same mandatory light/dark foreground pair as Semantic Status colors, on a `-500/10` wash with a `-500/20` border.
+
+| Role | Hue | Classes |
+|------|-----|---------|
+| Owner | Rose | `bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20` |
+| Admin | Violet | `bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20` |
+| Manager | Indigo | `bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20` |
+| Auditor | Neutral (HeroUI default) | `bg-default text-muted border-border` |
+| Member | Zinc | `bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20` |
+
+Off-limits for role identity: cyan/sky/teal (brand, One Signal Rule), and emerald/amber/slate (already Semantic Status — Success/Warning/Neutral Track above). Owner and Member previously used amber and slate respectively; both were moved off in 2026-09 after a design critique found Owner's badge shared the exact class combo used by warning banners elsewhere in the console, and Member's badge shared the completion-bar "Neutral Track" hue — both are Status-Is-Not-Brand Rule violations even though neither is a brand color.
+
 ### Named Rules
 **The Status-Is-Not-Brand Rule.** Semantic Status colors report state; they never carry identity. Keep them to badges, dots, bars, and counts — small surfaces, ≤10% of a view — so they read as instrumentation against the neutral ground, and never let a status hue stand in for the cyan signal (or vice versa). This is what keeps the One Signal Rule intact on a data-dense console.
 
