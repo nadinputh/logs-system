@@ -17,6 +17,12 @@ export interface IUser extends Document {
    * a lost phone stays signed in for 30 days and no admin action can end it.
    */
   sessionsVersion: number;
+  /** Platform-wide operator access — /platform-admin and cross-team billing.
+   *  Distinct from `role`, which is a narrow, documented admin|staff constraint
+   *  used elsewhere; never inferred from it. Set only via scripts/grant-superadmin.ts. */
+  isSuperAdmin: boolean;
+  /** Login-blocking flag, distinct from emailVerified. Set by a superadmin. */
+  isDisabled: boolean;
   createdAt: Date;
 }
 
@@ -35,6 +41,8 @@ const UserSchema = new Schema<IUser>(
     activeTeamId: { type: Schema.Types.ObjectId, ref: "Team" },
     emailVerified: { type: Date, default: null }, // null until email is verified; login is blocked while null
     sessionsVersion: { type: Number, default: 0 },
+    isSuperAdmin: { type: Boolean, default: false },
+    isDisabled: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

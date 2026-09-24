@@ -126,6 +126,12 @@ export default async function LandingPage() {
             </Link>
 
             <div className="ml-auto flex items-center gap-2">
+              <Link
+                href="/pricing"
+                className="hidden h-11 items-center rounded-full px-4 text-sm font-semibold text-muted transition-colors hover:text-foreground sm:inline-flex"
+              >
+                {t('pricingNavLink')}
+              </Link>
               {/* Unlike NavBar (which falls back to a hamburger menu), this
                   header has no mobile overflow menu, so the switcher stays
                   visible at every width rather than hiding below `sm` — a

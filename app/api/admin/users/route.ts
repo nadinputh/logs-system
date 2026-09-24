@@ -8,6 +8,7 @@ import { requireTeamPermission } from "@/lib/middleware/auth";
 import { issueVerificationToken, setPasswordLink } from "@/lib/verification";
 import { sendSetPasswordEmail } from "@/lib/email/send";
 import { assertSameOrigin } from "@/lib/csrf";
+import { getTeamEntitlements, readOnlyResponse } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,20 @@ export async function POST(req: NextRequest) {
 
   const email = parsed.data.email.toLowerCase().trim();
   await connectDB();
+
+  const { limits, readOnly } = await getTeamEntitlements(auth.teamId);
+  if (readOnly) {
+    return NextResponse.json(readOnlyResponse(), { status: 403 });
+  }
+  if (limits.maxTeamMembers != null) {
+    const activeCount = await TeamMember.countDocuments({ teamId: auth.teamId, status: "active" });
+    if (activeCount >= limits.maxTeamMembers) {
+      return NextResponse.json(
+        { error: `Your plan allows up to ${limits.maxTeamMembers} team member(s). Upgrade to add more.` },
+        { status: 403 },
+      );
+    }
+  }
 
   if (await User.findOne({ email }).select("_id").lean()) {
     return NextResponse.json(

@@ -6,6 +6,7 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 import { requireAuth } from "@/lib/middleware/auth";
 import { assertSameOrigin } from "@/lib/csrf";
+import { getTeamEntitlements, readOnlyResponse } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,29 @@ export async function POST(
   }
 
   const userId = (session.user as any).id;
+
+  const alreadyActive = await TeamMember.exists({
+    teamId: invite.teamId,
+    userId,
+    status: "active",
+  });
+  if (!alreadyActive) {
+    const { limits, readOnly } = await getTeamEntitlements(invite.teamId);
+    if (readOnly) {
+      return NextResponse.json(readOnlyResponse(), { status: 403 });
+    }
+    if (limits.maxTeamMembers != null) {
+      const activeCount = await TeamMember.countDocuments({ teamId: invite.teamId, status: "active" });
+      if (activeCount >= limits.maxTeamMembers) {
+        return NextResponse.json(
+          {
+            error: `This team's plan allows up to ${limits.maxTeamMembers} team member(s) and is already at that limit. Ask the team owner to upgrade.`,
+          },
+          { status: 403 },
+        );
+      }
+    }
+  }
 
   await TeamMember.findOneAndUpdate(
     { teamId: invite.teamId, userId },

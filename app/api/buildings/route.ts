@@ -4,6 +4,7 @@ import { Building } from "@/lib/models/Building";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { CreateBuildingSchema } from "@/lib/validations/location";
 import { assertSameOrigin } from "@/lib/csrf";
+import { getTeamEntitlements, readOnlyResponse } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,27 @@ export async function POST(req: NextRequest) {
   }
 
   await connectDB();
+
+  const { limits, readOnly } = await getTeamEntitlements(auth.teamId);
+  if (readOnly) {
+    return NextResponse.json(readOnlyResponse(), { status: 403 });
+  }
+  if (limits.maxBuildings != null) {
+    // `isArchived: false` alone misses buildings created before that field
+    // existed — those documents have no isArchived key at all, and MongoDB's
+    // equality match doesn't treat "missing" as "false".
+    const activeCount = await Building.countDocuments({
+      teamId: auth.teamId,
+      isArchived: { $ne: true },
+    });
+    if (activeCount >= limits.maxBuildings) {
+      return NextResponse.json(
+        { error: `Your plan allows up to ${limits.maxBuildings} building(s). Upgrade to add more.` },
+        { status: 403 },
+      );
+    }
+  }
+
   const building = await Building.create({
     ...parsed.data,
     teamId: auth.teamId,

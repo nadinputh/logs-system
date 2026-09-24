@@ -54,12 +54,24 @@ describe('POST /api/admin/users — mail is best-effort, never load-bearing', ()
       expiresAt: new Date('2026-09-03T09:00:00Z'),
     })
     const sendSetPasswordEmail = vi.fn().mockImplementation(sendImpl)
+    // Unlimited/not-read-only so these mail-delivery tests never trip the
+    // seat-limit check added to this route — that behavior has its own
+    // coverage; importing the real module here would also drag in
+    // Subscription/Plan/Building against no live DB connection and hang.
+    const getTeamEntitlements = vi.fn().mockResolvedValue({
+      limits: { maxBuildings: null, maxTeamMembers: null, maxQuestCards: null, logRetentionDays: null, blePush: true },
+      readOnly: false,
+    })
 
     vi.doMock('@/lib/middleware/auth', () => ({ requireTeamPermission }))
     vi.doMock('@/lib/db', () => ({ connectDB: vi.fn().mockResolvedValue(undefined) }))
     vi.doMock('@/lib/models/User', () => ({ User: { findOne: userFindOne, create: userCreate } }))
-    vi.doMock('@/lib/models/TeamMember', () => ({ TeamMember: { create: teamMemberCreate } }))
+    vi.doMock('@/lib/models/TeamMember', () => ({ TeamMember: { create: teamMemberCreate, countDocuments: vi.fn().mockResolvedValue(0) } }))
     vi.doMock('@/lib/models/Team', () => ({ Team: { findById: teamFindById } }))
+    vi.doMock('@/lib/entitlements', () => ({
+      getTeamEntitlements,
+      readOnlyResponse: vi.fn().mockReturnValue({ error: 'read-only' }),
+    }))
     vi.doMock('@/lib/verification', () => ({
       issueVerificationToken,
       setPasswordLink: (t: string) => `https://kamnotheat.example/set-password/${t}`,

@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/sonner'
 import { AddUserDirect } from './AddUserDirect'
+import { TeamBillingCard } from './TeamBillingCard'
 
 type TeamRole = 'owner' | 'admin' | 'manager' | 'member' | 'auditor'
 type TeamStatus = 'active' | 'suspended'
@@ -203,7 +204,13 @@ function CollapsibleSection({
   return (
     <Card>
       <CardContent className="p-0">
-        <details open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+        {/* Deliberately uncontrolled: the browser is the source of truth for
+            `<details>`'s own open/closed state. `open` here only mirrors it
+            for the chevron's rotation — re-applying an `open` prop that could
+            lag one render behind the native toggle (e.g. while this card's
+            own async data fetch settles and re-renders the tree) is what
+            made the first click sometimes silently fail to expand it. */}
+        <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
           <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
             <div>
               <p className="text-sm font-semibold text-foreground">{title}</p>
@@ -1077,8 +1084,25 @@ export default function TeamSettingsPage() {
           </div>
 
           {loadingTeams ? (
-            <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
-              Loading teams...
+            // Matches the loaded grid's own container class and each card's
+            // approximate shape/height (not just a shorter one-line placeholder)
+            // — a shorter skeleton here was pushing "Billing" and everything
+            // below it down the moment real team data arrived, and a click
+            // aimed at the accordion during that reflow window landed on
+            // whatever had moved into its place instead.
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
+              {[0, 1].map((i) => (
+                <div key={i} className="rounded-xl border border-border bg-muted/30 px-3 py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="h-3.5 w-2/3 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                      <div className="h-3 w-1/3 rounded bg-muted animate-pulse motion-reduce:animate-none" />
+                    </div>
+                    <div className="h-5 w-14 shrink-0 rounded-full bg-muted animate-pulse motion-reduce:animate-none" />
+                  </div>
+                  <div className="mt-3 h-7 w-16 rounded-full bg-muted animate-pulse motion-reduce:animate-none" />
+                </div>
+              ))}
             </div>
           ) : teams.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
@@ -1122,6 +1146,16 @@ export default function TeamSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <CollapsibleSection title="Billing" description="Subscription plan, payment status, and self-serve checkout.">
+        {!activeTeam ? (
+          <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
+            Select an active team first.
+          </div>
+        ) : (
+          <TeamBillingCard teamId={activeTeam.id} isOwner={isOwner} />
+        )}
+      </CollapsibleSection>
 
       <CollapsibleSection
         title="Team Audit Trail"

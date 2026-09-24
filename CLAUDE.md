@@ -4,36 +4,6 @@
 
 An enterprise-grade, high-throughput, and immutable Check-In/Out logging system. The engine balances zero-friction user experiences (Passkeys, QR, BLE) with strict cryptographic security, compliance tracking, and automated edge-case resolution.
 
-**Stack:** Next.js 15 (App Router, TypeScript) · MongoDB (Mongoose v9) · NextAuth v4 · HeroUI v3 · Tailwind v4 · Vercel + MongoDB Atlas
-
----
-
-## Implementation Status
-
-### ✅ Fully Implemented
-
-| Feature                                                                      | Location                                                                                  |
-| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Building / Floor / Room CRUD (admin)                                         | `app/admin/buildings\|floors\|rooms/`                                                     |
-| Static QR code generation + print page                                       | `lib/qr.ts`, `app/admin/qr/[id]/`                                                         |
-| Check-in/out flow: visitor identity, open-log detection, selfie (Cloudinary) | `components/location/CheckInOut.tsx`                                                      |
-| In-app QR scanner (html5-qrcode, iOS-safe)                                   | `components/scanner/QRScanner.tsx`                                                        |
-| Dashboard stats (today/live/total)                                           | `app/dashboard/`                                                                          |
-| Logs pages (staff own, admin all)                                            | `app/logs/`, `app/admin/logs/`                                                            |
-| Quest cards: location_chain + custom, bulk issuance, per-card QR             | `app/admin/quests/`, `app/quest/[token]/`                                                 |
-| Quest progress API with ordered step validation                              | `app/api/quests/[token]/progress/`                                                        |
-| NextAuth v4 credentials + role-based middleware guard                        | `lib/auth.ts`, `middleware.ts`                                                            |
-| Nightly stale-log cron (12h, append-only, autoCheckedOut flag)               | `app/api/cron/cleanup-stale-logs/`                                                        |
-| Enterprise log fields: deviceId, ipAddress, userAgent, geofenceStatus        | `lib/models/Log.ts`, `app/api/logs/`                                                      |
-| Append-only checkout (OUT document with relatedLogId)                        | `app/api/logs/[id]/route.ts`                                                              |
-| Predictive 4:30pm checkout hint + duration display                           | `lib/predictive.ts`, `components/location/CheckInOut.tsx`                                 |
-| Idempotency engine (SHA-256 key + MongoDB TTL)                               | `lib/idempotency.ts`, `lib/models/IdempotencyKey.ts`                                      |
-| Immutable audit ledger (admin corrections)                                   | `lib/models/AuditLog.ts`, `app/api/logs/[id]/correction/`                                 |
-| Dynamic QR kiosk loop (15s JWT, HS256, auto-refresh)                         | `lib/jwt.ts`, `app/kiosk/[locationId]/`, `app/api/kiosk/token/`                           |
-| Reverse QR scanner loop (30s personal JWT, terminal scan)                    | `app/profile/`, `app/terminal/`, `app/api/terminal/scan/`, `app/api/users/session-qr/`    |
-| WebAuthn / FIDO2 passkeys + NextAuth bridge                                  | `lib/models/PasskeyCredential.ts`, `app/api/auth/passkey/`, `app/settings/passkeys/`      |
-| PWA push notifications (VAPID, service worker)                               | `lib/models/PushSubscription.ts`, `app/api/push/`, `public/sw.js`, `public/manifest.json` |
-
 ---
 
 ## Architecture & Anti-Spoofing Requirements
@@ -135,23 +105,6 @@ Every log entry must capture and store the complete request context in a single 
 
 Every check-in/out event must support cryptographic validation via the device's native Secure Enclave or TPM.
 
-### Database Schema
-
-```typescript
-// lib/models/PasskeyCredential.ts
-{
-  userId:           ObjectId,       // ref: User
-  credentialId:     string,         // base64url-encoded credential ID
-  publicKey:        string,         // COSE-encoded public key (base64url)
-  counter:          number,         // replay-attack prevention
-  deviceType:       string,         // 'singleDevice' | 'multiDevice'
-  backedUp:         boolean,
-  transports:       string[],       // ['internal', 'hybrid', ...]
-  createdAt:        Date,
-  lastUsedAt:       Date,
-}
-```
-
 ### Implementation Notes
 
 - Use `@simplewebauthn/server` (Node) and `@simplewebauthn/browser` (client).
@@ -159,90 +112,6 @@ Every check-in/out event must support cryptographic validation via the device's 
 - Authentication: `POST /api/auth/passkey/authenticate/options` → `POST /api/auth/passkey/authenticate/verify`
 - Passkey auth replaces the `POST /api/logs` password check but co-exists with credential auth for backwards compatibility.
 - Every passkey-verified check-in must set `passkeyVerified: true` on the Log document.
-
----
-
-## Implementation Roadmap
-
-### Sprint 1 — Enterprise Field Fixes (Current Sprint, affects existing code)
-
-**Changes to existing files:**
-
-1. `lib/models/Log.ts` — add fields: `ip_address`, `user_agent`, `device_id`, `geofence_status`, `auto_checked_out`, `relatedLogId`, `passkeyVerified`
-2. `app/api/logs/route.ts` — extract IP + user-agent from request headers; accept `deviceId` + `geofenceStatus` in body; change checkout to append-only (create new `action: 'out'` document instead of mutating)
-3. `app/api/logs/[id]/route.ts` — convert PATCH to write a new log document, not mutate the existing one
-4. `app/api/cron/cleanup-stale-logs/route.ts` — change 24h → 12h, add `auto_checked_out: true`
-5. `components/location/CheckInOut.tsx` — add `deviceId` from localStorage, send with check-in; add predictive 4:30pm hint
-6. `lib/validations/log.ts` — add `deviceId`, `geofenceStatus`, `idempotencyKey` to `CreateLogSchema`
-
-**New files:**
-
-- `lib/predictive.ts` — `getPredictedAction(openLog, now)` utility
-
-### Sprint 2 — Idempotency + Audit Ledger (new collections)
-
-**New files:**
-
-- `lib/models/IdempotencyKey.ts` — `{ key, response, createdAt }` with TTL index 24h
-- `lib/models/AuditLog.ts` — correction ledger schema
-- `app/api/logs/[id]/correction/route.ts` — admin endpoint to correct a log entry
-- `lib/idempotency.ts` — `checkIdempotency(key)` / `saveIdempotency(key, response)` helpers
-
-**Changes to existing files:**
-
-- `app/api/logs/route.ts` — add idempotency key check before write
-
-### Sprint 3 — Dynamic QR + Reverse QR
-
-**New env vars:** `KIOSK_SECRET`, `SESSION_QR_SECRET`
-
-**New files:**
-
-- `app/kiosk/[locationId]/page.tsx` — full-screen auto-refreshing QR display
-- `app/terminal/page.tsx` — terminal scanner page
-- `app/profile/page.tsx` — authenticated user personal QR
-- `app/api/kiosk/token/route.ts`
-- `app/api/users/session-qr/route.ts`
-- `app/api/terminal/scan/route.ts`
-
-**Changes to existing files:**
-
-- `app/scan/[locationId]/page.tsx` — handle `?token=` signed JWT param for dynamic QR path
-
-### Sprint 4 — WebAuthn / FIDO2 Passkeys
-
-**New deps:** `@simplewebauthn/server`, `@simplewebauthn/browser`
-
-**New files:**
-
-- `lib/models/PasskeyCredential.ts`
-- `app/api/auth/passkey/register/options/route.ts`
-- `app/api/auth/passkey/register/verify/route.ts`
-- `app/api/auth/passkey/authenticate/options/route.ts`
-- `app/api/auth/passkey/authenticate/verify/route.ts`
-- `app/settings/passkeys/page.tsx` — manage passkeys for authenticated user
-
-**Changes to existing files:**
-
-- `lib/models/User.ts` — add `passkeys: PasskeyCredential[]` virtual
-- `lib/auth.ts` — add passkey as an alternative auth method alongside credentials
-- `lib/models/Log.ts` — add `passkeyVerified: boolean` field
-
-### Sprint 5 — BLE + PWA Push Notifications
-
-**New deps:** `web-push`
-
-**New env vars:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
-
-**New files:**
-
-- `lib/models/PushSubscription.ts`
-- `app/api/push/subscribe/route.ts`
-- `app/api/push/send/route.ts` (internal)
-- `public/sw.js` — service worker for background push
-- `public/manifest.json` — PWA manifest
-
-**Note:** Full BLE beacon detection requires Capacitor or React Native wrapper.
 
 ---
 
@@ -294,6 +163,7 @@ npm run dev
 | `VAPID_PUBLIC_KEY`                     | Web Push               | Sprint 5 |
 | `VAPID_PRIVATE_KEY`                    | Web Push               | Sprint 5 |
 | `VAPID_SUBJECT`                        | Web Push               | Sprint 5 |
+| `BILLING_MOCK_MODE`                    | Dev-mode billing bypass (see below) | Dev only |
 | `SMTP_HOST`                            | Verification / invite / set-password email | Prod ✅ |
 | `SMTP_PORT`                            | SMTP transport (default 587)              | Optional |
 | `SMTP_SECURE`                          | SMTP transport (`true`, or implied at 465)| Optional |
@@ -381,8 +251,6 @@ still exists and the resend endpoints above are the recovery.
 
 Deliverability is not configured by these variables: publish SPF, DKIM and DMARC for whatever
 domain `EMAIL_FROM` uses, or transactional mail from it lands in spam.
-
-"""
 
 ## graphify
 

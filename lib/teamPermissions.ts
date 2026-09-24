@@ -23,6 +23,7 @@ export type TeamPermission =
   | "team.ownership.transfer"
   | "team.invites.read"
   | "team.invites.manage"
+  | "team.billing.manage"
   | "terminal.scan";
 
 export const TEAM_PERMISSION_MIN_ROLE: Record<TeamPermission, TeamRole> = {
@@ -40,6 +41,7 @@ export const TEAM_PERMISSION_MIN_ROLE: Record<TeamPermission, TeamRole> = {
   "team.ownership.transfer": "owner",
   "team.invites.read": "admin",
   "team.invites.manage": "admin",
+  "team.billing.manage": "owner",
   "terminal.scan": "manager",
 };
 

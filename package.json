@@ -8,6 +8,10 @@
     "start": "node scripts/next-with-port.mjs start",
     "lint": "next lint",
     "seed": "npx tsx scripts/seed.ts",
+    "seed:plans": "npx tsx scripts/seed-plans.ts",
+    "grant-superadmin": "npx tsx scripts/grant-superadmin.ts",
+    "backfill:legacy-plan:dry": "npx tsx scripts/backfill-legacy-plan.ts --dry-run",
+    "backfill:legacy-plan": "npx tsx scripts/backfill-legacy-plan.ts",
     "backfill:team:dry": "npx tsx scripts/backfill-team-ownership.ts --dry-run",
     "backfill:team": "npx tsx scripts/backfill-team-ownership.ts",
     "backfill:email-verified": "npx tsx scripts/backfill-email-verified.ts",
@@ -37,6 +41,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "stripe": "^22.6.1",
     "uuid": "^14.0.0",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"

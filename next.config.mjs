@@ -22,12 +22,13 @@ const nextConfig = {
   experimental: {
     devtoolSegmentExplorer: false,
   },
-  // Both are node-only server packages that must not be bundled. nodemailer
-  // additionally must stay external so a missing or broken mail dependency is a
-  // runtime error inside the send path — catchable by the caller — rather than
-  // a build-time resolution failure that takes down every route importing
-  // lib/email/send.ts before it can even validate its request.
-  serverExternalPackages: ['mongoose', 'nodemailer'],
+  // Node-only server packages that must not be bundled. nodemailer and stripe
+  // additionally must stay external so a missing or broken dependency is a
+  // runtime error inside the send/billing path — catchable by the caller — rather
+  // than a build-time resolution failure that takes down every route importing
+  // lib/email/send.ts or lib/billing/providers/stripe.ts before it can even
+  // validate its request.
+  serverExternalPackages: ['mongoose', 'nodemailer', 'stripe'],
 }
 
 export default withNextIntl(nextConfig)

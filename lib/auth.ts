@@ -208,6 +208,11 @@ export const authOptions: NextAuthOptions = {
         // callback runs later without a request object.
         const uaHeader = (req?.headers?.["user-agent"] as string | undefined) ?? "unknown";
         const originIp = ip;
+        // Checked before password/verification, not after: a disabled account
+        // must not leak whether its password would otherwise have been
+        // correct, and a superadmin disabling someone mid-incident needs it
+        // to take effect immediately regardless of that account's other state.
+        if (user.isDisabled) throw new Error("ACCOUNT_DISABLED");
         /**
          * An admin-provisioned account exists but has no password yet. Returning
          * null here collapsed it into the generic credential failure, so the user
@@ -277,6 +282,11 @@ export const authOptions: NextAuthOptions = {
         if (!tokenDoc) return null;
         const user = await User.findById(tokenDoc.userId);
         if (!user) return null;
+        // Passkey auth is a second sign-in path, not exempt from the same
+        // disable check the credentials provider applies above — the
+        // cryptographic verification already succeeded by the time a
+        // preAuthToken exists, so this is the only remaining gate.
+        if (user.isDisabled) throw new Error("ACCOUNT_DISABLED");
 
         const fwd = req?.headers?.["x-forwarded-for"] ?? "";
         const ip =

@@ -164,6 +164,8 @@ export function LoginForm() {
         setNeedsPassword(true)
       } else if (result.error.includes('EMAIL_NOT_VERIFIED')) {
         setNeedsVerify(true)
+      } else if (result.error.includes('ACCOUNT_DISABLED')) {
+        setError(t('errorAccountDisabled'))
       } else {
         setError(t('errorNoMatch'))
       }

@@ -7,6 +7,7 @@ import { CreateQuestCardSchema } from "@/lib/validations/quest";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { v4 as uuidv4 } from "uuid";
 import { assertSameOrigin } from "@/lib/csrf";
+import { getTeamEntitlements, readOnlyResponse } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -64,6 +65,22 @@ export async function POST(req: NextRequest) {
 
   const { count, ...cardData } = parsed.data;
   const issuedBy = (auth.session.user as any).id;
+
+  const { limits, readOnly } = await getTeamEntitlements(auth.teamId);
+  if (readOnly) {
+    return NextResponse.json(readOnlyResponse(), { status: 403 });
+  }
+  if (limits.maxQuestCards != null) {
+    const existingCount = await QuestCard.countDocuments({ teamId: auth.teamId });
+    if (existingCount + count > limits.maxQuestCards) {
+      return NextResponse.json(
+        {
+          error: `Your plan allows up to ${limits.maxQuestCards} quest card(s) total (${existingCount} already issued). Upgrade to issue more.`,
+        },
+        { status: 403 },
+      );
+    }
+  }
 
   for (const step of cardData.steps) {
     const location = await findOwnedLocationByType(

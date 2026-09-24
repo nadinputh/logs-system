@@ -89,5 +89,11 @@ export const config = {
     "/profile/:path*",
     "/settings/:path*",
     "/terminal/:path*",
+    // Deliberately not in requiresTeamContext above — platform-admin has no
+    // team context at all. This entry only gets an unauthenticated visitor
+    // bounced to /login; requireSuperAdmin() in app/platform-admin/layout.tsx
+    // does the actual authorization (same reason the /terminal role check
+    // isn't here either — middleware is Edge, that check needs a DB read).
+    "/platform-admin/:path*",
   ],
 };

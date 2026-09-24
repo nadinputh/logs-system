@@ -60,6 +60,7 @@
   },
   "landing": {
     "primaryNavLabel": "Primary",
+    "pricingNavLink": "Pricing",
     "heroTitleLine1": "Zero-friction check-ins.",
     "heroTitleLine2": "Cryptographic certainty.",
     "heroSubhead": "An immutable check-in/out ledger. Passkeys, QR and kiosk flows make entry effortless; server-authoritative time and a tamper-evident audit trail make the record impossible to quietly rewrite.",
@@ -97,6 +98,10 @@
     "auditTrailDetail": "Corrections never overwrite",
     "footerTagline": "Secure check-in logging · Immutable by design"
   },
+  "pricing": {
+    "title": "Plans for every estate size",
+    "subtitle": "From a single building to a multi-site organization — start free, upgrade when you outgrow it."
+  },
   "login": {
     "welcomeBack": "Welcome back",
     "subhead": "Staff and admin access to the console.",
@@ -121,6 +126,7 @@
     "reasonSessionRevokedBody": "The session on this device was revoked from Settings → Security. If that wasn't you, sign in and end every session immediately.",
     "errorTooManyAttempts": "Too many sign-in attempts. Try again in a few minutes.",
     "errorNoMatch": "That email and password do not match an account.",
+    "errorAccountDisabled": "This account has been disabled. Contact your administrator.",
     "errorRateLimited429": "Too many attempts. Try again in a few minutes.",
     "errorEnterEmailFirst": "Enter your email address first, then sign in with your passkey.",
     "errorNoPasskeyRegistered": "No passkey is registered for this account.",
