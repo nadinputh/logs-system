@@ -7,6 +7,7 @@ import { VerificationToken } from "@/lib/models/VerificationToken";
 import { hashToken } from "@/lib/verification";
 import { bumpSessionsVersion } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
+import { clientKey, rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -63,6 +64,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+
+  // Defense in depth against token guessing — the token itself is the real
+  // barrier, this just raises the cost of casual brute force above zero.
+  const limited = rateLimit(clientKey(req, "reset-password"), 10, 15 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfter) } },
+    );
+  }
 
   const parsed = Schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {

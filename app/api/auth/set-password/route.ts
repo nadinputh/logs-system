@@ -6,6 +6,7 @@ import { User } from "@/lib/models/User";
 import { VerificationToken } from "@/lib/models/VerificationToken";
 import { hashToken } from "@/lib/verification";
 import { assertSameOrigin } from "@/lib/csrf";
+import { clientKey, rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,14 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+
+  const limited = rateLimit(clientKey(req, "set-password"), 10, 15 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfter) } },
+    );
+  }
 
   const parsed = Schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {

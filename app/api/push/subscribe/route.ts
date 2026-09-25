@@ -66,6 +66,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   await connectDB();
-  await PushSubscription.deleteOne({ endpoint: body.endpoint });
+  const userId = (session.user as any).id;
+  await PushSubscription.deleteOne({ endpoint: body.endpoint, userId });
   return NextResponse.json({ ok: true });
 }
