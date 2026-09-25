@@ -18,6 +18,7 @@ import { getPredictedAction, formatDuration } from '@/lib/predictive'
 import { buildIdempotencyKey } from '@/lib/idempotency-key'
 import { useLogRealtime } from '@/lib/useLogRealtime'
 import { usePasskeySupport } from '@/lib/usePasskeySupport'
+import { getClientCoordinates } from '@/lib/geolocation'
 
 const SelfieCapture = dynamic(() => import('@/components/selfie/SelfieCapture'), { ssr: false })
 const QRScanner = dynamic(() => import('@/components/scanner/QRScanner'), { ssr: false })
@@ -308,6 +309,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
     setCheckedInViaPasskey(false)
     setPasskeySavedThisVisit(false)
     try {
+      const coords = await getClientCoordinates()
       const res = await fetch('/api/logs', {
         method: 'POST',
         headers: {
@@ -327,6 +329,8 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           visitorGender: gender || undefined,
           visitPurpose: purpose || undefined,
           deviceId: deviceId || undefined,
+          latitude: coords?.latitude,
+          longitude: coords?.longitude,
           photo,
         }),
       })

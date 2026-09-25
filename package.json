@@ -27,6 +27,7 @@
     "html-to-image": "^1.11.13",
     "html5-qrcode": "^2.3.8",
     "jose": "^6.2.3",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
     "mongoose": "^9.6.2",
     "next": "15.5.18",
@@ -37,12 +38,14 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-leaflet": "^5.0.0",
     "uuid": "^14.0.0",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/prop-types": "^15.7.15",

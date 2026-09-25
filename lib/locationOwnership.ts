@@ -8,6 +8,7 @@ type LeanLocation = {
   _id: any;
   teamId: any;
   checkInMode?: "click" | "passkey";
+  buildingId?: any;
 };
 
 export function getLocationModel(locationType: LocationType) {
@@ -23,7 +24,7 @@ export async function findOwnedLocationByType(
   const model = getLocationModel(locationType) as any;
   const doc = await model
     .findById(locationId)
-    .select("teamId checkInMode")
+    .select("teamId checkInMode buildingId")
     .lean<LeanLocation | null>();
   return doc;
 }

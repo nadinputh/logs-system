@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Building2, Layers3, Pencil, Plus, QrCode, Search } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { Building2, Layers3, MapPinned, Pencil, Plus, QrCode, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,8 +14,37 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
+import type { LatLng } from '@/components/admin/GeofenceMapPicker'
 
-interface Building { _id: string; name: string; address: string; description?: string; checkInMode?: 'click' | 'passkey' }
+// Leaflet touches window/document at import time — must stay client-only,
+// mirroring the QRScanner/html5-qrcode convention noted in CLAUDE.md.
+const GeofenceMapPicker = dynamic(() => import('@/components/admin/GeofenceMapPicker'), { ssr: false })
+
+type GeofencePolygon = { type: 'Polygon'; coordinates: number[][][] }
+interface Building { _id: string; name: string; address: string; description?: string; checkInMode?: 'click' | 'passkey'; geofence?: GeofencePolygon | null }
+
+const DEFAULT_MAP_CENTER: LatLng = [11.5564, 104.9282] // arbitrary fallback so the map always has somewhere to open
+
+// GeoJSON is [lng, lat] and requires a closed ring (first point repeated at
+// the end) — both the opposite of what's natural to hand-draw on a map.
+function verticesToGeofence(vertices: LatLng[]): GeofencePolygon | null {
+  if (vertices.length < 3) return null
+  const ring = vertices.map(([lat, lng]) => [lng, lat])
+  const [firstLng, firstLat] = ring[0]
+  const [lastLng, lastLat] = ring[ring.length - 1]
+  if (firstLng !== lastLng || firstLat !== lastLat) ring.push(ring[0])
+  return { type: 'Polygon', coordinates: [ring] }
+}
+
+function geofenceToVertices(geofence?: GeofencePolygon | null): LatLng[] {
+  const ring = geofence?.coordinates?.[0]
+  if (!ring || ring.length < 3) return []
+  // Drop the closing duplicate — editing should show each vertex once.
+  const open = ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+    ? ring.slice(0, -1)
+    : ring
+  return open.map(([lng, lat]) => [lat, lng] as LatLng)
+}
 
 export default function AdminBuildingsPage() {
   const [buildings, setBuildings] = useState<Building[]>([])
@@ -22,6 +52,8 @@ export default function AdminBuildingsPage() {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [description, setDescription] = useState('')
+  const [geofenceVertices, setGeofenceVertices] = useState<LatLng[]>([])
+  const [showGeofence, setShowGeofence] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
@@ -30,6 +62,8 @@ export default function AdminBuildingsPage() {
   const [editName, setEditName] = useState('')
   const [editAddress, setEditAddress] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editGeofenceVertices, setEditGeofenceVertices] = useState<LatLng[]>([])
+  const [editShowGeofence, setEditShowGeofence] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
 
   async function load() {
@@ -56,13 +90,13 @@ export default function AdminBuildingsPage() {
       const res = await fetch('/api/buildings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, address, description }),
+        body: JSON.stringify({ name, address, description, geofence: verticesToGeofence(geofenceVertices) }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(readApiError(data, 'Failed to create building'))
       toast.success('Building created')
       setOpen(false)
-      setName(''); setAddress(''); setDescription('')
+      setName(''); setAddress(''); setDescription(''); setGeofenceVertices([]); setShowGeofence(false)
       load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create building')
@@ -76,6 +110,8 @@ export default function AdminBuildingsPage() {
     setEditName(b.name)
     setEditAddress(b.address)
     setEditDescription(b.description ?? '')
+    setEditGeofenceVertices(geofenceToVertices(b.geofence))
+    setEditShowGeofence(!!b.geofence)
   }
 
   async function handleEditSubmit(e: React.FormEvent) {
@@ -86,7 +122,12 @@ export default function AdminBuildingsPage() {
       const res = await fetch(`/api/locations/${editing._id}?type=building`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName, address: editAddress, description: editDescription }),
+        body: JSON.stringify({
+          name: editName,
+          address: editAddress,
+          description: editDescription,
+          geofence: verticesToGeofence(editGeofenceVertices),
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(readApiError(data, 'Failed to update building'))
@@ -136,6 +177,19 @@ export default function AdminBuildingsPage() {
                 <Label>Description (optional)</Label>
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Brief description…" />
               </div>
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowGeofence(v => !v)}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-accent transition-colors"
+                >
+                  <MapPinned className="w-4 h-4" aria-hidden />
+                  Geofence boundary (optional)
+                </button>
+                {showGeofence && (
+                  <GeofenceMapPicker value={geofenceVertices} onChange={setGeofenceVertices} center={DEFAULT_MAP_CENTER} />
+                )}
+              </div>
               <Button type="submit" variant="mono" className="w-full" disabled={saving}>
                 {saving ? 'Creating…' : 'Create Building'}
               </Button>
@@ -162,6 +216,23 @@ export default function AdminBuildingsPage() {
             <div className="space-y-1.5">
               <Label>Description (optional)</Label>
               <Textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} placeholder="Brief description…" />
+            </div>
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => setEditShowGeofence(v => !v)}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-accent transition-colors"
+              >
+                <MapPinned className="w-4 h-4" aria-hidden />
+                Geofence boundary (optional)
+              </button>
+              {editShowGeofence && (
+                <GeofenceMapPicker
+                  value={editGeofenceVertices}
+                  onChange={setEditGeofenceVertices}
+                  center={editGeofenceVertices[0] ?? DEFAULT_MAP_CENTER}
+                />
+              )}
             </div>
             <Button type="submit" variant="mono" className="w-full" disabled={editSaving}>
               {editSaving ? 'Saving…' : 'Save Changes'}

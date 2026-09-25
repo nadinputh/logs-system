@@ -7,6 +7,8 @@ import { PasskeyCheckInChallenge } from "@/lib/models/PasskeyCheckInChallenge";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
+import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
+import { resolveBuildingId, computeGeofenceStatus } from "@/lib/geofence";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
 
@@ -26,6 +28,8 @@ export async function POST(req: NextRequest) {
     relatedLogId,
     idempotencyKey,
     visitorName: bodyVisitorName,
+    latitude,
+    longitude,
   } = body;
 
   if (
@@ -217,6 +221,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const passkeyLocation = await findOwnedLocationByType(
+      locationType as LocationType,
+      locationId,
+    );
+    const geofenceStatus = passkeyLocation
+      ? await computeGeofenceStatus(
+          resolveBuildingId(locationType as LocationType, passkeyLocation),
+          latitude,
+          longitude,
+        )
+      : undefined;
+
     log = await Log.create({
       teamId,
       locationId,
@@ -231,6 +247,7 @@ export async function POST(req: NextRequest) {
       deviceId: intentDoc.deviceId ?? undefined,
       ipAddress,
       userAgent,
+      geofenceStatus,
       action: "in",
       passkeyVerified: true,
       passkeyCredentialId: credId,

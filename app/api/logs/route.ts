@@ -8,6 +8,7 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import { CreateLogSchema } from "@/lib/validations/log";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
+import { resolveBuildingId, computeGeofenceStatus } from "@/lib/geofence";
 import { resolveLocationLabels } from "@/lib/locationLabels";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
@@ -267,7 +268,8 @@ export async function POST(req: NextRequest) {
     photo,
     questCardId,
     deviceId,
-    geofenceStatus,
+    latitude,
+    longitude,
   } = parsed.data;
 
   const location = await findOwnedLocationByType(
@@ -277,6 +279,12 @@ export async function POST(req: NextRequest) {
   if (!location) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
+
+  const geofenceStatus = await computeGeofenceStatus(
+    resolveBuildingId(locationType as LocationType, location),
+    latitude,
+    longitude,
+  );
 
   const teamId = location.teamId.toString();
 

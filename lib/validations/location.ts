@@ -1,9 +1,30 @@
 import { z } from "zod";
+import { normalizeGeofenceWinding } from "@/lib/geofence";
+
+// GeoJSON Polygon: one or more linear rings, each a closed loop of [lng, lat]
+// pairs (at least 4 points, first === last). Shape-checked here; Mongo's
+// 2dsphere index is the source of truth for real geometry validity. Winding
+// order is normalized on the way in — see normalizeGeofenceWinding — so it
+// never depends on the order an admin happened to click the map in.
+const GeofenceSchema = z
+  .object({
+    type: z.literal("Polygon"),
+    coordinates: z
+      .array(z.array(z.tuple([z.number(), z.number()])).min(4))
+      .min(1),
+  })
+  .nullable()
+  .transform((geofence) =>
+    geofence
+      ? { ...geofence, coordinates: normalizeGeofenceWinding(geofence.coordinates) }
+      : geofence,
+  );
 
 export const CreateBuildingSchema = z.object({
   name: z.string().min(1).max(100),
   address: z.string().min(1).max(200),
   description: z.string().max(500).optional(),
+  geofence: GeofenceSchema.optional(),
 });
 
 export const CreateFloorSchema = z.object({
@@ -35,6 +56,7 @@ export const UpdateBuildingSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   address: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
+  geofence: GeofenceSchema.optional(),
 });
 
 export const UpdateFloorSchema = z.object({

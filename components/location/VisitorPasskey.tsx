@@ -6,6 +6,7 @@ import { Fingerprint } from 'lucide-react'
 import { toast } from '@/components/ui/sonner'
 import { buildIdempotencyKey } from '@/lib/idempotency-key'
 import { usePasskeySupport } from '@/lib/usePasskeySupport'
+import { getClientCoordinates } from '@/lib/geolocation'
 
 interface Props {
   locationId: string
@@ -86,6 +87,9 @@ export default function VisitorPasskey({
     try {
       const { startAuthentication } = await import('@simplewebauthn/browser')
       const idempotencyKey = await buildIdempotencyKey(sessionToken, locationId, action)
+      // Checkout doesn't re-validate location, so coordinates are only worth
+      // capturing (and asking permission for) on the check-in leg.
+      const coords = action === 'in' ? await getClientCoordinates() : null
       const intentPayload = {
         locationId,
         locationType,
@@ -98,6 +102,8 @@ export default function VisitorPasskey({
         visitorGender,
         visitPurpose,
         deviceId,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
       }
 
       const challengeRes = await fetch('/api/logs/passkey/challenge', {

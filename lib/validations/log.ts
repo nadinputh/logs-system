@@ -10,7 +10,11 @@ export const CreateLogSchema = z.object({
   visitPurpose: z.string().max(200).optional(),
   sessionToken: z.string().uuid(),
   deviceId: z.string().optional(),
-  geofenceStatus: z.boolean().optional(),
+  // Raw coordinates only — geofenceStatus is computed server-side against the
+  // location's stored geofence (app/api/logs/route.ts), never trusted from
+  // the client.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   photo: z.string().url().optional(),
   questCardId: z.string().optional(),
 });
