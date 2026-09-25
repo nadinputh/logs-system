@@ -5,10 +5,11 @@ import { User } from '@/lib/models/User'
 import { requireSession } from '@/lib/server/requireSession'
 import Link from 'next/link'
 import PasskeyManager from '@/app/settings/passkeys/PasskeyManager'
+import NotificationsToggle from './NotificationsToggle'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { SessionsList, type SessionRow } from './SessionsList'
-import { ShieldCheck, Fingerprint } from 'lucide-react'
+import { ShieldCheck, Fingerprint, Bell } from 'lucide-react'
 
 export const metadata = {
   title: 'Account & Security — Kamnotheat',
@@ -117,6 +118,24 @@ export default async function SecuritySettingsPage() {
             </div>
           </div>
           <PasskeyManager initialPasskeys={JSON.parse(JSON.stringify(passkeys))} />
+        </CardContent>
+      </Card>
+
+      {/* Push notifications */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-4">
+          <div className="mb-4 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+              <Bell className="w-4 h-4 text-accent" strokeWidth={2.2} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-foreground">Notifications</h2>
+              <p className="text-xs text-muted mt-0.5 max-w-md">
+                Push notifications for this device, sent through your browser.
+              </p>
+            </div>
+          </div>
+          <NotificationsToggle />
         </CardContent>
       </Card>
 

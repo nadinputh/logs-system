@@ -291,9 +291,10 @@ npm run dev
 | `CRON_SECRET`                          | `/api/cron/*` guard    | ✅       |
 | `KIOSK_SECRET`                         | Dynamic QR signing     | Sprint 3 |
 | `SESSION_QR_SECRET`                    | Reverse QR signing     | Sprint 3 |
-| `VAPID_PUBLIC_KEY`                     | Web Push               | Sprint 5 |
-| `VAPID_PRIVATE_KEY`                    | Web Push               | Sprint 5 |
-| `VAPID_SUBJECT`                        | Web Push               | Sprint 5 |
+| `VAPID_PUBLIC_KEY`                     | Web Push (server)      | Sprint 5 |
+| `VAPID_PRIVATE_KEY`                    | Web Push (server)      | Sprint 5 |
+| `VAPID_SUBJECT`                        | Web Push (server)      | Sprint 5 |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY`         | Web Push (client subscribe, same value as `VAPID_PUBLIC_KEY`) | Sprint 5 |
 | `SMTP_HOST`                            | Verification / invite / set-password email | Prod ✅ |
 | `SMTP_PORT`                            | SMTP transport (default 587)              | Optional |
 | `SMTP_SECURE`                          | SMTP transport (`true`, or implied at 465)| Optional |
