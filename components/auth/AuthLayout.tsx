@@ -116,6 +116,20 @@ export function AuthLayout({
           {children}
         </div>
       </main>
+
+      <footer className="relative z-10 shrink-0 border-t border-[var(--panel-border)]">
+        <div className="shell flex flex-col items-center justify-between gap-2 py-4 text-xs text-muted sm:flex-row">
+          <p>{t('copyright', { year: new Date().getFullYear() })}</p>
+          <div className="flex items-center gap-4">
+            <Link href="/privacy" className="transition-colors hover:text-accent">
+              {t('privacyPolicy')}
+            </Link>
+            <Link href="/terms" className="transition-colors hover:text-accent">
+              {t('termsOfUse')}
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

@@ -17,7 +17,18 @@
     "sending": "Sending…",
     "checkYourEmail": "Check your email",
     "errorCheckDetails": "Check the details you entered and try again.",
-    "errorRequestLinkFailed": "Could not request a new link just now. Try again in a moment."
+    "errorRequestLinkFailed": "Could not request a new link just now. Try again in a moment.",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfUse": "Terms of Use",
+    "copyright": "© {year} Kamnotheat",
+    "backToHome": "Back to home"
+  },
+  "legal": {
+    "englishOnlyNotice": "This document is currently available in English only.",
+    "visitorNoticeSummary": "How we handle this check-in",
+    "visitorNoticeLearnMore": "Learn more",
+    "visitorNoticeShowLess": "Show less",
+    "visitorNoticeBody": "Checking in records the action, the time (set by our server, not your device), and this location in a permanent, append-only log. We also record a device identifier, your IP address, and browser information — this confirms the check-in is real, not to track you elsewhere. If this location asks for a photo, it's stored securely and used only to confirm who checked in. This information is visible to the organization operating this system and is not shared with anyone else."
   },
   "nav": {
     "dashboard": "Dashboard",

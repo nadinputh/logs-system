@@ -266,6 +266,17 @@ export default async function LandingPage() {
               {t('footerTagline')}
             </p>
           </div>
+          <div className="shell flex flex-col items-center justify-between gap-3 border-t border-[var(--panel-border)] py-6 text-sm text-muted sm:flex-row">
+            <p>{tCommon('copyright', { year: new Date().getFullYear() })}</p>
+            <div className="flex items-center gap-5">
+              <Link href="/privacy" className="transition-colors hover:text-accent">
+                {tCommon('privacyPolicy')}
+              </Link>
+              <Link href="/terms" className="transition-colors hover:text-accent">
+                {tCommon('termsOfUse')}
+              </Link>
+            </div>
+          </div>
         </footer>
       </div>
     </div>

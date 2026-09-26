@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { LogoTile } from '@/components/Logo'
 import { CircleCheck, Lock, MapPin, Star } from 'lucide-react'
 import { ScanNotice } from '@/components/location/ScanNotice'
+import { VisitorNotice } from '@/components/legal/VisitorNotice'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -673,6 +674,9 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
                 Continue
               </Button>
             </form>
+            <div className="mt-3.5">
+              <VisitorNotice />
+            </div>
             </CardContent>
           </Card>
         )}
