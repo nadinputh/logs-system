@@ -18,31 +18,31 @@ colors:
   status-track: "#64748b"
 typography:
   display:
-    fontFamily: "Inter Variable, Inter, system-ui, sans-serif"
+    fontFamily: "Public Sans, system-ui, sans-serif"
     fontSize: "clamp(2.25rem, 5vw, 3.75rem)"
     fontWeight: 800
     lineHeight: 1.05
     letterSpacing: "-0.02em"
   headline:
-    fontFamily: "Inter Variable, Inter, system-ui, sans-serif"
+    fontFamily: "Public Sans, system-ui, sans-serif"
     fontSize: "1.875rem"
     fontWeight: 800
     lineHeight: 1.15
     letterSpacing: "-0.015em"
   title:
-    fontFamily: "Inter Variable, Inter, system-ui, sans-serif"
+    fontFamily: "Public Sans, system-ui, sans-serif"
     fontSize: "1.125rem"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "normal"
   body:
-    fontFamily: "Inter Variable, Inter, system-ui, sans-serif"
+    fontFamily: "Public Sans, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.6
     letterSpacing: "normal"
   label:
-    fontFamily: "Inter Variable, Inter, system-ui, sans-serif"
+    fontFamily: "Public Sans, system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
     lineHeight: 1.2
@@ -162,10 +162,10 @@ Off-limits for role identity: cyan/sky/teal (brand, One Signal Rule), and emeral
 
 ## Typography
 
-**Display / Body Font:** Inter Variable (with Inter, system-ui, sans-serif)
-**Label Font:** Inter Variable, uppercase with wide tracking (no separate family)
+**Display / Body Font:** Public Sans (with system-ui, sans-serif)
+**Label Font:** Public Sans, uppercase with wide tracking (no separate family)
 
-**Character:** One voice, worked hard. Inter carries everything from the extrabold gradient hero to fine print; hierarchy comes from weight, size, and tracking rather than a second typeface. The effect is precise and modern — engineered, not decorated. (Geist and Geist Mono ship in the repo but are not wired into the layout; Inter is the live family. If a monospace is ever needed for tokens/hashes, wire Geist Mono rather than importing a new face.)
+**Character:** One voice, worked hard. Public Sans is the U.S. Web Design System's typeface, built for exactly the register Kamnotheat claims — a verifiable, official-grade record, not a marketing surface — and it carries everything from the extrabold gradient hero to fine print; hierarchy comes from weight, size, and tracking rather than a second typeface. The effect is precise and modern — engineered, not decorated. (Geist Mono is wired in and narrowly scoped to data that must line up or be read character by character — session/device hashes and IDs in Settings → Security and Team; it is not a second voice and never carries headings or body copy. Khmer text renders in Noto Sans Khmer, loaded separately since neither face has Khmer glyphs.)
 
 ### Hierarchy
 - **Display** (800, `clamp(2.25rem, 5vw, 3.75rem)`, line-height 1.05, tracking -0.02em): Hero headlines only. Often paired with the gradient-text treatment on one clause.
@@ -250,7 +250,7 @@ Soft, confident, pill-forward. Interactive controls are fully rounded: buttons, 
 ### Don't:
 - **Don't** flatten the brand into opaque boxes with gray drop shadows — that's generic SaaS, not the Glass Vault.
 - **Don't** run two gradients, or paint large fields of saturated cyan; the accent's rarity is the point.
-- **Don't** introduce a second type family — hierarchy is weight/size/tracking in Inter. (If a mono is truly needed, wire the already-present Geist Mono.)
+- **Don't** introduce a second type family — hierarchy is weight/size/tracking in Public Sans. (Geist Mono is the one narrow exception, scoped to hash/ID alignment; it never carries headings or body copy.)
 - **Don't** use bouncy or attention-seeking motion; reveals fade and lift, calm and deliberate.
 - **Don't** carry the Particle Field or heavy hero glass into dense console/admin tables where scan-density matters — flatten there.
 - **Don't** hardcode neutral grays; use HeroUI semantic tokens (`background`, `foreground`, `muted-foreground`, `border`, `overlay`).

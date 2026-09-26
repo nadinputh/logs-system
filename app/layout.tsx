@@ -7,14 +7,14 @@ import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/sonner'
 
-const inter = localFont({
-  src: '../public/fonts/Inter-Variable.woff2',
+const publicSans = localFont({
+  src: '../public/fonts/PublicSans-Variable.woff2',
   variable: '--font-sans',
   display: 'swap',
 })
 
-// Inter has no Khmer glyphs, so Khmer text would otherwise fall back to the
-// platform's default (inconsistent weight/metrics across OSes and often
+// Public Sans has no Khmer glyphs, so Khmer text would otherwise fall back to
+// the platform's default (inconsistent weight/metrics across OSes and often
 // missing subscript consonant shaping). next/font still generates this at
 // build time regardless of locale (the loader call itself can't be
 // conditional), but applying `.variable` to <html> only under the km locale
@@ -54,7 +54,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang={locale}
-      className={`${inter.variable} ${locale === 'km' ? notoSansKhmer.variable : ''} ${geistMono.variable}`}
+      className={`${publicSans.variable} ${locale === 'km' ? notoSansKhmer.variable : ''} ${geistMono.variable}`}
       suppressHydrationWarning
     >
       <body className="font-sans antialiased bg-background text-foreground">

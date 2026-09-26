@@ -130,6 +130,16 @@ const from = () =>
   process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? "no-reply@localhost";
 
 /**
+ * The declared 'Public Sans' in every font-family stack below is inert
+ * without this: an @font-face pointing at it. Mirrors lib/verification.ts's
+ * baseUrl() precedence — same three sources, same order — because a mail
+ * client fetches this URL from wherever the email is opened, not from this
+ * server, so it must be absolute and publicly reachable, never relative.
+ */
+const fontUrl = () =>
+  `${process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`}/fonts/PublicSans-Variable.woff2`;
+
+/**
  * Resolves true when the message was actually handed to an SMTP relay, false
  * when it was not sent at all. Callers surface the difference: an admin told
  * "a set-password email was sent" when nothing left the process has no reason
@@ -242,37 +252,88 @@ function shell(
 <meta name="supported-color-schemes" content="light dark">
 <title>${escapeHtml(title)}</title>
 <style>
+  /* Best-effort, not universal: Gmail and Outlook desktop strip @font-face
+     entirely and always render the 'system-ui, sans-serif' fallback in this
+     file's font stacks, no matter what happens here. Clients that do honor it
+     (Apple/iOS Mail, most other webmail) render actual Public Sans instead of
+     silently falling through — this is what makes that possible; there is no
+     way to force a custom font on every client, only to stop leaving it
+     unclaimed on the ones that support it. */
+  @font-face {
+    font-family: 'Public Sans';
+    src: url('${fontUrl()}') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+  }
   /* Declaring color-scheme without implementing it is worse than declaring
      nothing: Apple Mail reads the meta above, suppresses its own auto-inversion,
      and leaves a glaring white card in a dark inbox. DESIGN.md calls the dark
      vault first-class, so honour the claim. Inline styles win over stylesheets,
-     so these overrides need !important. */
+     so these overrides need !important.
+
+     The CTA and its label are two separate overrides, not one: dark mode
+     doesn't just dim the brand gradient, it inverts which stops carry it
+     (app/globals.css --cta-from/--cta-to) and flips the label from white to
+     near-black (--accent-foreground) to hold contrast — see the measured
+     values in that file. The logo tile's gradient is deliberately absent here:
+     it's the identity mark, theme-invariant by design, so it never changes. */
   @media (prefers-color-scheme: dark) {
-    .kt-ground { background:#07070f !important; }
-    .kt-card   { background:#0f0f1e !important; }
-    .kt-title  { color:#f4f4f5 !important; }
-    .kt-body   { color:#c7c7d1 !important; }
-    .kt-fine   { color:#9d9daa !important; }
-    .kt-link   { color:#22d3ee !important; }
-    .kt-cta    { background:#0e7490 !important; }
+    .kt-ground    { background:#07070f !important; }
+    .kt-card      { background:#0f0f1e !important; box-shadow:0 18px 40px -16px rgba(34,211,238,0.16),0 2px 6px -2px rgba(9,9,11,0.08) !important; }
+    .kt-title     { color:#f4f4f5 !important; }
+    .kt-body      { color:#c7c7d1 !important; }
+    .kt-fine      { color:#9d9daa !important; }
+    .kt-link      { color:#22d3ee !important; }
+    .kt-cta       { background:#38bdf8 !important; background-image:linear-gradient(135deg,#38bdf8 0%,#2dd4bf 100%) !important; }
+    .kt-cta-label { color:#06131a !important; }
   }
 </style>
 </head>
-<body class="kt-ground" style="margin:0;padding:0;background:#f6f7f9;color:#0f0f1e;font-family:'Inter',system-ui,sans-serif">
+<body class="kt-ground" style="margin:0;padding:0;background:#f6f7f9;color:#0f0f1e;font-family:'Public Sans',system-ui,sans-serif">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all">${escapeHtml(preheader)}${"&#8204;&nbsp;".repeat(60)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f7f9" class="kt-ground" style="background:#f6f7f9">
 <tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;width:100%">
-<tr><td bgcolor="#ffffff" class="kt-card" style="background:#ffffff;border-radius:16px;padding:32px;border:1px solid #e6e8ec">
-<h1 class="kt-title" style="margin:0 0 12px;font-size:20px;line-height:1.3;font-weight:800;color:#0f0f1e;word-wrap:break-word;overflow-wrap:anywhere;word-break:break-word">${escapeHtml(title)}</h1>
+<tr><td align="center" style="padding:0 0 20px">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td valign="middle" style="padding:0 8px 0 0">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="28" height="28" style="width:28px;height:28px">
+<tr><td width="28" height="28" bgcolor="#06b6d4" style="background:#06b6d4;background-image:linear-gradient(135deg,#0ea5e9 0%,#06b6d4 50%,#0d9488 100%);border-radius:8px;width:28px;height:28px;text-align:center;vertical-align:middle;line-height:28px">
+<!--[if mso]>
+<span style="font-family:Arial,sans-serif;font-size:12px;font-weight:700;color:#ffffff">K</span>
+<![endif]-->
+<!--[if !mso]><!-->
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle" aria-hidden="true">
+<path d="M12 3 L19 5.6 V11.1 C19 15.6 16 18.9 12 21 C8 18.9 5 15.6 5 11.1 V5.6 Z" stroke="#ffffff" stroke-width="1.9" stroke-linejoin="round"/>
+<path d="M8.7 11.7 L11 14 L15.5 9.2" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+<!--<![endif]-->
+</td></tr>
+</table>
+</td>
+<td valign="middle">
+<span class="kt-title" style="font-family:'Public Sans',system-ui,sans-serif;font-size:14px;font-weight:700;letter-spacing:-0.025em;color:#0f0f1e">Kamnotheat</span>
+</td>
+</tr></table>
+</td></tr>
+<tr><td bgcolor="#ffffff" class="kt-card" style="background:#ffffff;border-radius:16px;padding:32px;border:1px solid #e6e8ec;box-shadow:0 18px 40px -16px rgba(6,182,212,0.22),0 2px 6px -2px rgba(9,9,11,0.08)">
+<h1 class="kt-title" style="margin:0 0 12px;font-size:18px;line-height:1.3;font-weight:800;color:#0f0f1e;word-wrap:break-word;overflow-wrap:anywhere;word-break:break-word">${escapeHtml(title)}</h1>
 <p class="kt-body" style="margin:0 0 24px;color:#475569;font-size:16px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere">${bodyHtml}</p>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-<td bgcolor="#0e7490" class="kt-cta" style="background:#0e7490;border-radius:10px">
-<a href="${escapeHtml(href)}" style="display:inline-block;min-height:48px;line-height:48px;padding:0 24px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600">${escapeHtml(cta.label)}</a>
+<td bgcolor="#0369a1" class="kt-cta" style="background:#0369a1;background-image:linear-gradient(135deg,#0369a1 0%,#0f766e 100%);border-radius:24px">
+<!--[if mso]>
+<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeHtml(href)}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="50%" fillcolor="#0369a1" stroke="f">
+<w:anchorlock/>
+<center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:600;">${escapeHtml(cta.label)}</center>
+</v:roundrect>
+<![endif]-->
+<!--[if !mso]><!-->
+<a href="${escapeHtml(href)}" class="kt-cta-label" style="display:inline-block;min-height:48px;line-height:48px;padding:0 28px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;border-radius:24px">${escapeHtml(cta.label)}</a>
+<!--<![endif]-->
 </td></tr></table>
-<p class="kt-fine" style="margin:24px 0 0;color:#57575e;font-size:13px;line-height:1.5">If the button doesn't work, use this link:<br>
+<p class="kt-fine" style="margin:24px 0 0;color:#57575e;font-size:12px;line-height:1.5">If the button doesn't work, use this link:<br>
 <a href="${escapeHtml(href)}" class="kt-link" style="color:#0e7490;word-wrap:break-word;overflow-wrap:anywhere;word-break:break-all">${escapeHtml(href)}</a></p>
-<p class="kt-fine" style="margin:16px 0 0;color:#57575e;font-size:13px;line-height:1.5">${escapeHtml(IGNORE_LINE)}</p>
+<p class="kt-fine" style="margin:16px 0 0;color:#57575e;font-size:12px;line-height:1.5">${escapeHtml(IGNORE_LINE)}</p>
 </td></tr>
 </table>
 </td></tr>

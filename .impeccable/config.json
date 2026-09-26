@@ -17,6 +17,96 @@
         ],
         "createdAt": "2026-08-22T14:59:52.777Z",
         "reason": "DESIGN.md commits the Split-Clause Headline Rule as the project's visual world; stops deepened to 5.44:1 light / 4.9:1 dark, above the 3:1 large-text floor"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(34,211,238,0.16)",
+        "createdAt": "2026-09-25T16:52:11.688Z",
+        "reason": "app/globals.css --glow dark value (line 104), used verbatim for the email card's dark-mode signal shadow"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#c7c7d1",
+        "createdAt": "2026-09-25T16:52:11.715Z",
+        "reason": "pre-existing kt-body dark override, unrelated to this edit"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#9d9daa",
+        "createdAt": "2026-09-25T16:52:11.742Z",
+        "reason": "pre-existing kt-fine dark override, unrelated to this edit"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#22d3ee",
+        "createdAt": "2026-09-25T16:52:11.773Z",
+        "reason": "app/globals.css --accent dark value (line 97), pre-existing kt-link dark override"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#38bdf8",
+        "createdAt": "2026-09-25T16:52:11.800Z",
+        "reason": "app/globals.css --cta-from dark / --brand-sky dark (lines 82,93), the real app's dark-mode CTA gradient start"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#2dd4bf",
+        "createdAt": "2026-09-25T16:52:11.828Z",
+        "reason": "app/globals.css --cta-to dark / --brand-teal dark (lines 84,94), the real app's dark-mode CTA gradient end"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#06131a",
+        "createdAt": "2026-09-25T16:52:11.855Z",
+        "reason": "app/globals.css --accent-foreground dark (line 98) -- the CTA label deliberately flips from white to this near-black to hold contrast on the brighter dark-mode gradient, per that file's own measured-contrast comment"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#0369a1",
+        "createdAt": "2026-09-25T16:52:11.884Z",
+        "reason": "app/globals.css --cta-from light / --headline-from (lines 24,69), the real app's light-mode CTA gradient start"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#0f766e",
+        "createdAt": "2026-09-25T16:52:11.913Z",
+        "reason": "app/globals.css --cta-to light / --headline-to (lines 25,70), the real app's light-mode CTA gradient end"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#0e7490",
+        "createdAt": "2026-09-25T16:52:11.941Z",
+        "reason": "pre-existing fallback-link color, matches app/globals.css --accent light (line 41) exactly, unrelated to this edit"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#475569",
+        "createdAt": "2026-09-25T16:52:11.969Z",
+        "reason": "pre-existing kt-body light color, unrelated to this edit"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "arial",
+        "createdAt": "2026-09-25T16:52:11.998Z",
+        "reason": "Outlook/MSO conditional-comment fallback text only (VML roundrect + monogram tile) -- Inter is not reliable inside VML, Arial is the standard bulletproof-email fallback face, never shown outside Outlook desktop"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "14px",
+        "createdAt": "2026-09-25T16:52:12.036Z",
+        "reason": "matches the real app's wordmark size: components/NavBar.tsx and app/landing/page.tsx both set the Kamnotheat wordmark at Tailwind text-sm (14px) font-bold tracking-tight"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-09-25T16:55:30.977Z",
+        "reason": "DESIGN.md mandates Inter as the app's sole type family ('One voice, worked hard... Don't introduce a second type family') -- it's the incumbent brand face used everywhere in the product (nav, buttons, headings), not a generic AI default being reached for here"
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-09-25T16:55:31.003Z",
+        "reason": "Outlook/MSO conditional-comment fallback text only (VML roundrect + monogram tile) -- never shown outside Outlook desktop, same exception already granted under design-system-font"
       }
     ]
   }

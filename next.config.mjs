@@ -22,6 +22,21 @@ const nextConfig = {
   experimental: {
     devtoolSegmentExplorer: false,
   },
+  // @font-face in the transactional emails (lib/email/send.ts) points here.
+  // A mail client renders that HTML from its own internal origin, never this
+  // app's, so the request is always cross-origin and browsers apply CORS to
+  // cross-origin font fetches; without this header the file 200s over the
+  // wire but the font is rejected and silently falls back, exactly like a
+  // missing file would. Fonts carry no per-user data, so `*` is the same
+  // trade every public font CDN (Google Fonts included) already makes.
+  async headers() {
+    return [
+      {
+        source: '/fonts/:path*',
+        headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
+      },
+    ]
+  },
   // Both are node-only server packages that must not be bundled. nodemailer
   // additionally must stay external so a missing or broken mail dependency is a
   // runtime error inside the send path — catchable by the caller — rather than
