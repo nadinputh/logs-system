@@ -8,7 +8,7 @@ web
 
 ## Users
 
-**Primary — Security / facilities administrator.** Owns and operates the estate inside the console: models buildings, floors, and rooms; generates and prints QR; manages teams and invites; audits every check-in/out log across the organization. Lives in the admin surfaces daily and is the user future design serves first when priorities conflict.
+**Primary — Space administrator** (facilities, security, school, studio, clinic, office). Owns and operates the estate inside the console: models buildings, floors, and rooms; generates and prints QR; manages teams and invites; audits every check-in/out log across the organization. Lives in the admin surfaces daily and is the user future design serves first when priorities conflict.
 
 **Secondary — Staff member.** Authenticated user who checks in/out often, sees their own logs, and manages their own passkeys. Wants zero friction and speed.
 
@@ -16,7 +16,7 @@ web
 
 ## Product Purpose
 
-Kamnotheat is an enterprise-grade check-in/out logging engine: a high-throughput, immutable record of who was where and when. It exists to give an organization a compliance-grade, tamper-evident presence trail while keeping the act of checking in effortless. Success is a complete, trustworthy audit ledger produced with near-zero friction at the point of entry — no missed check-outs, no spoofable entries, no manual reconciliation.
+Kamnotheat is a free platform for check-in/out: anyone running a space can set it up at no cost and get a high-throughput, immutable record of who was where and when. It gives them a tamper-evident presence trail while keeping the act of checking in effortless. Success is a complete, trustworthy audit ledger produced with near-zero friction at the point of entry — no missed check-outs, no spoofable entries, no manual reconciliation.
 
 ## Positioning
 
@@ -24,7 +24,7 @@ The meaningfully different thing is the **pairing itself: frictionless entry AND
 
 ## Operating Context
 
-Deployed as an **internal tool for a single organization's own use** — not sold or marketed to outside customers. The console/admin experience is effectively the whole product; the public landing page is a front door that routes staff to the console and visitors to the scan flow.
+Offered as a **free, open-to-anyone platform**: any organization can create a workspace and use it at no cost, with no sales gate. The console/admin experience is still the core of the product; the public landing page is a front door that invites new workspaces, routes staff to the console and visitors to the scan flow. Billing/pricing code exists in the repo (`app/pricing`, `platform-admin`) and is not yet reconciled with the free positioning.
 
 Usage scenes:
 - **Console (admin):** desktop-first management of buildings/floors/rooms, QR generation and print pages, dashboard stats (today / live-on-site / all-time), organization-wide log audit, team ownership, invites, and admin user management.
@@ -46,14 +46,14 @@ Constraints and terminology:
 
 - **Name:** Kamnotheat (confirmed in code — `components/Logo.tsx`, landing, footer).
 - **Logo mark:** a security shield with a verification check (`LogoMark` / `LogoTile`), rendered on a sky→cyan→teal gradient tile.
-- **Voice (current, incumbent):** confident, technical, enterprise-grade; leans on precise mechanism language ("append-only", "idempotency", "cryptographic certainty") rather than soft marketing.
+- **Voice:** plain, friendly and open — a free platform, not an enterprise sale. Mechanism language ("append-only", "cryptographic certainty") stays as proof, but is explained in everyday words; no "contact sales" or upgrade-gate phrasing.
 - **Hero commitment:** "Zero-friction check-ins. Cryptographic certainty." — the dual promise that encodes the positioning above.
 
 ## Evidence on Hand
 
 - Real, working product implementation across all five CLAUDE.md sprints (auth, idempotency, audit ledger, dynamic/reverse QR, passkeys, push).
 - Landing-page stat strip uses **real technical facts** (12h auto-checkout window, 15s kiosk rotation, 256-bit idempotency keys, 100% append-only) — not fabricated customer metrics.
-- **No real customers, testimonials, logos, deployment references, or usage/scale numbers exist.** As an internal tool, future work must not fabricate external social proof, customer names, or adoption claims.
+- **No real customers, testimonials, logos, deployment references, or usage/scale numbers exist.** Future work must not fabricate external social proof, customer names, adoption claims, or user counts for the free platform.
 - Seed account for development: `admin@example.com` / `admin123` (`scripts/seed.ts`).
 
 ## Product Principles
@@ -61,5 +61,5 @@ Constraints and terminology:
 1. **The ledger is sacred.** Every design decision must respect append-only immutability — surface corrections through the audit trail, never as silent edits.
 2. **Friction is the enemy at the edge; certainty is the point at the record.** Optimize the point of entry for speed and obviousness; optimize the console for trust, auditability, and completeness.
 3. **Admin-first.** When priorities conflict, serve the facilities/security administrator managing the whole estate.
-4. **Never fabricate proof.** This is an internal tool with no external customers; do not invent testimonials, logos, or adoption metrics.
+4. **Never fabricate proof.** There are no verified customers yet; do not invent testimonials, logos, or adoption metrics.
 5. **The mechanism is the message.** The differentiator is the pairing of frictionless capture and cryptographic certainty — keep both visible, never trade one away for the other.

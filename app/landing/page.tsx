@@ -34,13 +34,13 @@ import {
  */
 
 export const metadata: Metadata = {
-  title: 'Kamnotheat — Secure check-in logging',
+  title: 'Kamnotheat — Free check-in/out platform',
   description:
-    'An immutable check-in/out ledger. Passkeys, QR and kiosk flows at the door; server-authoritative time and a tamper-evident audit trail in the record.',
+    'A free check-in/out platform. Passkeys, QR and kiosk flows at the door; server-authoritative time and a tamper-evident audit trail in the record.',
   openGraph: {
-    title: 'Kamnotheat — Secure check-in logging',
+    title: 'Kamnotheat — Free check-in/out platform',
     description:
-      'Zero-friction check-ins. Cryptographic certainty. An append-only presence ledger for your estate.',
+      'Zero-friction check-ins. Cryptographic certainty. A free, append-only presence ledger for any space.',
     type: 'website',
   },
 }

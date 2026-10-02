@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: 'What Kamnotheat records at check-in and check-out, why, and for how long.',
 }
 
-const LAST_UPDATED = 'September 26, 2026'
+const LAST_UPDATED = 'October 2, 2026'
 
 const TOC = [
   { id: 'overview', label: 'Overview & scope' },
@@ -21,6 +21,13 @@ const TOC = [
   { id: 'contact', label: 'Contact us' },
 ]
 
+const SUMMARY = [
+  'Kamnotheat is a free check-in/out platform. We never sell your data.',
+  'Each check-in saves the time, place, your device, IP address and browser, to prove it was really you.',
+  'Check-in records are permanent by design. Mistakes are fixed with a visible correction, not deleted.',
+  'Selfies and notifications happen only where a workspace turns them on or you opt in.',
+]
+
 /**
  * Every claim below traces to CLAUDE.md's documented architecture — nothing
  * here is boilerplate. Organization identity and contact are the two facts
@@ -29,9 +36,9 @@ const TOC = [
  */
 export default function PrivacyPolicyPage() {
   return (
-    <LegalLayout title="Privacy Policy" lastUpdated={LAST_UPDATED} toc={TOC}>
+    <LegalLayout title="Privacy Policy" lastUpdated={LAST_UPDATED} toc={TOC} summary={SUMMARY}>
       <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted">
-        This policy covers staff and administrator accounts on the Kamnotheat console. If you're a
+        This policy covers people who sign in to a Kamnotheat workspace. If you're a
         one-time visitor who just scanned a QR code to check in, see the short notice shown at the
         point of check-in instead — you don't need to read this document.
       </p>
@@ -39,11 +46,13 @@ export default function PrivacyPolicyPage() {
       <section id="overview">
         <h2>Overview &amp; scope</h2>
         <p>
-          Kamnotheat is an internal check-in/out logging system operated by{' '}
-          <Placeholder>[Organization Name]</Placeholder> ("we," "us," "the organization") for its own
-          staff and facilities. It is not sold or offered to the public, and this policy describes
-          only how <Placeholder>[Organization Name]</Placeholder> uses Kamnotheat's own data — it does
-          not cover any other systems your employer operates.
+          Kamnotheat is a free check-in/out platform operated by{' '}
+          <Placeholder>[Operator Name]</Placeholder> ("we," "us"). Anyone can create a workspace and
+          invite people to it. The workspace owner decides who is invited and where check-in is
+          used, so for the check-in records in a workspace the owner is the one who decides what is
+          collected and why, and we host and process that data on their behalf. This policy describes
+          what the platform itself records and how long it keeps it; it does not cover other systems a
+          workspace owner may run.
         </p>
       </section>
 
@@ -71,7 +80,7 @@ export default function PrivacyPolicyPage() {
             <Camera className="size-4 text-[var(--accent)]" strokeWidth={2.2} />
             Selfie capture
           </div>
-          <p className="mt-2 !mt-2 text-sm">
+          <p className="!mt-2 text-sm">
             Where a location is configured to ask for one, a photo is captured at check-in and
             uploaded directly to our image host (Cloudinary) to confirm who checked in. It is not used
             for any other purpose, and locations that don't request it never capture one.
@@ -83,7 +92,7 @@ export default function PrivacyPolicyPage() {
             <Fingerprint className="size-4 text-[var(--accent)]" strokeWidth={2.2} />
             Passkeys (WebAuthn / FIDO2)
           </div>
-          <p className="mt-2 !mt-2 text-sm">
+          <p className="!mt-2 text-sm">
             If you register a passkey, your device's secure enclave generates the credential — we only
             ever receive and store the public key, a replay-prevention counter, and device metadata
             (type, transports, when it was created and last used). We never receive, and cannot
@@ -110,8 +119,8 @@ export default function PrivacyPolicyPage() {
       <section id="why-we-collect">
         <h2>Why we collect it</h2>
         <p>
-          Attendance and presence records the organization needs to operate and to meet its own
-          compliance obligations; anti-spoofing signals (device, IP, geofence) so a check-in can't be
+          Attendance and presence records the workspace owner needs to operate and to meet their own
+          obligations; anti-spoofing signals (device, IP, geofence) so a check-in can't be
           faked from somewhere else; and safety — knowing who is on-site matters in an emergency.
         </p>
       </section>
@@ -145,7 +154,7 @@ export default function PrivacyPolicyPage() {
         <h2>Who can see it</h2>
         <p>
           Staff and Members see their own check-in history. Owners, Admins, Managers, and Auditors can
-          see check-in records across the team they belong to, scoped by role. We do not sell your data
+          see check-in records across the workspace team they belong to, scoped by role. We do not sell your data
           or share it with third parties for advertising. It is shared with the processors this system
           relies on to function: Cloudinary (if selfie capture is enabled, for image storage) and our
           email delivery provider (to send verification, invite, and password-related mail).
@@ -158,7 +167,7 @@ export default function PrivacyPolicyPage() {
           Because the ledger is append-only, we can't delete or silently edit a past entry on request —
           but an administrator can enter a correction, which is itself recorded with your name attached
           to the reason, so the record stays honest about what changed and why. To request a correction,
-          contact your administrator or use the details below. Selfie capture and push notifications are
+          contact your workspace administrator or use the details below. Selfie capture and push notifications are
           only active where an administrator has turned them on for a given location or where you've
           opted in yourself; passkeys can be removed at any time from Settings → Security.
         </p>
@@ -178,7 +187,7 @@ export default function PrivacyPolicyPage() {
         <h2>Changes to this policy</h2>
         <p>
           If this policy changes, we'll update the date at the top of this page. Material changes will
-          be announced to staff through the console or by email.
+          be announced through the console or by email.
         </p>
       </section>
 

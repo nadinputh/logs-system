@@ -1,6 +1,6 @@
 {
   "common": {
-    "tagline": "Secure check-in logging",
+    "tagline": "Free check-in/out platform",
     "homeAriaLabel": "Kamnotheat — home",
     "skipToContent": "Skip to content",
     "language": "Language",
@@ -24,6 +24,8 @@
     "backToHome": "Back to home"
   },
   "legal": {
+    "lastUpdated": "Last updated {date}",
+    "tocLabel": "Contents",
     "englishOnlyNotice": "This document is currently available in English only.",
     "visitorNoticeSummary": "How we handle this check-in",
     "visitorNoticeLearnMore": "Learn more",
@@ -73,7 +75,7 @@
     "primaryNavLabel": "Primary",
     "heroTitleLine1": "Zero-friction check-ins.",
     "heroTitleLine2": "Cryptographic certainty.",
-    "heroSubhead": "An immutable check-in/out ledger. Passkeys, QR and kiosk flows make entry effortless; server-authoritative time and a tamper-evident audit trail make the record impossible to quietly rewrite.",
+    "heroSubhead": "A free check-in/out platform for any space. Passkeys, QR and kiosk flows make entry effortless; server-authoritative time and a tamper-evident audit trail make the record impossible to quietly rewrite.",
     "visitorPrompt": "Here to check in? Point your phone's camera at the QR code posted at your location — it opens your check-in directly.",
     "visitorScanLink": "If it doesn't open, scan it here",
     "parametersHeading": "Operating parameters",
@@ -106,7 +108,7 @@
     "serverTimeDetail": "Client clocks are ignored",
     "auditTrail": "Separate audit trail",
     "auditTrailDetail": "Corrections never overwrite",
-    "footerTagline": "Secure check-in logging · Immutable by design"
+    "footerTagline": "Free check-in/out platform · Immutable by design"
   },
   "login": {
     "welcomeBack": "Welcome back",

@@ -4,13 +4,14 @@ import { LegalLayout, Placeholder } from '@/components/legal/LegalLayout'
 
 export const metadata: Metadata = {
   title: 'Terms of Use — Kamnotheat',
-  description: 'The rules that govern staff and administrator use of the Kamnotheat console.',
+  description: 'The rules for using the free Kamnotheat check-in/out platform.',
 }
 
-const LAST_UPDATED = 'September 26, 2026'
+const LAST_UPDATED = 'October 2, 2026'
 
 const TOC = [
   { id: 'acceptance', label: 'Acceptance & eligibility' },
+  { id: 'workspace-owners', label: 'If you run a workspace' },
   { id: 'acceptable-use', label: 'Acceptable use' },
   { id: 'checkin-obligations', label: 'Check-in / check-out' },
   { id: 'data-accuracy', label: 'Data accuracy & corrections' },
@@ -22,11 +23,18 @@ const TOC = [
   { id: 'contact', label: 'Contact us' },
 ]
 
+const SUMMARY = [
+  'Kamnotheat is free to use. Anyone can create a workspace and invite their people.',
+  'Check in as yourself, from where you really are, and check out when you leave.',
+  'Records are never edited or deleted. Mistakes are fixed with a visible correction.',
+  'Workspace owners are responsible for the people they invite and for telling visitors how check-in data is used.',
+]
+
 export default function TermsOfUsePage() {
   return (
-    <LegalLayout title="Terms of Use" lastUpdated={LAST_UPDATED} toc={TOC}>
+    <LegalLayout title="Terms of Use" lastUpdated={LAST_UPDATED} toc={TOC} summary={SUMMARY}>
       <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted">
-        These terms cover staff and administrator accounts on the Kamnotheat console. See the{' '}
+        These terms cover everyone who uses the Kamnotheat platform: workspace owners, their invited people, and signed-in members. See the{' '}
         <Link href="/privacy" className="font-medium text-accent hover:underline">
           Privacy Policy
         </Link>{' '}
@@ -36,10 +44,22 @@ export default function TermsOfUsePage() {
       <section id="acceptance">
         <h2>Acceptance &amp; eligibility</h2>
         <p>
-          An account on this system is created or invited by an administrator at{' '}
-          <Placeholder>[Organization Name]</Placeholder> — you cannot self-register a staff or
-          administrator account. By signing in, you agree to these terms for as long as your account
-          remains active.
+          Kamnotheat is a free platform operated by <Placeholder>[Operator Name]</Placeholder>. You can
+          create a workspace yourself, or you can be invited into one by its owner or an
+          administrator. By creating an account or signing in, you agree to these terms for as long as
+          your account remains active. You must be old enough to enter a binding agreement where you
+          live.
+        </p>
+      </section>
+
+      <section id="workspace-owners">
+        <h2>If you run a workspace</h2>
+        <p>
+          As a workspace owner you decide who is invited and where check-in is used. You are
+          responsible for the people you invite, for using check-in records only for a lawful purpose,
+          and for telling visitors how their check-in data is used. The notice shown at check-in helps
+          with that, but it does not replace your own duties under the law where you operate. Keep
+          the owner role with someone who can reach the platform if something goes wrong.
         </p>
       </section>
 
@@ -97,7 +117,7 @@ export default function TermsOfUsePage() {
       <section id="termination">
         <h2>Termination &amp; suspension</h2>
         <p>
-          An administrator may suspend or remove your account, including for a violation of the
+          A workspace administrator may suspend or remove your account, and we may suspend a workspace that is used to break these terms, including for a violation of the
           acceptable-use terms above. Removing an account does not remove or alter any check-in record
           already written to the ledger.
         </p>
@@ -106,9 +126,9 @@ export default function TermsOfUsePage() {
       <section id="liability">
         <h2>Disclaimers &amp; limitation of liability</h2>
         <p>
-          This system is provided by <Placeholder>[Organization Name]</Placeholder> as an internal
-          operational tool, on an "as is" basis, without warranties of any kind. To the fullest extent
-          permitted by law, <Placeholder>[Organization Name]</Placeholder> disclaims liability for
+          This platform is provided free of charge by <Placeholder>[Operator Name]</Placeholder> on an
+          "as is" basis, without warranties of any kind. To the fullest extent permitted by law,
+          <Placeholder>[Operator Name]</Placeholder> disclaims liability for
           indirect, incidental, or consequential damages arising from its use.{' '}
           <Placeholder>[This section is a standard placeholder shape, not legal advice — have counsel confirm the exact language before publishing.]</Placeholder>
         </p>
@@ -126,7 +146,7 @@ export default function TermsOfUsePage() {
         <h2>Changes to these terms</h2>
         <p>
           If these terms change, we'll update the date at the top of this page. Material changes will
-          be announced to staff through the console or by email.
+          be announced through the console or by email.
         </p>
       </section>
 

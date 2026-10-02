@@ -1,6 +1,6 @@
 ---
 name: Kamnotheat
-description: Secure check-in logging — passkeys, QR, and an immutable audit ledger, rendered as a glass vault.
+description: A free check-in/out platform — passkeys, QR, and a tamper-proof record, rendered as a glass vault.
 colors:
   sky-signal: "#0ea5e9"
   cyan-core: "#06b6d4"
@@ -99,7 +99,7 @@ components:
 
 Kamnotheat renders a paradox as a single surface: an immutable, vault-grade record of who was where and when, made visible through frosted glass. The interface earns trust not by looking locked-down and opaque, but by looking *seen-through* — translucent panels, soft cyan light, and calm neutral space that says "nothing here is hidden, and nothing here can be altered." Security is communicated as clarity, not as friction.
 
-The mood is **calm and authoritative**. This is enterprise software for a security/facilities administrator who audits a whole estate, so restraint is the point: composed spacing, disciplined color, and motion that reveals rather than performs. The cyan–teal identity appears as a *signal* against quiet ground — a gradient headline, a glowing CTA, a glass panel edged in colored light — never as wall-to-wall saturation. Framer-motion reveals (fade-up, staggered children, scroll-linked hero fade) give the system a composed, deliberate cadence; nothing snaps or bounces.
+The mood is **calm, open, and welcoming**. Kamnotheat is a free platform for check-in/out: anyone running a space — a school, studio, clinic, or office — can set it up without a sales call, and anyone arriving can check in without an account or a manual. Free is a voice, not a visual discount: the copy is plain and friendly, with no "contact sales" gates, enterprise jargon, or upsell chrome. The administrator who audits an estate is still the primary user, so restraint stays the point: composed spacing, disciplined color, and motion that reveals rather than performs. The cyan–teal identity appears as a *signal* against quiet ground — a gradient headline, a glowing CTA, a glass panel edged in colored light — never as wall-to-wall saturation. Framer-motion reveals (fade-up, staggered children, scroll-linked hero fade) give the system a composed, deliberate cadence; nothing snaps or bounces.
 
 Depth is **glass plus colored glow**: frosted translucent surfaces (`backdrop-filter: blur(12px)`) floating over a subtly layered background, lifted by soft cyan-tinted shadows. Light and dark modes are first-class (next-themes, `class` strategy) — light mode is bright paper with cyan light; dark mode is a deep indigo-black vault (`#0f0f1e`) where the glass and glow do more of the work. The base component library is HeroUI v3 (neutral, accessible primitives); Kamnotheat's identity lives in the brand gradient, the glass, and the glow layered on top.
 
@@ -109,6 +109,7 @@ Depth is **glass plus colored glow**: frosted translucent surfaces (`backdrop-fi
 - Calm, deliberate motion — reveals and fades, never bounce or spectacle
 - Fully dual-mode: bright paper vault (light) and deep indigo vault (dark)
 - HeroUI v3 primitives as the accessible substrate; brand lives in the gradient, glass, and glow
+- Free and open in voice — plain, friendly language; trust comes from clarity, not from enterprise posture
 
 ## Colors
 
@@ -213,7 +214,7 @@ Soft, confident, pill-forward. Interactive controls are fully rounded: buttons, 
 - **Base:** All buttons are HeroUI v3 `Button` (via `components/ui/button.tsx`); `default`→`primary`, `outline`/`secondary`/`ghost` map through the adapter. Use `onPress`/`isDisabled`.
 
 ### Chips
-- **Style:** Pill (`rounded-full`) with a tinted brand wash (`bg-accent/10`) and cyan-deep uppercase label, sometimes with a leading icon (e.g. the "Enterprise check-in engine" eyebrow uses a `border-accent/20` outline).
+- **Style:** Pill (`rounded-full`) with a tinted brand wash (`bg-accent/10`) and cyan-deep uppercase label, sometimes with a leading icon (e.g. the landing eyebrow, which should read as the free-platform promise rather than "Enterprise check-in engine", uses a `border-accent/20` outline).
 - **State:** Primarily used as static eyebrows and metadata badges; selected/active states tint toward solid cyan.
 
 ### Cards / Containers
@@ -248,6 +249,7 @@ Soft, confident, pill-forward. Interactive controls are fully rounded: buttons, 
 - **Do** use uppercase, wide-tracked (`0.12em`) micro-labels for eyebrows, chips, and metadata.
 
 ### Don't:
+- **Don't** use enterprise or paywall language in UI copy ("contact sales", "upgrade to unlock", "request a demo") or dress the free platform in pricing-tier chrome; say what it does in plain words.
 - **Don't** flatten the brand into opaque boxes with gray drop shadows — that's generic SaaS, not the Glass Vault.
 - **Don't** run two gradients, or paint large fields of saturated cyan; the accent's rarity is the point.
 - **Don't** introduce a second type family — hierarchy is weight/size/tracking in Public Sans. (Geist Mono is the one narrow exception, scoped to hash/ID alignment; it never carries headings or body copy.)

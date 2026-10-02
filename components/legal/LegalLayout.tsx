@@ -16,12 +16,15 @@ export async function LegalLayout({
   title,
   lastUpdated,
   toc,
+  summary,
   children,
 }: {
   title: string
   /** Fixed draft date, e.g. "September 26, 2026" — bump by hand when content changes. Never `new Date()`; that would silently misdate every past version as "current". */
   lastUpdated: string
   toc: { id: string; label: string }[]
+  /** 3-4 plain-language bullets shown above the full text. */
+  summary: string[]
   children: ReactNode
 }) {
   const t = await getTranslations('common')
@@ -67,11 +70,39 @@ export async function LegalLayout({
           </Link>
 
           <h1 className="mt-6 text-3xl font-extrabold tracking-[-0.02em] sm:text-4xl">{title}</h1>
-          <p className="mt-2 text-sm text-muted">Last updated {lastUpdated}</p>
+          <p className="mt-2 text-sm text-muted">{tLegal('lastUpdated', { date: lastUpdated })}</p>
           <p className="mt-1 text-sm italic text-muted">{tLegal('englishOnlyNotice')}</p>
 
+          <section
+            aria-labelledby="plain-words"
+            className="mt-8 max-w-[68ch] rounded-2xl border border-border bg-muted/30 p-5"
+          >
+            <h2 id="plain-words" className="text-base font-semibold tracking-tight">
+              In plain words
+            </h2>
+            <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
+              {summary.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-muted">The full text below is what applies.</p>
+          </section>
+
+          <details className="mt-6 rounded-xl border border-border px-4 py-3 text-sm lg:hidden">
+            <summary className="cursor-pointer font-medium">{tLegal('tocLabel')}</summary>
+            <ul className="mt-3 space-y-2">
+              {toc.map((item) => (
+                <li key={item.id}>
+                  <a href={`#${item.id}`} className="text-muted transition-colors hover:text-accent">
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+
           <div className="mt-10 grid gap-10 lg:grid-cols-[14rem_minmax(0,1fr)]">
-            <nav aria-label="Table of contents" className="hidden lg:block">
+            <nav aria-label={tLegal('tocLabel')} className="hidden lg:block">
               <ul className="sticky top-8 space-y-2 border-l border-border pl-4 text-sm">
                 {toc.map((item) => (
                   <li key={item.id}>
@@ -108,6 +139,10 @@ export async function LegalLayout({
 }
 
 /**
+ * Launch checklist — every Placeholder still in app/terms and app/privacy:
+ * operator name (every [Operator Name] marker), jurisdiction, privacy contact email, and the "have counsel
+ * confirm" liability note. Find them with `grep -rn "<Placeholder>" app/terms app/privacy`.
+ *
  * An uninventable fact (legal entity name, contact channel, jurisdiction) —
  * PRODUCT.md's "never fabricate proof" rule extended to legal claims. Amber
  * (Warning/Pending) is the exact right semantic register: this needs someone's
