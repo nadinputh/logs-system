@@ -10,6 +10,8 @@ export const CreateLogSchema = z.object({
   visitPurpose: z.string().max(200).optional(),
   sessionToken: z.string().uuid(),
   deviceId: z.string().optional(),
+  // Presence proof minted by the scan page after a dynamic kiosk QR was verified.
+  kioskToken: z.string().optional(),
   // Raw coordinates only — geofenceStatus is computed server-side against the
   // location's stored geofence (app/api/logs/route.ts), never trusted from
   // the client.

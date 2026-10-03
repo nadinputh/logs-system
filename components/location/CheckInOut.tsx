@@ -49,6 +49,7 @@ type Step = 'loading' | 'identity' | 'checkin' | 'selfie' | 'checkedIn' | 'check
 interface CheckInOutClientProps {
   locationId: string
   initialLocation: LocationData | null
+  kioskToken?: string
 }
 
 interface SessionData {
@@ -166,7 +167,7 @@ function firstNameOf(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || fullName
 }
 
-export default function CheckInOutClient({ locationId, initialLocation }: CheckInOutClientProps) {
+export default function CheckInOutClient({ locationId, initialLocation, kioskToken }: CheckInOutClientProps) {
   const searchParams = useSearchParams()
   const questToken = searchParams.get('quest')
 
@@ -330,6 +331,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
           visitorGender: gender || undefined,
           visitPurpose: purpose || undefined,
           deviceId: deviceId || undefined,
+          kioskToken,
           latitude: coords?.latitude,
           longitude: coords?.longitude,
           photo,
@@ -822,6 +824,7 @@ export default function CheckInOutClient({ locationId, initialLocation }: CheckI
               locationType={location.locationType}
               action="in"
               sessionToken={sessionToken}
+              kioskToken={kioskToken}
               hasPasskey={visitorPasskeyRegistered}
               visitorName={name}
               visitorContact={contact || undefined}

@@ -19,6 +19,7 @@ interface Props {
   visitorGender?: string
   visitPurpose?: string
   deviceId?: string
+  kioskToken?: string
   // Whether this session already has a passkey registered at this location —
   // the parent already resolves this (checkOpenLog fetches
   // /api/logs/passkey/visitor/exists once for the whole flow), so this
@@ -73,6 +74,7 @@ export default function VisitorPasskey({
   visitorGender,
   visitPurpose,
   deviceId,
+  kioskToken,
   hasPasskey,
   authOnly = false,
   registerOnly = false,
@@ -102,6 +104,7 @@ export default function VisitorPasskey({
         visitorGender,
         visitPurpose,
         deviceId,
+        kioskToken,
         latitude: coords?.latitude,
         longitude: coords?.longitude,
       }
@@ -136,7 +139,7 @@ export default function VisitorPasskey({
     } finally {
       setLoading(false)
     }
-  }, [locationId, locationType, action, sessionToken, relatedLogId, visitorName, visitorContact, visitorGender, visitPurpose, deviceId, onAuthenticated])
+  }, [locationId, locationType, action, sessionToken, relatedLogId, visitorName, visitorContact, visitorGender, visitPurpose, deviceId, kioskToken, onAuthenticated])
 
   const register = useCallback(async () => {
     setLoading(true)

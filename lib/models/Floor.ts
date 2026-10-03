@@ -7,6 +7,7 @@ export interface IFloor extends Document {
   name: string;
   description?: string;
   checkInMode: "click" | "passkey";
+  requireDynamicQr?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,6 +30,7 @@ const FloorSchema = new Schema<IFloor>(
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
     checkInMode: { type: String, enum: ["click", "passkey"], default: "click" },
+    requireDynamicQr: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
@@ -38,6 +40,7 @@ FloorSchema.index({ teamId: 1, buildingId: 1, number: 1 }, { unique: true });
 if (
   mongoose.models.Floor &&
   (!mongoose.models.Floor.schema.path("checkInMode") ||
+    !mongoose.models.Floor.schema.path("requireDynamicQr") ||
     !mongoose.models.Floor.schema.path("teamId"))
 ) {
   delete mongoose.models.Floor;

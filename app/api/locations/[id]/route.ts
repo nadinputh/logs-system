@@ -81,7 +81,9 @@ export async function PATCH(
     typeParam === "room" || typeParam === "floor" || typeParam === "building"
       ? typeParam
       : null;
-  const isModeChange = typeof body?.checkInMode !== "undefined";
+  const isModeChange =
+    typeof body?.checkInMode !== "undefined" ||
+    typeof body?.requireDynamicQr !== "undefined";
 
   // Mode changes stay admin-gated (they flip a security control); plain
   // metadata edits only need the same permission that create already uses.
@@ -100,7 +102,10 @@ export async function PATCH(
   // compatibility with any caller that predates the hint.
   if (type) {
     const schema = METADATA_SCHEMAS[type].merge(
-      z.object({ checkInMode: CheckInModeEnum.optional() }),
+      z.object({
+        checkInMode: CheckInModeEnum.optional(),
+        requireDynamicQr: z.boolean().optional(),
+      }),
     );
     const parsed = schema.safeParse(body);
     if (!parsed.success) {

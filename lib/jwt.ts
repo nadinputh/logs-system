@@ -2,20 +2,33 @@ import { SignJWT, jwtVerify } from "jose";
 
 const enc = new TextEncoder();
 
-export async function signKioskToken(locationId: string): Promise<string> {
-  const secret = enc.encode(process.env.KIOSK_SECRET!);
+// Fail closed: a missing secret must reject, never silently skip verification.
+function kioskSecret() {
+  const s = process.env.KIOSK_SECRET;
+  if (!s) throw new Error("KIOSK_SECRET not configured");
+  return enc.encode(s);
+}
+
+// The 15s default is the on-screen QR. The scan page re-signs a longer-lived
+// "presence" token (see ttl) so the visitor can fill in the form before POST.
+export async function signKioskToken(
+  locationId: string,
+  ttl = "15s",
+): Promise<string> {
   return new SignJWT({ locationId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("15s")
-    .sign(secret);
+    .setExpirationTime(ttl)
+    .sign(kioskSecret());
 }
 
 export async function verifyKioskToken(
   token: string,
 ): Promise<{ locationId: string }> {
-  const secret = enc.encode(process.env.KIOSK_SECRET!);
-  const { payload } = await jwtVerify(token, secret);
+  const { payload } = await jwtVerify(token, kioskSecret(), {
+    algorithms: ["HS256"],
+    clockTolerance: 5,
+  });
   return { locationId: payload.locationId as string };
 }
 

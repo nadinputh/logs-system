@@ -8,6 +8,7 @@ type LeanLocation = {
   _id: any;
   teamId: any;
   checkInMode?: "click" | "passkey";
+  requireDynamicQr?: boolean;
   buildingId?: any;
 };
 
@@ -24,7 +25,7 @@ export async function findOwnedLocationByType(
   const model = getLocationModel(locationType) as any;
   const doc = await model
     .findById(locationId)
-    .select("teamId checkInMode buildingId")
+    .select("teamId checkInMode requireDynamicQr buildingId")
     .lean<LeanLocation | null>();
   return doc;
 }

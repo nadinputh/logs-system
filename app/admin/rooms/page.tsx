@@ -13,12 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
+import DynamicQrToggle from '@/components/admin/DynamicQrToggle'
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
 
 interface Building { _id: string; name: string }
 interface Floor { _id: string; name: string; number: number; buildingId: string }
-interface Room { _id: string; name: string; number: string; type?: string; capacity?: number; description?: string; floorId: string; buildingId: string; checkInMode?: 'click' | 'passkey' }
+interface Room { _id: string; name: string; number: string; type?: string; capacity?: number; description?: string; floorId: string; buildingId: string; checkInMode?: 'click' | 'passkey'; requireDynamicQr?: boolean }
 
 function RoomsContent() {
   const searchParams = useSearchParams()
@@ -350,7 +351,10 @@ function RoomsContent() {
                       )}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <CheckInModeToggle locationId={r._id} locationType="room" value={r.checkInMode ?? 'click'} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CheckInModeToggle locationId={r._id} locationType="room" value={r.checkInMode ?? 'click'} />
+                        <DynamicQrToggle locationId={r._id} locationType="room" value={!!r.requireDynamicQr} />
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">

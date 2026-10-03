@@ -89,5 +89,6 @@ export const config = {
     "/profile/:path*",
     "/settings/:path*",
     "/terminal/:path*",
+    "/kiosk/:path*",
   ],
 };

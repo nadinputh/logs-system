@@ -13,11 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
+import DynamicQrToggle from '@/components/admin/DynamicQrToggle'
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
 
 interface Building { _id: string; name: string }
-interface Floor { _id: string; name: string; number: number; buildingId: string | Building; description?: string; checkInMode?: 'click' | 'passkey' }
+interface Floor { _id: string; name: string; number: number; buildingId: string | Building; description?: string; checkInMode?: 'click' | 'passkey'; requireDynamicQr?: boolean }
 
 function FloorsContent() {
   const searchParams = useSearchParams()
@@ -302,7 +303,10 @@ function FloorsContent() {
                     <p className="text-sm text-muted">{getBuildingName(f.buildingId)}</p>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    <CheckInModeToggle locationId={f._id} locationType="floor" value={f.checkInMode ?? 'click'} />
+                    <div className="flex flex-wrap items-center gap-2">
+                        <CheckInModeToggle locationId={f._id} locationType="floor" value={f.checkInMode ?? 'click'} />
+                        <DynamicQrToggle locationId={f._id} locationType="floor" value={!!f.requireDynamicQr} />
+                      </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">

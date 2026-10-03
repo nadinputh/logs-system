@@ -1,3 +1,4 @@
+import { kioskGate } from "@/lib/kioskGate";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { connectDB } from "@/lib/db";
@@ -23,6 +24,7 @@ const ChallengeSchema = z.object({
     .optional(),
   visitPurpose: z.string().max(200).optional(),
   deviceId: z.string().optional(),
+  kioskToken: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
     visitorGender,
     visitPurpose,
     deviceId,
+    kioskToken,
   } = parsed.data;
 
   await connectDB();
@@ -61,6 +64,11 @@ export async function POST(req: NextRequest) {
   );
   if (!location) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
+  // Only the check-in leg needs proof of presence; checkout does not.
+  if (action === "in") {
+    const gate = await kioskGate(location, locationId, kioskToken);
+    if (gate) return gate;
   }
   const teamId = location.teamId.toString();
 

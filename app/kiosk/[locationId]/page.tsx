@@ -15,9 +15,14 @@ export default function KioskPage() {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/kiosk/token?locationId=${locationId}`)
+      if (res.status === 401 || res.status === 403) {
+        setError('Sign in as a manager or owner of this team to run the kiosk.')
+        return
+      }
       if (!res.ok) throw new Error('Failed to fetch token')
       const { token } = await res.json()
       setQrToken(token)
+      setError(null)
       setCountdown(12)
     } catch {
       setError('Unable to generate QR code. Check KIOSK_SECRET env var.')
@@ -31,7 +36,7 @@ export default function KioskPage() {
   }, [refresh])
 
   useEffect(() => {
-    const tick = setInterval(() => setCountdown((c) => (c > 0 ? c - 1 : 12)), 1000)
+    const tick = setInterval(() => setCountdown((c) => Math.max(c - 1, 0)), 1000)
     return () => clearInterval(tick)
   }, [])
 
@@ -56,7 +61,7 @@ export default function KioskPage() {
         <Card className="overflow-hidden">
           <CardContent className="p-4">
             <div className="rounded-[2rem] border border-border/60 bg-white p-3 shadow-sm shadow-slate-900/20">
-              <RoundedQRCode value={qrToken} size={300} />
+              <RoundedQRCode value={`${window.location.origin}/scan/${locationId}?token=${qrToken}`} size={300} />
             </div>
           </CardContent>
         </Card>

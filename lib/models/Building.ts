@@ -13,6 +13,7 @@ export interface IBuilding extends Document {
   address: string;
   description?: string;
   checkInMode: CheckInMode;
+  requireDynamicQr?: boolean;
   geofence?: IGeofence | null;
   createdAt: Date;
   updatedAt: Date;
@@ -25,6 +26,7 @@ const BuildingSchema = new Schema<IBuilding>(
     address: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
     checkInMode: { type: String, enum: ["click", "passkey"], default: "click" },
+    requireDynamicQr: { type: Boolean, default: false },
     // Admin-drawn boundary used to validate check-in coordinates server-side
     // (see app/api/logs/route.ts). Optional — buildings without one simply
     // never get a geofenceStatus computed on their logs.
@@ -42,6 +44,7 @@ BuildingSchema.index({ geofence: "2dsphere" });
 if (
   mongoose.models.Building &&
   (!mongoose.models.Building.schema.path("checkInMode") ||
+    !mongoose.models.Building.schema.path("requireDynamicQr") ||
     !mongoose.models.Building.schema.path("teamId") ||
     !mongoose.models.Building.schema.path("geofence"))
 ) {

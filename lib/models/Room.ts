@@ -10,6 +10,7 @@ export interface IRoom extends Document {
   capacity?: number;
   description?: string;
   checkInMode: "click" | "passkey";
+  requireDynamicQr?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +41,7 @@ const RoomSchema = new Schema<IRoom>(
     capacity: { type: Number },
     description: { type: String, trim: true },
     checkInMode: { type: String, enum: ["click", "passkey"], default: "click" },
+    requireDynamicQr: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
@@ -50,6 +52,7 @@ RoomSchema.index({ teamId: 1, buildingId: 1, number: 1 });
 if (
   mongoose.models.Room &&
   (!mongoose.models.Room.schema.path("checkInMode") ||
+    !mongoose.models.Room.schema.path("requireDynamicQr") ||
     !mongoose.models.Room.schema.path("teamId"))
 ) {
   delete mongoose.models.Room;

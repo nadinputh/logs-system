@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
+import DynamicQrToggle from '@/components/admin/DynamicQrToggle'
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
 import type { LatLng } from '@/components/admin/GeofenceMapPicker'
@@ -21,7 +22,7 @@ import type { LatLng } from '@/components/admin/GeofenceMapPicker'
 const GeofenceMapPicker = dynamic(() => import('@/components/admin/GeofenceMapPicker'), { ssr: false })
 
 type GeofencePolygon = { type: 'Polygon'; coordinates: number[][][] }
-interface Building { _id: string; name: string; address: string; description?: string; checkInMode?: 'click' | 'passkey'; geofence?: GeofencePolygon | null }
+interface Building { _id: string; name: string; address: string; description?: string; checkInMode?: 'click' | 'passkey'; requireDynamicQr?: boolean; geofence?: GeofencePolygon | null }
 
 const DEFAULT_MAP_CENTER: LatLng = [11.5564, 104.9282] // arbitrary fallback so the map always has somewhere to open
 
@@ -329,7 +330,10 @@ export default function AdminBuildingsPage() {
                     <p className="text-sm text-muted">{b.address}</p>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    <CheckInModeToggle locationId={b._id} locationType="building" value={b.checkInMode ?? 'click'} />
+                    <div className="flex flex-wrap items-center gap-2">
+                        <CheckInModeToggle locationId={b._id} locationType="building" value={b.checkInMode ?? 'click'} />
+                        <DynamicQrToggle locationId={b._id} locationType="building" value={!!b.requireDynamicQr} />
+                      </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">

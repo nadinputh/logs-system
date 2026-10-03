@@ -19,6 +19,7 @@ import {
 import { hasMinimumTeamRole } from "@/lib/teamPermissions";
 import { TeamRole } from "@/lib/models/TeamMember";
 import { assertSameOrigin } from "@/lib/csrf";
+import { kioskGate } from "@/lib/kioskGate";
 
 export const runtime = "nodejs";
 
@@ -270,6 +271,7 @@ export async function POST(req: NextRequest) {
     deviceId,
     latitude,
     longitude,
+    kioskToken,
   } = parsed.data;
 
   const location = await findOwnedLocationByType(
@@ -279,6 +281,9 @@ export async function POST(req: NextRequest) {
   if (!location) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
+
+  const gate = await kioskGate(location, locationId, kioskToken);
+  if (gate) return gate;
 
   const geofenceStatus = await computeGeofenceStatus(
     resolveBuildingId(locationType as LocationType, location),
