@@ -69,6 +69,18 @@ LogSchema.index({ userId: 1 });
 LogSchema.index({ questCardId: 1 });
 LogSchema.index({ timestamp: -1 });
 LogSchema.index({ relatedLogId: 1 });
+// A check-in can be closed once. Backstops the cron/manual/visitor checkout
+// race, which the read-then-insert checks in each route cannot close alone.
+LogSchema.index(
+  { relatedLogId: 1 },
+  {
+    unique: true,
+    // Explicit name: the plain { relatedLogId: 1 } index above auto-names to
+    // the same string and the build fails with IndexKeySpecsConflict.
+    name: "relatedLogId_out_unique",
+    partialFilterExpression: { action: "out" },
+  },
+);
 
 if (mongoose.models.Log && !mongoose.models.Log.schema.path("teamId")) {
   delete mongoose.models.Log;

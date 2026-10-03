@@ -3,7 +3,8 @@ import mongoose, { Schema, Document, Model, Types } from "mongoose";
 export interface IAuditLog extends Document {
   teamId: Types.ObjectId;
   logId: Types.ObjectId;
-  modifiedByUserId: Types.ObjectId;
+  // Absent for system actions (e.g. the auto-checkout cron).
+  modifiedByUserId?: Types.ObjectId;
   field: string;
   originalValue: string;
   newValue: string;
@@ -15,11 +16,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
   {
     teamId: { type: Schema.Types.ObjectId, ref: "Team", required: true },
     logId: { type: Schema.Types.ObjectId, ref: "Log", required: true },
-    modifiedByUserId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
+    modifiedByUserId: { type: Schema.Types.ObjectId, ref: "User" },
     field: { type: String, required: true },
     originalValue: { type: String, required: true },
     newValue: { type: String, required: true },
