@@ -44,7 +44,7 @@ describe("cleanup-stale-logs cron", () => {
       { _id: "c1", teamId: "t1", locationId: "l1", locationType: "room", sessionToken: "s", timestamp: t },
     ]);
     const res = await GET(req("Bearer s3cret"));
-    expect(await res.json()).toEqual({ cleaned: 1, skipped: 0 });
+    expect(await res.json()).toMatchObject({ cleaned: 1, skipped: 0, backlog: false });
     expect(create.mock.calls[0][0].timestamp.getTime()).toBe(t.getTime() + 12 * H);
     expect(create.mock.calls[0][0].autoCheckedOut).toBe(true);
     expect(auditCreate.mock.calls[0][0]).toMatchObject({ field: "autoCheckout", logId: "c1" });
@@ -57,7 +57,32 @@ describe("cleanup-stale-logs cron", () => {
         throw Object.assign(new Error("dup"), { code: 11000 });
       },
     );
-    expect(await (await GET(req("Bearer s3cret"))).json()).toEqual({ cleaned: 0, skipped: 1 });
+    expect(await (await GET(req("Bearer s3cret"))).json()).toMatchObject({ cleaned: 0, skipped: 1 });
     expect(auditCreate).not.toHaveBeenCalled();
+  });
+
+  it("reports stranded check-ins and a full-run backlog", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const full = Array.from({ length: 500 }, (_, i) => ({
+      _id: `c${i}`,
+      teamId: "t1",
+      timestamp: new Date(Date.now() - 20 * H),
+    }));
+    const { GET } = await setup(full);
+    const body = await (await GET(req("Bearer s3cret"))).json();
+    expect(body).toMatchObject({ cleaned: 5000, backlog: true });
+    expect(body.stranded).toBeGreaterThan(0);
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it("reports nothing when there is no backlog or stranded tail", async () => {
+    const { GET } = await setup([]);
+    expect(await (await GET(req("Bearer s3cret"))).json()).toEqual({
+      cleaned: 0,
+      skipped: 0,
+      backlog: false,
+      stranded: 0,
+    });
   });
 });

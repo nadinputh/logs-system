@@ -16,6 +16,7 @@ const STALE_AFTER_MS = 12 * HOUR;
 const LOOKBACK_MS = 30 * 24 * HOUR;
 const BATCH = 500;
 const MAX_BATCHES = 10;
+const STRANDED_CAP = 100;
 
 function sha(s: string) {
   return createHash("sha256").update(s).digest();
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
 
   let cleaned = 0;
   let skipped = 0;
+  let backlog = false;
 
   // Drain in batches so a backlog above BATCH clears in one run instead of
   // BATCH per hour. MAX_BATCHES bounds the run; a short batch means done.
@@ -102,13 +104,21 @@ export async function GET(req: NextRequest) {
     }
 
     if (open.length < BATCH) break;
+    // Ran out of batches with the last one full: more are waiting.
+    backlog = i === MAX_BATCHES - 1;
   }
 
   // Check-ins past the lookback are never auto-closed, so they would show as
   // "in" forever. Surface them for an admin rather than failing silently.
-  const stranded = await findOpen(null, new Date(now - LOOKBACK_MS), 1);
-  if (stranded.length) {
-    console.warn("[cron] open check-ins older than the 30-day lookback need manual checkout");
+  // Capped count: enough to alert on, without scanning the whole tail.
+  const stranded = (await findOpen(null, new Date(now - LOOKBACK_MS), STRANDED_CAP)).length;
+  if (stranded) {
+    console.warn(
+      `[cron] ${stranded >= STRANDED_CAP ? `${STRANDED_CAP}+` : stranded} open check-ins older than the 30-day lookback need manual checkout`,
+    );
+  }
+  if (backlog) {
+    console.warn(`[cron] stale-log backlog exceeds ${BATCH * MAX_BATCHES} per run; the next run continues`);
   }
 
   // Notification pipeline v1: console. A webhook can hook in here.
@@ -116,5 +126,5 @@ export async function GET(req: NextRequest) {
     console.info(`[cron] auto-checkout: ${cleaned} closed, ${skipped} skipped`);
   }
 
-  return NextResponse.json({ cleaned, skipped });
+  return NextResponse.json({ cleaned, skipped, backlog, stranded });
 }
