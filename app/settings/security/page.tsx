@@ -10,14 +10,16 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { SessionsList, type SessionRow } from './SessionsList'
 import { ShieldCheck, Fingerprint, Bell } from 'lucide-react'
+import { getLocale, getTranslations } from 'next-intl/server'
 
-export const metadata = {
-  title: 'Account & Security — Kamnotheat',
-  description: 'Passkeys and every device signed in on this account, in one place.',
-  robots: { index: false },
+export async function generateMetadata() {
+  const t = await getTranslations('security')
+  return { title: t('metaTitle'), description: t('metaDescription'), robots: { index: false } }
 }
 
 export default async function SecuritySettingsPage() {
+  const t = await getTranslations('security')
+  const locale = await getLocale()
   const session = await requireSession('/settings/security')
 
   const userId = (session.user as any).id as string
@@ -61,14 +63,13 @@ export default async function SecuritySettingsPage() {
             d="M15 19l-7-7 7-7"
           />
         </svg>
-        Back to dashboard
+        {t('back')}
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Account &amp; Security</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
         <p className="text-sm text-muted mt-0.5 max-w-md">
-          Your sign-in methods and every device signed in on this account — the same
-          ledger Kamnotheat keeps for every check-in, now covering your own account.
+          {t('intro')}
         </p>
       </div>
 
@@ -90,11 +91,11 @@ export default async function SecuritySettingsPage() {
                       : 'inline-flex items-center text-xs font-medium text-muted bg-default border border-border px-2 py-0.5 rounded-full'
                   }
                 >
-                  {u?.role === 'admin' ? 'Admin' : 'Staff'}
+                  {u?.role === 'admin' ? t('roleAdmin') : t('roleStaff')}
                 </span>
                 {u?.createdAt && (
                   <span className="text-xs text-muted">
-                    Member since {new Date(u.createdAt).toLocaleDateString()}
+                    {t('memberSince', { date: new Date(u.createdAt).toLocaleDateString(locale) })}
                   </span>
                 )}
               </div>
@@ -111,9 +112,9 @@ export default async function SecuritySettingsPage() {
               <Fingerprint className="w-4 h-4 text-sky-500" strokeWidth={2.2} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-foreground">Passkeys</h2>
+              <h2 className="text-base font-semibold text-foreground">{t('passkeysTitle')}</h2>
               <p className="text-xs text-muted mt-0.5 max-w-md">
-                Use your device biometrics or PIN to verify your identity — no password needed.
+                {t('passkeysBody')}
               </p>
             </div>
           </div>
@@ -129,9 +130,9 @@ export default async function SecuritySettingsPage() {
               <Bell className="w-4 h-4 text-accent" strokeWidth={2.2} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-foreground">Notifications</h2>
+              <h2 className="text-base font-semibold text-foreground">{t('notifTitle')}</h2>
               <p className="text-xs text-muted mt-0.5 max-w-md">
-                Push notifications for this device, sent through your browser.
+                {t('notifBody')}
               </p>
             </div>
           </div>
@@ -147,12 +148,9 @@ export default async function SecuritySettingsPage() {
               <ShieldCheck className="w-4 h-4 text-accent" strokeWidth={2.2} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-foreground">Active sessions</h2>
+              <h2 className="text-base font-semibold text-foreground">{t('sessionsTitle')}</h2>
               <p className="text-xs text-muted mt-0.5 max-w-md">
-                Revoke one row to end that device only. Every session is a JWT stamped
-                with a session-inventory row (jti) and the account&apos;s{' '}
-                <span className="font-mono text-xs">sessionsVersion</span>; either
-                gate can end it.
+                {t.rich('sessionsBody', { mono: (c) => <span className="font-mono text-xs">{c}</span> })}
               </p>
             </div>
           </div>

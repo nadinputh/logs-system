@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   }
   // Only the check-in leg needs proof of presence; checkout does not.
   if (action === "in") {
-    const gate = await kioskGate(location, locationId, kioskToken);
+    const gate = await kioskGate(location, locationId, kioskToken, sessionToken);
     if (gate) return gate;
   }
   const teamId = location.teamId.toString();

@@ -8,6 +8,8 @@ import { requireTeamPermission } from "@/lib/middleware/auth";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
 import { assertSameOrigin } from "@/lib/csrf";
+import { acquireCheckInLock } from "@/lib/checkInLock";
+import { claim } from "@/lib/claim";
 
 export const runtime = "nodejs";
 
@@ -32,9 +34,11 @@ export async function POST(req: NextRequest) {
   }
 
   let userId: string;
+  let jti: string | undefined;
   try {
     const payload = await verifySessionQrToken(token);
     userId = payload.userId;
+    jti = payload.jti;
   } catch {
     return NextResponse.json(
       { error: "Invalid or expired token" },
@@ -60,40 +64,63 @@ export async function POST(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const lastCheckin = await Log.findOne({
-    teamId,
-    locationId,
-    userId,
-    action: "in",
-  }).sort({ timestamp: -1 });
-  if (lastCheckin) {
-    const existingCheckout = await Log.findOne({
+  const release = await acquireCheckInLock(teamId, locationId, userId);
+  if (!release) {
+    return NextResponse.json(
+      {
+        error: "CHECKIN_IN_PROGRESS",
+        message: "Check-in already in progress, try again.",
+      },
+      { status: 409 },
+    );
+  }
+  try {
+    const lastCheckin = await Log.findOne({
       teamId,
-      relatedLogId: lastCheckin._id,
-      action: "out",
-    });
-    if (!existingCheckout) {
+      locationId,
+      userId,
+      action: "in",
+    }).sort({ timestamp: -1 });
+    if (lastCheckin) {
+      const existingCheckout = await Log.findOne({
+        teamId,
+        relatedLogId: lastCheckin._id,
+        action: "out",
+      });
+      if (!existingCheckout) {
+        return NextResponse.json(
+          { existing: true, log: lastCheckin },
+          { status: 200 },
+        );
+      }
+    }
+
+    // The 30s QR is one scan: a replay after check-out must not check the user
+    // back in. (Checked after the open-visit return so a double scan stays a no-op.)
+    if (jti && (await claim(`sessionqr:${jti}`, userId)) !== null) {
       return NextResponse.json(
-        { existing: true, log: lastCheckin },
-        { status: 200 },
+        { error: "Token already used" },
+        { status: 409 },
       );
     }
+
+    const log = await Log.create({
+      teamId,
+      locationId,
+      locationType,
+      sessionToken: userId,
+      userId,
+      visitorName: (user as any).name,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers.get("user-agent") ?? undefined,
+      action: "in",
+      timestamp: new Date(),
+    });
+
+    publishLogCreated(log);
+
+    return NextResponse.json(log, { status: 201 });
+  } finally {
+    await release();
   }
-
-  const log = await Log.create({
-    teamId,
-    locationId,
-    locationType,
-    sessionToken: userId,
-    userId,
-    visitorName: (user as any).name,
-    ipAddress: getClientIp(req),
-    userAgent: req.headers.get("user-agent") ?? undefined,
-    action: "in",
-    timestamp: new Date(),
-  });
-
-  publishLogCreated(log);
-
-  return NextResponse.json(log, { status: 201 });
 }

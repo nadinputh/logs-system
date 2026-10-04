@@ -11,6 +11,8 @@
 export const ALLOWED_PREFIXES = ['/scan/', '/quest/', '/terminal']
 
 export type Failure = {
+  /** Stable id the UI translates; title/detail stay English as the fallback. */
+  key: 'insecure' | 'blocked' | 'noCamera' | 'busy' | 'noRear' | 'timeout' | 'unsupported' | 'generic'
   title: string
   detail: string
   /** Whether retrying can plausibly succeed. */
@@ -19,7 +21,7 @@ export type Failure = {
 
 export type Resolution =
   | { kind: 'route'; href: string }
-  | { kind: 'foreign'; notice: string }
+  | { kind: 'foreign'; notice: string; noticeKey: 'noticeNotCheckin' | 'noticeOutside' }
 
 /**
  * A decoded QR is untrusted input. Only same-origin URLs pointing at a route
@@ -41,6 +43,7 @@ export function resolveDecoded(decodedText: string, origin: string): Resolution 
     return {
       kind: 'foreign',
       notice: 'That is not a check-in code — still looking. Scan the QR posted at your location.',
+      noticeKey: 'noticeNotCheckin',
     }
   }
   // `target.origin` is the check that matters: a protocol-relative
@@ -53,6 +56,7 @@ export function resolveDecoded(decodedText: string, origin: string): Resolution 
       kind: 'foreign',
       notice:
         'That code leads somewhere outside this check-in system — still looking. Scan the QR posted at your location.',
+      noticeKey: 'noticeOutside',
     }
   }
   return { kind: 'route', href: target.pathname + target.search }
@@ -73,6 +77,7 @@ export function describeFailure(err: unknown): Failure {
 
   if (/NotAllowedError|SecurityError|permission|denied|dismissed/i.test(raw)) {
     return {
+      key: 'blocked',
       title: 'Camera access is blocked',
       detail:
         'Allow camera access for this site in your browser settings, then try again. On iPhone: Settings → Safari → Camera.',
@@ -81,6 +86,7 @@ export function describeFailure(err: unknown): Failure {
   }
   if (/NotFoundError|DevicesNotFoundError|no camera|device not found|not found/i.test(raw)) {
     return {
+      key: 'noCamera',
       title: 'No camera found',
       detail: 'This device has no camera available to open.',
       retryable: false,
@@ -88,6 +94,7 @@ export function describeFailure(err: unknown): Failure {
   }
   if (/NotReadableError|TrackStartError|AbortError|in use|could not start/i.test(raw)) {
     return {
+      key: 'busy',
       title: 'The camera is busy',
       detail: 'Another app or tab is already using it. Close the other one, then try again.',
       retryable: true,
@@ -95,6 +102,7 @@ export function describeFailure(err: unknown): Failure {
   }
   if (/OverconstrainedError|ConstraintNotSatisfiedError/i.test(raw)) {
     return {
+      key: 'noRear',
       title: "This camera can't be used",
       detail: 'No rear-facing camera is available on this device.',
       retryable: false,
@@ -102,6 +110,7 @@ export function describeFailure(err: unknown): Failure {
   }
   if (/KamnotheatTimeout|camera-timeout/.test(raw)) {
     return {
+      key: 'timeout',
       title: 'The camera did not open',
       detail:
         'It may be in use by another app. Close anything else using the camera, then try again.',
@@ -112,6 +121,7 @@ export function describeFailure(err: unknown): Failure {
   // exactly how a visitor often arrives at a QR link.
   if (/NotSupportedError|not supported|undefined is not an object/i.test(raw)) {
     return {
+      key: 'unsupported',
       title: "This browser can't use the camera",
       detail:
         'If you opened this from inside another app, tap its menu and choose "Open in browser" and load this page there.',
@@ -119,6 +129,7 @@ export function describeFailure(err: unknown): Failure {
     }
   }
   return {
+    key: 'generic',
     title: "The scanner couldn't start",
     detail: 'Something went wrong reaching the camera. Try again, or ask a host to check you in.',
     retryable: true,

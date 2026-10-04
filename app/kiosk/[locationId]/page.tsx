@@ -1,39 +1,61 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { RoundedQRCode } from '@/components/qr/RoundedQRCode'
 import { Clock3, QrCode } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+
+// Tokens live 15s (+5s verify tolerance); refreshing at 8s leaves a retry's
+// worth of margin for slow networks and scanning a code already on screen.
+const REFRESH_S = 8
+const TOKEN_TTL_MS = 15_000
 
 export default function KioskPage() {
+  const t = useTranslations('kiosk')
   const { locationId } = useParams() as { locationId: string }
   const [qrToken, setQrToken] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
-  const [countdown, setCountdown] = useState(12)
+  const [countdown, setCountdown] = useState(REFRESH_S)
+  const fetchedAt = useRef(0)
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/kiosk/token?locationId=${locationId}`)
       if (res.status === 401 || res.status === 403) {
-        setError('Sign in as a manager or owner of this team to run the kiosk.')
+        setError(t('signInAsAManager'))
         return
       }
-      if (!res.ok) throw new Error('Failed to fetch token')
+      if (!res.ok) throw new Error(t('failedToFetchToken'))
       const { token } = await res.json()
       setQrToken(token)
+      fetchedAt.current = Date.now()
       setError(null)
-      setCountdown(12)
+      setCountdown(REFRESH_S)
     } catch {
-      setError('Unable to generate QR code. Check KIOSK_SECRET env var.')
+      // A transient failure keeps the last QR up until it would stop scanning.
+      if (Date.now() - fetchedAt.current > TOKEN_TTL_MS - 2_000) {
+        setQrToken('')
+        setError(t('unableToGenerateQrCode'))
+      }
     }
   }, [locationId])
 
   useEffect(() => {
     refresh()
-    const interval = setInterval(refresh, 12_000)
+    const interval = setInterval(refresh, REFRESH_S * 1000)
     return () => clearInterval(interval)
   }, [refresh])
+
+  // Keep the display awake; the lock is released when the tab is hidden, so re-take it.
+  useEffect(() => {
+    let lock: WakeLockSentinel | null = null
+    const take = () => navigator.wakeLock?.request('screen').then((l) => (lock = l), () => {})
+    take()
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && take())
+    return () => { lock?.release() }
+  }, [])
 
   useEffect(() => {
     const tick = setInterval(() => setCountdown((c) => Math.max(c - 1, 0)), 1000)
@@ -54,8 +76,8 @@ export default function KioskPage() {
         <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
           <QrCode className="size-7" />
         </div>
-        <p className="text-white text-2xl font-semibold tracking-wide">Scan to Check In</p>
-        <p className="mt-1 text-sm text-white/50">Point your camera at the code below</p>
+        <p className="text-white text-2xl font-semibold tracking-wide">{t('scanToCheckIn')}</p>
+        <p className="mt-1 text-sm text-white/50">{t('pointYourCameraAtThe')}</p>
       </div>
       {qrToken ? (
         <Card className="overflow-hidden">
@@ -70,7 +92,7 @@ export default function KioskPage() {
       )}
       <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm text-white/60">
         <Clock3 className="size-4" />
-        Refreshes in {countdown}s
+        {t('refreshesIn', { seconds: countdown })}
       </p>
     </div>
   )

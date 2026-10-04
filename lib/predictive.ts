@@ -19,11 +19,12 @@ export function getPredictedAction(
 export function formatDuration(
   from: string | Date,
   to: Date = new Date(),
+  units: { h: string; m: string } = { h: "h", m: "m" },
 ): string {
   const ms = to.getTime() - new Date(from).getTime();
   const totalMinutes = Math.floor(ms / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  if (hours > 0) return `${hours}${units.h} ${minutes}${units.m}`;
+  return `${minutes}${units.m}`;
 }

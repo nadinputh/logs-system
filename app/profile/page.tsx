@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { RoundedQRCode } from '@/components/qr/RoundedQRCode'
 import { Clock3, RefreshCw, UserRound } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 export default function ProfilePage() {
+  const t = useTranslations('profile')
   const [qrToken, setQrToken] = useState<string>('')
   const [countdown, setCountdown] = useState(25)
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +22,7 @@ export default function ProfilePage() {
       setCountdown(25)
       setError(null)
     } catch {
-      setError('Failed to generate QR. Are you logged in?')
+      setError(t('failedToGenerateQrAre'))
     }
   }, [])
 
@@ -43,8 +45,8 @@ export default function ProfilePage() {
           <div className="w-12 h-12 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-3 shadow-sm shadow-cyan-200">
             <UserRound className="size-6 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-foreground">Your Personal QR</h1>
-          <p className="text-sm text-muted mt-1">Show this to a terminal scanner to check in</p>
+          <h1 className="text-xl font-bold text-foreground">{t('yourPersonalQr')}</h1>
+          <p className="text-sm text-muted mt-1">{t('showThisToATerminal')}</p>
         </div>
 
         {/* QR card */}
@@ -66,8 +68,8 @@ export default function ProfilePage() {
             <div className="flex items-center gap-3 w-full">
               <div className="flex-1 bg-muted/50 rounded-xl px-3.5 py-2.5 text-center">
                 <Clock3 className="mx-auto mb-1 size-4 text-muted" />
-                <p className="text-xs text-muted">Expires in</p>
-                <p className="text-lg font-bold text-foreground tabular-nums">{countdown}s</p>
+                <p className="text-xs text-muted">{t('expiresIn')}</p>
+                <p className="text-lg font-bold text-foreground tabular-nums">{t("seconds", { n: countdown })}</p>
               </div>
               <Button
                 type="button"
@@ -75,14 +77,14 @@ export default function ProfilePage() {
                 variant="outline"
               >
                 <RefreshCw className="size-4" />
-                Refresh
+                {t('refresh')}
               </Button>
             </div>
           </CardContent>
         </Card>
 
         <p className="text-xs text-center text-muted/60">
-          This QR refreshes automatically every 25 seconds
+          {t('thisQrRefreshesAutomaticallyEvery')}
         </p>
       </div>
     </div>

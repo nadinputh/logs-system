@@ -69,7 +69,7 @@ export function AuthLayout({
       </a>
 
       <header className="relative z-10 shrink-0 border-b border-[var(--panel-border)]">
-        <nav aria-label="Primary" className="shell flex h-16 items-center gap-3 sm:h-[4.5rem]">
+        <nav aria-label={t('primaryNav')} className="shell flex h-16 items-center gap-3 sm:h-[4.5rem]">
           <Link
             href="/landing"
             aria-label={t('homeAriaLabel')}

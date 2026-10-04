@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/sonner'
 import { AddUserDirect } from './AddUserDirect'
+import { useLocale, useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 
 type TeamRole = 'owner' | 'admin' | 'manager' | 'member' | 'auditor'
 type TeamStatus = 'active' | 'suspended'
@@ -46,7 +48,7 @@ interface TeamMemberRow {
   status: TeamStatus
   joinedAt: string
   // Admin-provisioned account that never reached a password. Drives the
-  // "Resend set-password" control.
+  // t('resendSetPassword') control.
   awaitingPassword?: boolean
   isSelf: boolean
 }
@@ -89,27 +91,27 @@ interface TeamAuditResponse {
   hasMore?: boolean
 }
 
-const ROLE_OPTIONS: Array<{ value: TeamRole; label: string }> = [
-  { value: 'owner', label: 'Owner' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'member', label: 'Member' },
-  { value: 'auditor', label: 'Auditor' },
+const ROLE_OPTIONS: Array<{ value: TeamRole }> = [
+  { value: 'owner' },
+  { value: 'admin' },
+  { value: 'manager' },
+  { value: 'member' },
+  { value: 'auditor' },
 ]
 
-const INVITE_ROLE_OPTIONS: Array<{ value: Exclude<TeamRole, 'owner'>; label: string }> = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'member', label: 'Member' },
-  { value: 'auditor', label: 'Auditor' },
+const INVITE_ROLE_OPTIONS: Array<{ value: Exclude<TeamRole, 'owner'> }> = [
+  { value: 'admin' },
+  { value: 'manager' },
+  { value: 'member' },
+  { value: 'auditor' },
 ]
 
-const AUDIT_ACTION_OPTIONS: Array<{ value: 'all' | TeamAuditAction; label: string }> = [
-  { value: 'all', label: 'All actions' },
-  { value: 'member_role_changed', label: 'Member role changed' },
-  { value: 'member_status_changed', label: 'Member status changed' },
-  { value: 'member_removed', label: 'Member removed' },
-  { value: 'ownership_transferred', label: 'Ownership transferred' },
+const AUDIT_ACTION_OPTIONS: Array<{ value: 'all' | TeamAuditAction }> = [
+  { value: 'all' },
+  { value: 'member_role_changed' },
+  { value: 'member_status_changed' },
+  { value: 'member_removed' },
+  { value: 'ownership_transferred' },
 ]
 
 // Deliberately off cyan/sky/teal (brand, reserved for the One Signal Rule) and
@@ -136,43 +138,37 @@ function roleBadgeClass(role: TeamRole) {
   }
 }
 
-function readApiError(payload: any, fallback: string) {
-  if (!payload) return fallback
-  if (typeof payload.error === 'string') return payload.error
-  if (typeof payload.message === 'string') return payload.message
-  return fallback
+type T = (key: string, values?: Record<string, string | number>) => string
+
+function describeAuditAction(action: TeamAuditAction, t: T) {
+  if (action === 'member_role_changed') return t('auditTitleRole')
+  if (action === 'member_status_changed') return t('auditTitleStatus')
+  return t(`audit_${action}`)
 }
 
-function describeAuditAction(action: TeamAuditAction) {
-  if (action === 'member_role_changed') return 'Role updated'
-  if (action === 'member_status_changed') return 'Status updated'
-  if (action === 'member_removed') return 'Member removed'
-  return 'Ownership transferred'
-}
-
-function displayActor(actor: TeamAuditActor | null) {
-  if (!actor) return 'Unknown user'
+function displayActor(actor: TeamAuditActor | null, t: T) {
+  if (!actor) return t('unknownUser')
   return actor.name ?? actor.email ?? actor.id
 }
 
 // Known audit metadata shapes get a human sentence; anything else falls back
 // to the raw pairs in the caller so no metadata is ever silently hidden.
-function describeAuditMetadata(action: TeamAuditAction, metadata: Record<string, unknown>): string | null {
+function describeAuditMetadata(action: TeamAuditAction, metadata: Record<string, unknown>, t: T): string | null {
   if (action === 'member_role_changed' && 'previousRole' in metadata && 'newRole' in metadata) {
-    return `Role changed from ${metadata.previousRole} to ${metadata.newRole}`
+    return t('metaRole', { from: String(metadata.previousRole), to: String(metadata.newRole) })
   }
   if (action === 'member_status_changed' && 'previousStatus' in metadata && 'newStatus' in metadata) {
-    return `Status changed from ${metadata.previousStatus} to ${metadata.newStatus}`
+    return t('metaStatus', { from: String(metadata.previousStatus), to: String(metadata.newStatus) })
   }
   if (action === 'member_removed' && 'previousRole' in metadata && 'previousStatus' in metadata) {
-    return `Was ${metadata.previousRole}, ${metadata.previousStatus}, at the time of removal`
+    return t('metaRemoved', { role: String(metadata.previousRole), status: String(metadata.previousStatus) })
   }
   if (
     action === 'ownership_transferred' &&
     'previousOwnerNewRole' in metadata &&
     'newOwnerPreviousRole' in metadata
   ) {
-    return `Previous owner is now ${metadata.previousOwnerNewRole}; new owner was previously ${metadata.newOwnerPreviousRole}`
+    return t('metaOwnership', { prev: String(metadata.previousOwnerNewRole), next: String(metadata.newOwnerPreviousRole) })
   }
   return null
 }
@@ -187,8 +183,8 @@ type ConfirmState =
 
 // A collapsed-by-default section for the page's occasional-use, setup-style
 // cards (audit trail, team creation, ownership transfer, invites, direct
-// add). Keeping these closed on load is what makes "Active team context" and
-// "Members" — the two things a daily admin actually opens this page for —
+// add). Keeping these closed on load is what makes t('activeTeamContext') and
+// t('members') — the two things a daily admin actually opens this page for —
 // the only things competing for attention on load.
 function CollapsibleSection({
   title,
@@ -222,10 +218,15 @@ function CollapsibleSection({
 }
 
 export default function TeamSettingsPage() {
+  const t = useTranslations('team')
+  const apiError = useApiError()
+  const locale = useLocale()
+  const tCommon = useTranslations('common')
+  const roleLabel = (role: string) => tCommon(`role${role[0].toUpperCase()}${role.slice(1)}`)
   const router = useRouter()
   const searchParams = useSearchParams()
   // Only a real redirect (someone bounced here from a page that needed an
-  // active team) earns the "Continue to requested page" button — the default
+  // active team) earns the t('continueToRequestedPage') button — the default
   // fallback below is where the click lands, not a signal the button should show.
   const explicitNextPath = searchParams.get('next')
   const nextPath = explicitNextPath ?? '/dashboard'
@@ -240,28 +241,28 @@ export default function TeamSettingsPage() {
     switch (redirectReason) {
       case 'suspended':
         return {
-          title: 'Your access to that team is suspended',
-          body: 'A team owner or admin paused your membership. Ask them to reactivate you, or switch to another team below.',
+          title: t('yourAccessToThatTeam'),
+          body: t('aTeamOwnerOrAdmin'),
         }
       case 'removed':
         return {
-          title: 'You are no longer a member of that team',
-          body: 'A team owner or admin removed you. If this was a mistake, ask them to invite you again.',
+          title: t('youAreNoLongerA'),
+          body: t('aTeamOwnerOrAdmin2'),
         }
       case 'team_deleted':
         return {
-          title: 'That team no longer exists',
-          body: 'The team you last used has been deleted. Pick another team below, or start a new one.',
+          title: t('thatTeamNoLongerExists'),
+          body: t('theTeamYouLastUsed'),
         }
       case 'insufficient_role':
         return {
-          title: 'You do not have permission for that page',
-          body: 'Your role on the active team does not include access to what you were trying to open.',
+          title: t('youDoNotHavePermission'),
+          body: t('yourRoleOnTheActive'),
         }
       case 'no_active_team':
         return {
-          title: 'Pick an active team first',
-          body: 'Every dashboard page runs against one team at a time. Pick one below to continue.',
+          title: t('pickAnActiveTeamFirst'),
+          body: t('everyDashboardPageRunsAgainst'),
         }
       default:
         return null
@@ -359,7 +360,7 @@ export default function TeamSettingsPage() {
       const res = await fetch('/api/teams')
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to load teams'))
+        throw new Error(apiError(payload, t('failedToLoadTeams')))
       }
 
       const nextTeams = (payload.teams ?? []) as TeamSummary[]
@@ -372,7 +373,7 @@ export default function TeamSettingsPage() {
         setAuditNextCursor(null)
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load teams')
+      toast.error(error instanceof Error ? error.message : t('failedToLoadTeams'))
     } finally {
       setLoadingTeams(false)
     }
@@ -384,7 +385,7 @@ export default function TeamSettingsPage() {
       const res = await fetch(`/api/teams/${teamId}/members`)
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to load team members'))
+        throw new Error(apiError(payload, t('failedToLoadTeamMembers')))
       }
       const nextMembers = (payload.members ?? []) as TeamMemberRow[]
       setMembers(nextMembers)
@@ -396,7 +397,7 @@ export default function TeamSettingsPage() {
       )
     } catch (error) {
       setMembers([])
-      toast.error(error instanceof Error ? error.message : 'Failed to load team members')
+      toast.error(error instanceof Error ? error.message : t('failedToLoadTeamMembers'))
     } finally {
       setLoadingMembers(false)
     }
@@ -413,12 +414,12 @@ export default function TeamSettingsPage() {
       const res = await fetch(`/api/teams/${teamId}/invites`)
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to load invites'))
+        throw new Error(apiError(payload, t('failedToLoadInvites')))
       }
       setInvites((payload.invites ?? []) as TeamInviteRow[])
     } catch (error) {
       setInvites([])
-      toast.error(error instanceof Error ? error.message : 'Failed to load invites')
+      toast.error(error instanceof Error ? error.message : t('failedToLoadInvites'))
     } finally {
       setLoadingInvites(false)
     }
@@ -457,7 +458,7 @@ export default function TeamSettingsPage() {
       const res = await fetch(`/api/teams/${teamId}/audit?${search.toString()}`)
       const payload = (await res.json()) as TeamAuditResponse
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to load team audit events'))
+        throw new Error(apiError(payload, t('failedToLoadTeamAudit')))
       }
 
       const nextEvents = (payload.events ?? []) as TeamAuditEvent[]
@@ -468,7 +469,7 @@ export default function TeamSettingsPage() {
         setAuditEvents([])
         setAuditNextCursor(null)
       }
-      toast.error(error instanceof Error ? error.message : 'Failed to load team audit events')
+      toast.error(error instanceof Error ? error.message : t('failedToLoadTeamAudit'))
     } finally {
       if (append) {
         setLoadingMoreAudit(false)
@@ -504,7 +505,7 @@ export default function TeamSettingsPage() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to switch team'))
+        throw new Error(apiError(payload, t('failedToSwitchTeam')))
       }
 
       setTeams((current) =>
@@ -528,9 +529,9 @@ export default function TeamSettingsPage() {
           auditToDate,
         ),
       ])
-      toast.success('Active team updated')
+      toast.success(t('activeTeamUpdated'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to switch team')
+      toast.error(error instanceof Error ? error.message : t('failedToSwitchTeam'))
     } finally {
       setSwitchingTeamId(null)
     }
@@ -549,14 +550,14 @@ export default function TeamSettingsPage() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to create team'))
+        throw new Error(apiError(payload, t('failedToCreateTeam')))
       }
 
       setNewTeamName('')
       await loadTeams()
-      toast.success('Team created')
+      toast.success(t('teamCreated'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create team')
+      toast.error(error instanceof Error ? error.message : t('failedToCreateTeam'))
     } finally {
       setCreatingTeam(false)
     }
@@ -581,7 +582,7 @@ export default function TeamSettingsPage() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to update member'))
+        throw new Error(apiError(payload, t('failedToUpdateMember')))
       }
 
       setMembers((current) =>
@@ -591,9 +592,9 @@ export default function TeamSettingsPage() {
             : row,
         ),
       )
-      toast.success('Member updated')
+      toast.success(t('memberUpdated'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update member')
+      toast.error(error instanceof Error ? error.message : t('failedToUpdateMember'))
     } finally {
       setSavingMemberUserId(null)
     }
@@ -611,14 +612,14 @@ export default function TeamSettingsPage() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to remove member'))
+        throw new Error(apiError(payload, t('failedToRemoveMember')))
       }
 
       setMembers((current) => current.filter((row) => row.userId !== member.userId))
       setConfirmState(null)
-      toast.success('Member removed')
+      toast.success(t('toastMemberRemoved'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to remove member')
+      toast.error(error instanceof Error ? error.message : t('failedToRemoveMember'))
     } finally {
       setRemovingMemberUserId(null)
     }
@@ -639,19 +640,19 @@ export default function TeamSettingsPage() {
         body: JSON.stringify({ userId: member.userId }),
       })
       const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(readApiError(payload, 'Failed to resend the set-password link'))
+      if (!res.ok) throw new Error(apiError(payload, t('failedToResendTheSet')))
       if (payload.emailDelivered) {
         setPendingLink(null)
-        toast.success(`Set-password link sent to ${member.email ?? 'the address'}`)
+        toast.success(t('toastSetPwSent', { email: member.email ?? t('theAddress') }))
       } else {
         setPendingLink({
           label: `Set-password link for ${member.email ?? member.name ?? 'this user'}`,
           url: payload.setPasswordUrl ?? '',
         })
-        toast.warning('Link created, but the email could not be sent')
+        toast.warning(t('linkCreatedButTheEmail'))
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to resend the set-password link')
+      toast.error(error instanceof Error ? error.message : t('failedToResendTheSet'))
     } finally {
       setResendingUserId(null)
     }
@@ -671,20 +672,20 @@ export default function TeamSettingsPage() {
         body: JSON.stringify({ email: invite.email, role: invite.role }),
       })
       const payload = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(readApiError(payload, 'Failed to resend the invite'))
+      if (!res.ok) throw new Error(apiError(payload, t('failedToResendTheInvite')))
       await loadInvites(activeTeam.id)
       if (payload.emailDelivered) {
         setPendingLink(null)
-        toast.success(`Invite resent to ${invite.email}`)
+        toast.success(t('toastInviteResent', { email: invite.email }))
       } else {
         setPendingLink({
-          label: `Invite for ${invite.email}`,
+          label: t('inviteFor', { email: invite.email }),
           url: payload.inviteUrl ?? '',
         })
-        toast.warning('Invite reissued, but the email could not be sent')
+        toast.warning(t('inviteReissuedButTheEmail'))
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to resend the invite')
+      toast.error(error instanceof Error ? error.message : t('failedToResendTheInvite'))
     } finally {
       setResendingInviteId(null)
     }
@@ -703,7 +704,7 @@ export default function TeamSettingsPage() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to send invite'))
+        throw new Error(apiError(payload, t('failedToSendInvite')))
       }
 
       setInviteEmail('')
@@ -713,16 +714,16 @@ export default function TeamSettingsPage() {
       // did not go out, because there is no second chance to read it.
       if (payload.emailDelivered) {
         setPendingLink(null)
-        toast.success(`Invite sent to ${payload?.invite?.email ?? 'the address'}`)
+        toast.success(t('toastInviteSent', { email: payload?.invite?.email ?? t('theAddress') }))
       } else {
         setPendingLink({
-          label: `Invite for ${payload?.invite?.email ?? 'the address'}`,
+          label: t('inviteFor', { email: payload?.invite?.email ?? t('theAddress') }),
           url: payload.inviteUrl ?? '',
         })
-        toast.warning('Invite created, but the email could not be sent')
+        toast.warning(t('inviteCreatedButTheEmail'))
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to send invite')
+      toast.error(error instanceof Error ? error.message : t('failedToSendInvite'))
     } finally {
       setCreatingInvite(false)
     }
@@ -740,14 +741,14 @@ export default function TeamSettingsPage() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to revoke invite'))
+        throw new Error(apiError(payload, t('failedToRevokeInvite')))
       }
 
       setInvites((current) => current.filter((invite) => invite.id !== inviteId))
       setConfirmState(null)
-      toast.success('Invite revoked')
+      toast.success(t('inviteRevoked'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to revoke invite')
+      toast.error(error instanceof Error ? error.message : t('failedToRevokeInvite'))
     } finally {
       setRevokingInviteId(null)
     }
@@ -771,9 +772,9 @@ export default function TeamSettingsPage() {
         const contentType = res.headers.get('content-type') ?? ''
         if (contentType.includes('application/json')) {
           const payload = await res.json()
-          throw new Error(readApiError(payload, 'Failed to export audit CSV'))
+          throw new Error(apiError(payload, t('failedToExportAuditCsv')))
         }
-        throw new Error('Failed to export audit CSV')
+        throw new Error(t('failedToExportAuditCsv'))
       }
 
       const blob = await res.blob()
@@ -788,9 +789,9 @@ export default function TeamSettingsPage() {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
 
-      toast.success('Audit CSV exported')
+      toast.success(t('auditCsvExported'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to export audit CSV')
+      toast.error(error instanceof Error ? error.message : t('failedToExportAuditCsv'))
     } finally {
       setExportingAuditCsv(false)
     }
@@ -803,7 +804,7 @@ export default function TeamSettingsPage() {
     const targetMember = ownershipCandidates.find(
       (member) => member.userId === transferTargetUserId,
     )
-    const targetLabel = targetMember?.name ?? targetMember?.email ?? 'selected member'
+    const targetLabel = targetMember?.name ?? targetMember?.email ?? t('selectedMember')
     setConfirmState({ kind: 'transfer-ownership', targetLabel })
   }
 
@@ -822,7 +823,7 @@ export default function TeamSettingsPage() {
       })
       const payload = await res.json()
       if (!res.ok) {
-        throw new Error(readApiError(payload, 'Failed to transfer ownership'))
+        throw new Error(apiError(payload, t('failedToTransferOwnership')))
       }
 
       setTransferTargetUserId('')
@@ -833,9 +834,9 @@ export default function TeamSettingsPage() {
         loadInvites(activeTeam.id),
         loadAudit(activeTeam.id, true, auditActionFilter, auditFromDate, auditToDate),
       ])
-      toast.success('Ownership transferred')
+      toast.success(t('audit_ownership_transferred'))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to transfer ownership')
+      toast.error(error instanceof Error ? error.message : t('failedToTransferOwnership'))
     } finally {
       setTransferringOwnership(false)
     }
@@ -847,7 +848,7 @@ export default function TeamSettingsPage() {
     if (!isEditable) {
       return (
         <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(member.teamRole)}`}>
-          {member.teamRole}
+          {roleLabel(member.teamRole)}
         </span>
       )
     }
@@ -860,7 +861,7 @@ export default function TeamSettingsPage() {
             [member.userId]: (value ?? member.teamRole) as TeamRole,
           }))
         }
-        ariaLabel={`Role for ${member.name ?? member.email ?? 'this member'}`}
+        ariaLabel={t('roleFor', { name: member.name ?? member.email ?? t('thisMember') })}
       >
         <SelectTrigger className="w-full">
           <SelectValue />
@@ -868,7 +869,7 @@ export default function TeamSettingsPage() {
         <SelectContent>
           {ROLE_OPTIONS.filter((option) => option.value !== 'owner').map((option) => (
             <SelectItem key={option.value} value={option.value}>
-              {option.label}
+              {roleLabel(option.value)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -878,7 +879,7 @@ export default function TeamSettingsPage() {
 
   function renderMemberStatusControl(member: TeamMemberRow, isEditable: boolean, currentDraftStatus: TeamStatus) {
     if (!isEditable) {
-      return <span className="text-sm text-muted">{member.status}</span>
+      return <span className="text-sm text-muted">{member.status === 'active' ? t('statusActive') : t('statusSuspended')}</span>
     }
     return (
       <Select
@@ -889,14 +890,14 @@ export default function TeamSettingsPage() {
             [member.userId]: (value ?? member.status) as TeamStatus,
           }))
         }
-        ariaLabel={`Status for ${member.name ?? member.email ?? 'this member'}`}
+        ariaLabel={t('statusFor', { name: member.name ?? member.email ?? t('thisMember') })}
       >
         <SelectTrigger className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="active">active</SelectItem>
-          <SelectItem value="suspended">suspended</SelectItem>
+          <SelectItem value="active">{t('active')}</SelectItem>
+          <SelectItem value="suspended">{t('suspended')}</SelectItem>
         </SelectContent>
       </Select>
     )
@@ -913,7 +914,7 @@ export default function TeamSettingsPage() {
               onClick={() => void saveMember(member)}
               disabled={savingMemberUserId === member.userId}
             >
-              {savingMemberUserId === member.userId ? 'Saving...' : 'Save'}
+              {savingMemberUserId === member.userId ? t('saving') : t('save')}
             </Button>
             <Button
               size="sm"
@@ -921,16 +922,16 @@ export default function TeamSettingsPage() {
               onClick={() => setConfirmState({ kind: 'remove-member', member })}
               disabled={removingMemberUserId === member.userId}
             >
-              {removingMemberUserId === member.userId ? 'Removing...' : 'Remove'}
+              {removingMemberUserId === member.userId ? t('removing') : t('remove')}
             </Button>
           </>
         ) : (
           <span className="text-xs text-muted">
             {member.isSelf
-              ? 'Current user'
+              ? t('currentUser')
               : member.teamRole === 'owner'
-                ? 'Owner — use Ownership Transfer below'
-                : 'No permission'}
+                ? t('ownerUseOwnershipTransferBelow')
+                : t('noPermission')}
           </span>
         )}
         {member.awaitingPassword && canManageMembers && (
@@ -939,9 +940,9 @@ export default function TeamSettingsPage() {
             variant="outline"
             onClick={() => void resendSetPassword(member)}
             disabled={resendingUserId === member.userId}
-            aria-label={`Resend set-password link to ${member.email ?? member.name ?? 'this user'}`}
+            aria-label={t('resendSetPwAria', { name: member.email ?? member.name ?? t('thisUser') })}
           >
-            {resendingUserId === member.userId ? 'Sending...' : 'Resend set-password'}
+            {resendingUserId === member.userId ? t('sending') : t('resendSetPassword')}
           </Button>
         )}
       </div>
@@ -1004,13 +1005,13 @@ export default function TeamSettingsPage() {
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
-        Back to dashboard
+        {t('backToDashboard')}
       </Link>
 
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-foreground">Team & Access</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('teamAccess')}</h1>
         <p className="max-w-2xl text-sm text-muted">
-          Switch active team, manage members, and control invite access for locations, guests, and logs.
+          {t('switchActiveTeamManageMembers')}
         </p>
       </div>
 
@@ -1038,21 +1039,21 @@ export default function TeamSettingsPage() {
             {pendingLink.label} was created, but the email could not be sent.
           </p>
           <p className="text-xs text-muted">
-            Pass this link on yourself. It is shown once — the server stores only its hash.
+            {t('passThisLinkOnYourself')}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
                 void navigator.clipboard?.writeText(pendingLink.url)
-                toast.success('Link copied')
+                toast.success(t('linkCopied'))
               }}
               className="max-w-full truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground sm:max-w-[420px]"
             >
               {pendingLink.url}
             </button>
             <Button size="sm" variant="outline" onClick={() => setPendingLink(null)}>
-              Dismiss
+              {t('dismiss')}
             </Button>
           </div>
         </div>
@@ -1062,8 +1063,8 @@ export default function TeamSettingsPage() {
         <CardContent className="space-y-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Active team context</p>
-              <p className="text-xs text-muted">Your APIs and dashboards use this team by default.</p>
+              <p className="text-sm font-semibold text-foreground">{t('activeTeamContext')}</p>
+              <p className="text-xs text-muted">{t('yourApisAndDashboardsUse')}</p>
             </div>
             {explicitNextPath && (
               <Button
@@ -1071,18 +1072,18 @@ export default function TeamSettingsPage() {
                 onClick={() => router.push(nextPath)}
                 disabled={!activeTeam}
               >
-                Continue to requested page
+                {t('continueToRequestedPage')}
               </Button>
             )}
           </div>
 
           {loadingTeams ? (
             <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
-              Loading teams...
+              {t('loadingTeams')}
             </div>
           ) : teams.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              No teams yet. Create your first team below.
+              {t('noTeamsYetCreateYour')}
             </div>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -1097,13 +1098,13 @@ export default function TeamSettingsPage() {
                       <p className="truncate text-xs text-muted">{team.slug}</p>
                     </div>
                     <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${roleBadgeClass(team.role)}`}>
-                      {team.role}
+                      {roleLabel(team.role)}
                     </span>
                   </div>
                   <div className="mt-3">
                     {team.isActive ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                        Active
+                        {t('active2')}
                       </span>
                     ) : (
                       <Button
@@ -1112,7 +1113,7 @@ export default function TeamSettingsPage() {
                         disabled={switchingTeamId === team.id}
                         onClick={() => void switchTeam(team.id)}
                       >
-                        {switchingTeamId === team.id ? 'Switching...' : 'Switch'}
+                        {switchingTeamId === team.id ? t('switching') : t('switch')}
                       </Button>
                     )}
                   </div>
@@ -1124,12 +1125,12 @@ export default function TeamSettingsPage() {
       </Card>
 
       <CollapsibleSection
-        title="Team Audit Trail"
-        description="Immutable timeline for role changes, ownership transfers, and member removals."
+        title={t('teamAuditTrail')}
+        description={t('immutableTimelineForRoleChanges')}
       >
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
-            <Label htmlFor="audit-action-filter">Action (optional)</Label>
+            <Label htmlFor="audit-action-filter">{t('actionOptional')}</Label>
             <Select
               value={auditActionFilter}
               onValueChange={(value) => setAuditActionFilter((value ?? 'all') as 'all' | TeamAuditAction)}
@@ -1141,14 +1142,14 @@ export default function TeamSettingsPage() {
               <SelectContent>
                 {AUDIT_ACTION_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                    {option.value === 'all' ? t('auditAll') : t(`audit_${option.value}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="audit-from-date">From (optional)</Label>
+            <Label htmlFor="audit-from-date">{t('fromOptional')}</Label>
             <Input
               id="audit-from-date"
               type="date"
@@ -1158,7 +1159,7 @@ export default function TeamSettingsPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="audit-to-date">To (optional)</Label>
+            <Label htmlFor="audit-to-date">{t('toOptional')}</Label>
             <Input
               id="audit-to-date"
               type="date"
@@ -1169,7 +1170,7 @@ export default function TeamSettingsPage() {
           </div>
           <div className="space-y-1.5">
             <Label className="hidden opacity-0 sm:block" aria-hidden>
-              Export
+              {t('export')}
             </Label>
             <Button
               type="button"
@@ -1177,26 +1178,26 @@ export default function TeamSettingsPage() {
               disabled={!canViewAudit || exportingAuditCsv || !activeTeam}
               onClick={() => void exportAuditCsv()}
             >
-              {exportingAuditCsv ? 'Exporting...' : 'Export CSV'}
+              {exportingAuditCsv ? t('exporting') : t('exportCsv')}
             </Button>
           </div>
         </div>
 
         {!activeTeam ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              Select an active team first.
+              {t('selectAnActiveTeamFirst')}
             </div>
           ) : !canViewAudit ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              You need team admin or owner role to view team audit events.
+              {t('youNeedTeamAdminOr')}
             </div>
           ) : loadingAudit ? (
             <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
-              Loading audit events...
+              {t('loadingAuditEvents')}
             </div>
           ) : auditEvents.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              No audit events yet for this team.
+              {t('noAuditEventsYetFor')}
             </div>
           ) : (
             <div className="space-y-2">
@@ -1204,32 +1205,32 @@ export default function TeamSettingsPage() {
                 <div key={event.id} className="rounded-xl border border-border px-3 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-foreground">{describeAuditAction(event.action)}</p>
+                      <p className="text-sm font-semibold text-foreground">{describeAuditAction(event.action, t)}</p>
                       <p className="text-xs text-muted">
-                        {new Date(event.createdAt).toLocaleString()}
+                        {new Date(event.createdAt).toLocaleString(locale)}
                       </p>
                     </div>
                     <span className="inline-flex rounded-full border border-border bg-default px-2 py-0.5 text-xs font-medium text-muted">
-                      {event.action}
+                      {t(`audit_${event.action}`)}
                     </span>
                   </div>
 
                   <div className="mt-2 space-y-1 text-xs text-muted">
                     <p>
-                      <span className="font-semibold text-foreground">Actor:</span> {displayActor(event.actor)}
+                      <span className="font-semibold text-foreground">{t('actor')}</span> {displayActor(event.actor, t)}
                     </p>
                     {event.target && (
                       <p>
-                        <span className="font-semibold text-foreground">Target:</span> {displayActor(event.target)}
+                        <span className="font-semibold text-foreground">{t('target')}</span> {displayActor(event.target, t)}
                       </p>
                     )}
                     {event.metadata && Object.keys(event.metadata).length > 0 && (() => {
-                      const summary = describeAuditMetadata(event.action, event.metadata as Record<string, unknown>)
+                      const summary = describeAuditMetadata(event.action, event.metadata as Record<string, unknown>, t)
                       return summary ? (
                         <p>{summary}</p>
                       ) : (
                         <p className="break-all font-mono text-xs">
-                          <span className="font-sans font-semibold text-foreground">Metadata:</span>{' '}
+                          <span className="font-sans font-semibold text-foreground">{t('metadata')}</span>{' '}
                           {JSON.stringify(event.metadata)}
                         </p>
                       )
@@ -1246,27 +1247,27 @@ export default function TeamSettingsPage() {
                     disabled={loadingMoreAudit}
                     onClick={() => void loadMoreAudit()}
                   >
-                    {loadingMoreAudit ? 'Loading more...' : 'Load more'}
+                    {loadingMoreAudit ? t('loadingMore') : t('loadMore')}
                   </Button>
                 ) : (
-                  <p className="text-xs text-muted">End of audit history.</p>
+                  <p className="text-xs text-muted">{t('endOfAuditHistory')}</p>
                 )}
               </div>
             </div>
           )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Create team" description="Add a new tenant and become its owner.">
+      <CollapsibleSection title={t('createTeam')} description={t('addANewTenantAnd')}>
         <form className="flex flex-col gap-3 sm:flex-row" onSubmit={createTeam}>
           <Input
             value={newTeamName}
             onChange={(e) => setNewTeamName(e.target.value)}
-            placeholder="Team name"
-            aria-label="Team name"
+            placeholder={t('teamName')}
+            aria-label={t('teamName')}
             required
           />
           <Button type="submit" disabled={creatingTeam || !newTeamName.trim()}>
-            {creatingTeam ? 'Creating...' : 'Create Team'}
+            {creatingTeam ? t('creating') : t('createTeam2')}
           </Button>
         </form>
       </CollapsibleSection>
@@ -1274,25 +1275,25 @@ export default function TeamSettingsPage() {
       <Card>
         <CardContent className="space-y-4 p-4">
           <div>
-            <p className="text-sm font-semibold text-foreground">Members</p>
+            <p className="text-sm font-semibold text-foreground">{t('members')}</p>
             <p className="text-xs text-muted">
               {activeTeam
-                ? `Viewing ${activeTeam.name}. You are ${activeTeam.role}.`
-                : 'Select a team to view members.'}
+                ? t('viewingTeam', { team: activeTeam.name, role: roleLabel(activeTeam.role) })
+                : t('selectATeamToView')}
             </p>
           </div>
 
           {loadingMembers ? (
             <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
-              Loading members...
+              {t('loadingMembers')}
             </div>
           ) : !activeTeam ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              No active team selected.
+              {t('noActiveTeamSelected')}
             </div>
           ) : members.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-              No members found for this team.
+              {t('noMembersFoundForThis')}
             </div>
           ) : (
             <>
@@ -1300,10 +1301,10 @@ export default function TeamSettingsPage() {
                 <table className="min-w-full border-separate border-spacing-y-2">
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide text-muted">
-                      <th className="px-2">Member</th>
-                      <th className="px-2">Role</th>
-                      <th className="px-2">Status</th>
-                      <th className="px-2">Actions</th>
+                      <th className="px-2">{t('member')}</th>
+                      <th className="px-2">{t('role')}</th>
+                      <th className="px-2">{t('status')}</th>
+                      <th className="px-2">{t('actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1316,9 +1317,9 @@ export default function TeamSettingsPage() {
                         <tr key={member.userId} className="rounded-xl border border-border bg-background">
                           <td className="px-2 py-2">
                             <p className="max-w-[220px] truncate text-sm font-medium text-foreground">
-                              {member.name ?? 'Unnamed user'}
+                              {member.name ?? t('unnamedUser')}
                             </p>
-                            <p className="max-w-[220px] truncate text-xs text-muted">{member.email ?? 'No email'}</p>
+                            <p className="max-w-[220px] truncate text-xs text-muted">{member.email ?? t('noEmail')}</p>
                           </td>
                           <td className="px-2 py-2">{renderMemberRoleControl(member, isEditable, currentDraftRole)}</td>
                           <td className="px-2 py-2">{renderMemberStatusControl(member, isEditable, currentDraftStatus)}</td>
@@ -1342,16 +1343,16 @@ export default function TeamSettingsPage() {
                   return (
                     <div key={member.userId} className="space-y-3 rounded-xl border border-border bg-background p-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{member.name ?? 'Unnamed user'}</p>
-                        <p className="truncate text-xs text-muted">{member.email ?? 'No email'}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{member.name ?? t('unnamedUser')}</p>
+                        <p className="truncate text-xs text-muted">{member.email ?? t('noEmail')}</p>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Role</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t('role')}</p>
                           {renderMemberRoleControl(member, isEditable, currentDraftRole)}
                         </div>
                         <div className="space-y-1">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Status</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted">{t('status')}</p>
                           {renderMemberStatusControl(member, isEditable, currentDraftStatus)}
                         </div>
                       </div>
@@ -1366,25 +1367,25 @@ export default function TeamSettingsPage() {
       </Card>
 
       <CollapsibleSection
-        title="Ownership Transfer"
-        description="Move resource ownership of this team to another active member."
+        title={t('ownershipTransfer')}
+        description={t('moveResourceOwnershipOfThis')}
       >
         {!activeTeam ? (
           <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-            Select an active team first.
+            {t('selectAnActiveTeamFirst')}
           </div>
         ) : !isOwner ? (
           <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-            Only current team owner can transfer ownership.
+            {t('onlyCurrentTeamOwnerCan')}
           </div>
         ) : ownershipCandidates.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-            Add another active member before transferring ownership.
+            {t('addAnotherActiveMemberBefore')}
           </div>
         ) : (
           <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={requestTransferOwnership}>
             <div className="space-y-1.5">
-              <Label htmlFor="ownership-target-user">New owner</Label>
+              <Label htmlFor="ownership-target-user">{t('newOwner')}</Label>
               <Select
                 value={transferTargetUserId}
                 onValueChange={(value) => setTransferTargetUserId(value ?? '')}
@@ -1397,7 +1398,7 @@ export default function TeamSettingsPage() {
                   {ownershipCandidates.map((member) => (
                     <SelectItem key={member.userId} value={member.userId}>
                       {(member.name ?? member.email ?? member.userId) +
-                        ` (${member.teamRole})`}
+                        ` (${roleLabel(member.teamRole)})`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1405,43 +1406,43 @@ export default function TeamSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="hidden opacity-0 md:block" aria-hidden>
-                Transfer
+                {t('transfer')}
               </Label>
               {/* Red is reserved for the confirm dialog's actual point of no
                   return — this trigger only opens that dialog. */}
               <Button type="submit" disabled={!transferTargetUserId}>
-                Transfer Ownership
+                {t('transferOwnership')}
               </Button>
             </div>
           </form>
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Invites" description="Invite users by email to this team.">
+      <CollapsibleSection title={t('invites')} description={t('inviteUsersByEmailTo')}>
         {!activeTeam ? (
           <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-            Select an active team to manage invites.
+            {t('selectAnActiveTeamTo')}
           </div>
         ) : !canManageInvites ? (
           <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-            You need team admin or owner role to manage invites.
+            {t('youNeedTeamAdminOr2')}
           </div>
         ) : (
           <>
               <form className="grid gap-3 md:grid-cols-[1fr_auto_auto]" onSubmit={createInvite}>
                 <div className="space-y-1.5">
-                  <Label htmlFor="invite-email">Email</Label>
+                  <Label htmlFor="invite-email">{t('email')}</Label>
                   <Input
                     id="invite-email"
                     type="email"
-                    placeholder="member@example.com"
+                    placeholder={t('memberExampleCom')}
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="invite-role">Role</Label>
+                  <Label htmlFor="invite-role">{t('role')}</Label>
                   <Select
                     value={inviteRole}
                     onValueChange={(value) => setInviteRole((value ?? 'member') as Exclude<TeamRole, 'owner'>)}
@@ -1453,7 +1454,7 @@ export default function TeamSettingsPage() {
                     <SelectContent>
                       {INVITE_ROLE_OPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
-                          {option.label}
+                          {roleLabel(option.value)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1461,21 +1462,21 @@ export default function TeamSettingsPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="hidden opacity-0 md:block" aria-hidden>
-                    Send
+                    {t('send')}
                   </Label>
                   <Button type="submit" disabled={creatingInvite || !inviteEmail.trim()}>
-                    {creatingInvite ? 'Creating...' : 'Create invite'}
+                    {creatingInvite ? t('creating') : t('createInvite')}
                   </Button>
                 </div>
               </form>
 
               {loadingInvites ? (
                 <div className="rounded-xl border border-border bg-muted/30 px-3 py-4 text-sm text-muted">
-                  Loading invites...
+                  {t('loadingInvites')}
                 </div>
               ) : invites.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-                  No pending invites.
+                  {t('noPendingInvites')}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1487,7 +1488,7 @@ export default function TeamSettingsPage() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{invite.email}</p>
                         <p className="text-xs text-muted">
-                          role {invite.role} | expires {new Date(invite.expiresAt).toLocaleString()}
+                          {t('inviteMeta', { role: roleLabel(invite.role), date: new Date(invite.expiresAt).toLocaleString(locale) })}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1496,9 +1497,9 @@ export default function TeamSettingsPage() {
                           variant="outline"
                           onClick={() => void resendInvite(invite)}
                           disabled={resendingInviteId === invite.id}
-                          aria-label={`Resend the invite to ${invite.email}`}
+                          aria-label={t('resendInviteAria', { email: invite.email })}
                         >
-                          {resendingInviteId === invite.id ? 'Sending...' : 'Resend'}
+                          {resendingInviteId === invite.id ? t('sending') : t('resend')}
                         </Button>
                         <Button
                           size="sm"
@@ -1506,7 +1507,7 @@ export default function TeamSettingsPage() {
                           onClick={() => setConfirmState({ kind: 'revoke-invite', invite })}
                           disabled={revokingInviteId === invite.id}
                         >
-                          {revokingInviteId === invite.id ? 'Revoking...' : 'Revoke'}
+                          {revokingInviteId === invite.id ? t('revoking') : t('revoke')}
                         </Button>
                       </div>
                     </div>
@@ -1519,8 +1520,8 @@ export default function TeamSettingsPage() {
 
       {activeTeam && (
         <CollapsibleSection
-          title="Add user directly"
-          description="Creates the account now and emails a set-password link (active on the current team)."
+          title={t('addUserDirectly')}
+          description={t('createsTheAccountNowAnd')}
         >
           <AddUserDirect
             canManage={Boolean(activeTeam.canManageMembers)}
@@ -1543,16 +1544,15 @@ export default function TeamSettingsPage() {
                   <UserMinus className="size-5" aria-hidden />
                 </DialogIcon>
                 <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
-                  Remove {confirmState.member.name ?? confirmState.member.email ?? 'this member'}?
+                  {t('confirmRemoveTitle', { name: confirmState.member.name ?? confirmState.member.email ?? t('thisMember') })}
                 </DialogTitle>
               </DialogHeader>
               <DialogBody className="mt-3 text-sm leading-6 text-muted">
-                They lose access to this team&apos;s locations, logs, and settings immediately. You can
-                re-invite them later.
+                {t('confirmRemoveBody')}
               </DialogBody>
               <DialogFooter className="mt-5 gap-2">
                 <Button variant="outline" size="sm" onPress={() => setConfirmState(null)} isDisabled={confirmBusy}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button
                   variant="destructive"
@@ -1561,7 +1561,7 @@ export default function TeamSettingsPage() {
                   isLoading={confirmBusy}
                   loadingBehavior="busy"
                 >
-                  Remove member
+                  {t('removeMember')}
                 </Button>
               </DialogFooter>
             </>
@@ -1573,15 +1573,15 @@ export default function TeamSettingsPage() {
                   <MailX className="size-5" aria-hidden />
                 </DialogIcon>
                 <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
-                  Revoke the invite to {confirmState.invite.email}?
+                  {t('confirmRevokeTitle', { email: confirmState.invite.email })}
                 </DialogTitle>
               </DialogHeader>
               <DialogBody className="mt-3 text-sm leading-6 text-muted">
-                The invite link stops working immediately. You can send a new one from this page any time.
+                {t('theInviteLinkStopsWorking')}
               </DialogBody>
               <DialogFooter className="mt-5 gap-2">
                 <Button variant="outline" size="sm" onPress={() => setConfirmState(null)} isDisabled={confirmBusy}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button
                   variant="destructive"
@@ -1590,7 +1590,7 @@ export default function TeamSettingsPage() {
                   isLoading={confirmBusy}
                   loadingBehavior="busy"
                 >
-                  Revoke invite
+                  {t('revokeInvite')}
                 </Button>
               </DialogFooter>
             </>
@@ -1602,17 +1602,15 @@ export default function TeamSettingsPage() {
                   <ArrowRightLeft className="size-5" aria-hidden />
                 </DialogIcon>
                 <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
-                  Transfer ownership to {confirmState.targetLabel}?
+                  {t('confirmTransferTitle', { target: confirmState.targetLabel })}
                 </DialogTitle>
               </DialogHeader>
               <DialogBody className="mt-3 text-sm leading-6 text-muted">
-                {activeTeam?.name ?? 'This team'}&apos;s ownership moves to {confirmState.targetLabel}. Your own
-                role becomes admin — you keep managing members and invites, just not transferring ownership
-                again yourself.
+                {t('confirmTransferBody', { team: activeTeam?.name ?? t('thisTeam'), target: confirmState.targetLabel })}
               </DialogBody>
               <DialogFooter className="mt-5 gap-2">
                 <Button variant="outline" size="sm" onPress={() => setConfirmState(null)} isDisabled={confirmBusy}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button
                   variant="destructive"
@@ -1621,7 +1619,7 @@ export default function TeamSettingsPage() {
                   isLoading={confirmBusy}
                   loadingBehavior="busy"
                 >
-                  Transfer ownership
+                  {t('transferOwnership2')}
                 </Button>
               </DialogFooter>
             </>

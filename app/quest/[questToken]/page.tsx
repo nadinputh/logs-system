@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { connectDB } from '@/lib/db'
 import { QuestCard } from '@/lib/models/QuestCard'
 import { QuestProgress } from '@/lib/models/QuestProgress'
+import { getTranslations } from 'next-intl/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,7 @@ async function getQuestData(token: string) {
 }
 
 export default async function QuestPage({ params }: { params: Promise<{ questToken: string }> }) {
+  const t = await getTranslations('questPublic')
   const { questToken } = await params
   const data = await getQuestData(questToken)
 
@@ -33,8 +35,8 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="w-6 h-6 text-[var(--status-danger)]" aria-hidden />
           </div>
-          <h1 className="font-bold text-foreground">Quest not found</h1>
-          <p className="text-sm text-muted mt-1.5">This quest card QR may be invalid.</p>
+          <h1 className="font-bold text-foreground">{t('questNotFound')}</h1>
+          <p className="text-sm text-muted mt-1.5">{t('thisQuestCardQrMay')}</p>
           </CardContent>
         </Card>
       </div>
@@ -58,12 +60,12 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
               <div className="space-y-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full text-foreground bg-muted">
-                    {card.type === 'location_chain' ? 'Location Chain' : 'Custom'}
+                    {card.type === 'location_chain' ? t('locationChain') : t('custom')}
                   </span>
                   {progress?.completedAt && (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--status-success)] bg-[var(--status-success)]/10 px-2 py-0.5 rounded-full">
                       <CheckCircle2 className="w-3 h-3" aria-hidden />
-                      Completed!
+                      {t('completed')}
                     </span>
                   )}
                 </div>
@@ -78,7 +80,7 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
             {/* Progress bar */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted">Progress</span>
+                <span className="text-muted">{t('progress')}</span>
                 <span className="font-semibold text-foreground">{completedCount}/{totalSteps}</span>
               </div>
               <div
@@ -87,7 +89,7 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
                 aria-valuenow={completedCount}
                 aria-valuemin={0}
                 aria-valuemax={totalSteps}
-                aria-label="Quest progress"
+                aria-label={t('questProgress')}
               >
                 <div
                   className="h-full gradient-primary rounded-full transition-all duration-500"
@@ -128,15 +130,14 @@ export default async function QuestPage({ params }: { params: Promise<{ questTok
               and saying so keeps a quest participant from paying a camera cold
               start at every stop when they do not have to. */}
           <p className="text-sm text-muted">
-            At a location? Point your phone&apos;s camera at its QR code to record the
-            visit. If it doesn&apos;t open, use the scanner here.
+            {t('scanCta')}
           </p>
           <Link
             href="/scan"
             className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
           >
             <QrCode className="w-4 h-4" aria-hidden />
-            Open Scanner
+            {t('openScanner')}
           </Link>
           </CardContent>
         </Card>

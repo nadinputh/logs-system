@@ -1,12 +1,16 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useLocale } from 'next-intl'
+import { useMounted } from '@/lib/useMounted'
+import { useApiError } from '@/lib/useApiError'
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser'
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogIcon, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/sonner'
 import { Trash2, Plus, KeyRound } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface Passkey {
   _id: string
@@ -22,6 +26,11 @@ interface PasskeyManagerProps {
 }
 
 export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps) {
+  const t = useTranslations('passkeys')
+  const apiError = useApiError()
+  const locale = useLocale()
+  const mounted = useMounted()
+  const fmt = (v: string) => (mounted ? new Date(v).toLocaleDateString(locale) : '')
   const [passkeys, setPasskeys] = useState<Passkey[]>(initialPasskeys)
   const [loading, setLoading] = useState(false)
   const [passkeyToDelete, setPasskeyToDelete] = useState<Passkey | null>(null)
@@ -43,14 +52,14 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
       })
       if (!verRes.ok) {
         const data = await verRes.json()
-        throw new Error(data.error ?? 'Verification failed')
+        throw new Error(apiError(data, t('verificationFailed')))
       }
 
-      toast.success('Passkey registered!')
+      toast.success(t('passkeyRegistered'))
       window.location.reload()
     } catch (err: any) {
       if (err.name !== 'NotAllowedError') {
-        toast.error(err.message ?? 'Registration failed')
+        toast.error(err.message ?? t('registrationFailed'))
       }
     } finally {
       setLoading(false)
@@ -63,12 +72,12 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
     setDeletingPasskeyId(passkeyToDelete._id)
     try {
       const res = await fetch(`/api/auth/passkey/${passkeyToDelete._id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Delete failed')
+      if (!res.ok) throw new Error(t('deleteFailed'))
       setPasskeys((prev) => prev.filter((p) => p._id !== passkeyToDelete._id))
       setPasskeyToDelete(null)
-      toast.success('Passkey removed')
+      toast.success(t('passkeyRemoved'))
     } catch {
-      toast.error('Failed to remove passkey')
+      toast.error(t('failedToRemovePasskey'))
     } finally {
       setDeletingPasskeyId(null)
     }
@@ -78,11 +87,11 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted">
-          {passkeys.length === 0 ? 'No passkeys registered yet.' : `${passkeys.length} passkey${passkeys.length !== 1 ? 's' : ''} registered`}
+          {passkeys.length === 0 ? t('noPasskeysRegisteredYet') : t('count', { count: passkeys.length })}
         </p>
         <Button onPress={handleRegister} isDisabled={loading} size="sm">
           <Plus className="w-4 h-4 mr-2" />
-          {loading ? 'Waiting…' : 'Add Passkey'}
+          {loading ? t('waiting') : t('addPasskey')}
         </Button>
       </div>
 
@@ -96,23 +105,22 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">
-                    {pk.deviceType === 'multiDevice' ? 'Synced passkey' : 'Device-bound passkey'}
+                    {pk.deviceType === 'multiDevice' ? t('syncedPasskey') : t('deviceBoundPasskey')}
                   </p>
                   <p className="text-xs text-muted truncate">
-                    Added {new Date(pk.createdAt).toLocaleDateString()} · Last used{' '}
-                    {new Date(pk.lastUsedAt).toLocaleDateString()}
+                    {t('addedLastUsed', { added: fmt(pk.createdAt), used: fmt(pk.lastUsedAt) })}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {pk.backedUp && (
-                  <span className="inline-flex items-center text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">Backed up</span>
+                  <span className="inline-flex items-center text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">{t('backedUp')}</span>
                 )}
                 <Button
                   variant="ghost"
                   size="icon"
                   className="text-[var(--status-danger)] hover:text-[var(--status-danger)] hover:bg-[var(--status-danger)]/10"
-                  aria-label={`Remove ${pk.deviceType === 'multiDevice' ? 'synced' : 'device-bound'} passkey added ${new Date(pk.createdAt).toLocaleDateString()}`}
+                  aria-label={t('removeAria', { kind: pk.deviceType === 'multiDevice' ? t('kindSynced') : t('kindDevice'), date: fmt(pk.createdAt) })}
                   onPress={() => setPasskeyToDelete(pk)}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -129,10 +137,10 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
             <DialogIcon className="size-12 rounded-full bg-[var(--status-danger)]/10 text-[var(--status-danger)]">
               <Trash2 className="size-5" aria-hidden />
             </DialogIcon>
-            <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">Remove passkey?</DialogTitle>
+            <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">{t('removePasskey')}</DialogTitle>
           </DialogHeader>
           <DialogBody className="mt-3 text-sm leading-6 text-muted">
-            This will remove the selected {passkeyToDelete?.deviceType === 'multiDevice' ? 'synced' : 'device-bound'} passkey from your account. You can register it again later if this device is still available.
+            {t('removeBody', { kind: passkeyToDelete?.deviceType === 'multiDevice' ? t('kindSynced') : t('kindDevice') })}
           </DialogBody>
           <DialogFooter className="mt-5 gap-2">
             <Button
@@ -141,7 +149,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
               onPress={() => setPasskeyToDelete(null)}
               isDisabled={Boolean(deletingPasskeyId)}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -149,7 +157,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
               onPress={handleDelete}
               isLoading={deletingPasskeyId === passkeyToDelete?._id}
             >
-              Remove Passkey
+              {t('removePasskey2')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -159,6 +167,8 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
 }
 
 export function PasskeyLoginButton({ email }: { email: string }) {
+  const t = useTranslations('passkeys')
+  const apiError = useApiError()
   const [loading, setLoading] = useState(false)
 
   const handleLogin = useCallback(async () => {
@@ -171,7 +181,7 @@ export function PasskeyLoginButton({ email }: { email: string }) {
       })
       if (!optRes.ok) {
         const data = await optRes.json()
-        throw new Error(data.error ?? 'No passkeys for this account')
+        throw new Error(apiError(data, t('noPasskeysForThisAccount')))
       }
       const { userId, ...options } = await optRes.json()
 
@@ -184,14 +194,14 @@ export function PasskeyLoginButton({ email }: { email: string }) {
       })
       if (!verRes.ok) {
         const data = await verRes.json()
-        throw new Error(data.error ?? 'Verification failed')
+        throw new Error(apiError(data, t('verificationFailed')))
       }
       const { preAuthToken } = await verRes.json()
 
       await signIn('passkey-token', { preAuthToken, redirect: true, callbackUrl: '/dashboard' })
     } catch (err: any) {
       if (err.name !== 'NotAllowedError') {
-        toast.error(err.message ?? 'Passkey login failed')
+        toast.error(err.message ?? t('passkeyLoginFailed'))
       }
     } finally {
       setLoading(false)
@@ -201,7 +211,7 @@ export function PasskeyLoginButton({ email }: { email: string }) {
   return (
     <Button variant="outline" onPress={handleLogin} isDisabled={loading} className="w-full">
       <KeyRound className="w-4 h-4 mr-2" />
-      {loading ? 'Authenticating…' : 'Sign in with Passkey'}
+      {loading ? t('authenticating') : t('signInWithPasskey')}
     </Button>
   )
 }

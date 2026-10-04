@@ -6,12 +6,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/sonner'
+import { useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 
 type DirectRole = 'admin' | 'manager' | 'member' | 'auditor'
 
 // Flow C trigger: provision an account directly. The user gets a set-password
 // email (which also verifies them) — no temporary password is shared.
 export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOwner: boolean }) {
+  const t = useTranslations('adduser')
+  const tCommon = useTranslations('common')
+  const apiError = useApiError()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<DirectRole>('member')
@@ -34,7 +39,7 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
       })
       const payload = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const msg = typeof payload.error === 'string' ? payload.error : 'Failed to create user'
+        const msg = apiError(payload, t('failedToCreateUser'))
         throw new Error(msg)
       }
       setName('')
@@ -45,13 +50,13 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
       // find out it had not arrived.
       if (payload.emailDelivered) {
         setUndelivered(null)
-        toast.success(`User created — set-password link sent to ${target}`)
+        toast.success(t('created', { email: target }))
       } else {
         setUndelivered({ email: target, url: payload.setPasswordUrl ?? '' })
-        toast.warning('User created, but the email could not be sent')
+        toast.warning(t('userCreatedButTheEmail'))
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create user')
+      toast.error(error instanceof Error ? error.message : t('failedToCreateUser'))
     } finally {
       setBusy(false)
     }
@@ -61,29 +66,29 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
     <>
       {!canManage ? (
         <p className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted">
-          You need team admin or owner role to add users.
+          {t('youNeedTeamAdminOr')}
         </p>
       ) : (
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
-              <Label htmlFor="direct-name">Name</Label>
-              <Input id="direct-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
+              <Label htmlFor="direct-name">{t('name')}</Label>
+              <Input id="direct-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('janeDoe')} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="direct-email">Email</Label>
-              <Input id="direct-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@company.com" />
+              <Label htmlFor="direct-email">{t('email')}</Label>
+              <Input id="direct-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('janeCompanyCom')} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="direct-role">Role</Label>
+              <Label htmlFor="direct-role">{t('role')}</Label>
               <Select value={role} onValueChange={(v) => setRole((v ?? 'member') as DirectRole)}>
                 <SelectTrigger id="direct-role" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {isOwner && <SelectItem value="admin">admin</SelectItem>}
-                  <SelectItem value="manager">manager</SelectItem>
-                  <SelectItem value="member">member</SelectItem>
-                  <SelectItem value="auditor">auditor</SelectItem>
+                  {isOwner && <SelectItem value="admin">{tCommon('roleAdmin')}</SelectItem>}
+                  <SelectItem value="manager">{tCommon('roleManager')}</SelectItem>
+                  <SelectItem value="member">{tCommon('roleMember')}</SelectItem>
+                  <SelectItem value="auditor">{tCommon('roleAuditor')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -96,7 +101,7 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
                 isLoading={busy}
                 loadingBehavior="busy"
               >
-                {busy ? 'Creating…' : 'Create user'}
+                {busy ? t('creating') : t('createUser')}
               </Button>
             </div>
           </form>
@@ -108,25 +113,24 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
             className="space-y-2 rounded-xl border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/10 px-3 py-3"
           >
             <p className="text-sm font-semibold text-foreground">
-              {undelivered.email} was created, but the email could not be sent.
+              {t('notDelivered', { email: undelivered.email })}
             </p>
             <p className="text-xs text-muted">
-              Send them this link yourself — it expires in 7 days. You can also resend it later
-              from their row in the members list.
+              {t('sendThemThisLinkYourself')}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
                   void navigator.clipboard?.writeText(undelivered.url)
-                  toast.success('Set-password link copied')
+                  toast.success(t('setPasswordLinkCopied'))
                 }}
                 className="max-w-[320px] truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground"
               >
                 {undelivered.url}
               </button>
               <Button size="sm" variant="outline" onPress={() => setUndelivered(null)}>
-                Dismiss
+                {t('dismiss')}
               </Button>
             </div>
           </div>

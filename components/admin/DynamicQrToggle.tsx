@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
-import { QrCode } from 'lucide-react'
+import { ExternalLink, QrCode } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface Props {
   locationId: string
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function DynamicQrToggle({ locationId, locationType, value }: Props) {
+  const t = useTranslations('adminToggles')
   const [on, setOn] = useState(value)
   const [saving, setSaving] = useState(false)
 
@@ -27,16 +29,17 @@ export default function DynamicQrToggle({ locationId, locationType, value }: Pro
         body: JSON.stringify({ requireDynamicQr: next }),
       })
       if (!res.ok) throw new Error()
-      toast.success(next ? 'Live kiosk QR required' : 'Static QR allowed')
+      toast.success(next ? t('liveKioskQrRequired') : t('staticQrAllowed'))
     } catch {
       setOn(!next)
-      toast.error('Failed to update QR requirement')
+      toast.error(t('failedToUpdateQrRequirement'))
     } finally {
       setSaving(false)
     }
   }
 
   return (
+    <>
     <Button
       type="button"
       variant="ghost"
@@ -44,13 +47,25 @@ export default function DynamicQrToggle({ locationId, locationType, value }: Pro
       onClick={toggle}
       disabled={saving}
       aria-pressed={on}
-      title="Only accept check-in from the live kiosk QR, not a printed one"
+      title={t('onlyAcceptCheckInFrom')}
       className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border/60 text-xs ${
         on ? 'bg-accent/15 border-accent text-accent font-medium' : 'text-muted hover:text-foreground'
       }`}
     >
       <QrCode className="w-3 h-3" />
-      Live QR only
+      {t('liveQrOnly')}
     </Button>
+    {on && (
+      <a
+        href={`/kiosk/${locationId}`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border/60 text-xs text-accent hover:bg-accent/10"
+      >
+        <ExternalLink className="w-3 h-3" />
+        {t('openLiveQr')}
+      </a>
+    )}
+    </>
   )
 }

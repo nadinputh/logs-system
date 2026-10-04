@@ -3,6 +3,7 @@
 import { MapContainer, TileLayer, Polygon, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Button } from '@/components/ui/button'
+import { useTranslations } from 'next-intl'
 
 // [lat, lng] pairs — the familiar order for the map UI. Flipped to GeoJSON's
 // [lng, lat] only at save time (see verticesToGeofence in the buildings page).
@@ -24,6 +25,7 @@ function ClickCapture({ onAdd }: { onAdd: (pos: LatLng) => void }) {
 }
 
 export default function GeofenceMapPicker({ value, onChange, center }: Props) {
+  const t = useTranslations('geofence')
   return (
     <div className="space-y-2">
       <div className="h-64 w-full overflow-hidden rounded-lg border border-border">
@@ -40,7 +42,7 @@ export default function GeofenceMapPicker({ value, onChange, center }: Props) {
       </div>
       <div className="flex items-center justify-between text-xs text-muted">
         <span>
-          {value.length} point{value.length !== 1 ? 's' : ''} — click the map to add a vertex (min 3)
+          {t('points', { count: value.length })}
         </span>
         <Button
           type="button"
@@ -49,7 +51,7 @@ export default function GeofenceMapPicker({ value, onChange, center }: Props) {
           onClick={() => onChange([])}
           disabled={value.length === 0}
         >
-          Clear
+          {t('clear')}
         </Button>
       </div>
     </div>

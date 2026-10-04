@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useLocale, useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { LogoTile } from '@/components/Logo'
@@ -33,6 +34,7 @@ interface LocationData {
   description?: string
   locationType: 'building' | 'floor' | 'room'
   checkInMode?: 'click' | 'passkey'
+  requireDynamicQr?: boolean
   buildingId?: { name: string; address: string }
   floorId?: { name: string; number: number }
 }
@@ -138,17 +140,17 @@ function toOpenLog(log: any, fallbackName?: string): OpenLog | null {
  * thing in the flow that needs second resolution, and re-rendering an 860-line
  * component once a second to advance it was the whole cost.
  */
-function LiveDuration({ since }: { since: string }) {
+function LiveDuration({ since, units }: { since: string; units: { h: string; m: string } }) {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
-  return <>{formatDuration(since, now)}</>
+  return <>{formatDuration(since, now, units)}</>
 }
 
-function formatCheckInTime(value: string | Date) {
-  return new Date(value).toLocaleTimeString([], {
+function formatCheckInTime(value: string | Date, locale: string) {
+  return new Date(value).toLocaleTimeString(locale, {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
@@ -168,6 +170,12 @@ function firstNameOf(fullName: string): string {
 }
 
 export default function CheckInOutClient({ locationId, initialLocation, kioskToken }: CheckInOutClientProps) {
+  const t = useTranslations('checkin')
+  const locale = useLocale()
+  const units = { h: t('unitHour'), m: t('unitMinute') }
+  const tCommon = useTranslations('common')
+  const tNotice = useTranslations('scanNotice')
+  const genderLabels: Record<string, string> = { male: t('genderMale'), female: t('genderFemale'), non_binary: t('genderNonBinary'), prefer_not_to_say: t('genderPreferNot') }
   const searchParams = useSearchParams()
   const questToken = searchParams.get('quest')
 
@@ -243,7 +251,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
       }
 
       if (event.relatedLogId === activeLogId || event.relatedLogId === openLog?._id) {
-        setLastStayDuration(openLog ? formatDuration(openLog.timestamp) : null)
+        setLastStayDuration(openLog ? formatDuration(openLog.timestamp, new Date(), units) : null)
         setJustCheckedIn(false)
         clearActiveCheckIn(locationId)
         setActiveLogId(null)
@@ -353,9 +361,9 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
 
       setJustCheckedIn(true)
       setStep('checkedIn')
-      toast.success(`Checked in to ${location?.name}`)
+      toast.success(t('toastCheckedInTo', { location: location?.name ?? '' }))
     } catch {
-      toast.error('Check-in failed. Please try again.')
+      toast.error(t('toastCheckInFailed'))
     } finally {
       setLoading(false)
     }
@@ -377,13 +385,13 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error ?? `Check-out failed (${res.status})`)
       }
-      setLastStayDuration(openLog ? formatDuration(openLog.timestamp) : null)
+      setLastStayDuration(openLog ? formatDuration(openLog.timestamp, new Date(), units) : null)
       setJustCheckedIn(false)
       clearActiveCheckIn(locationId)
       setStep('checkedOut')
-      toast.success(`Checked out of ${location?.name}`)
+      toast.success(t('toastCheckedOutOf', { location: location?.name ?? '' }))
     } catch (err: any) {
-      toast.error(err.message ?? 'Check-out failed. Please try again.')
+      toast.error(err.message ?? t('toastCheckOutFailed'))
     } finally {
       setLoading(false)
     }
@@ -410,17 +418,17 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
     try {
       const { ok, data } = await postQuestProgress(token)
       if (!ok) {
-        toast.error(data.error ?? 'Quest progress failed')
+        toast.error(data.error ?? t('toastQuestFailed'))
         return
       }
       setQuestRecorded(true)
       if (data.message === 'Already recorded') {
-        toast.success('Already recorded for this stop')
+        toast.success(t('toastQuestAlready'))
       } else {
-        toast.success(data.completed ? 'Quest completed!' : 'Quest step recorded!')
+        toast.success(data.completed ? t('toastQuestDone') : t('questStepRecorded'))
       }
     } catch {
-      toast.error('Quest progress failed — check your connection')
+      toast.error(t('toastQuestOffline'))
     }
   }
 
@@ -437,7 +445,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
       token = undefined
     }
     if (!token || !location) {
-      toast.error('That doesn’t look like a quest card')
+      toast.error(t('toastNotQuestCard'))
       setStep('checkedIn')
       return
     }
@@ -448,10 +456,10 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
 
   const locationLabel =
     location?.locationType === 'room'
-      ? `${(location as any).buildingId?.name ?? ''} › Floor ${(location as any).floorId?.number ?? ''} › ${location.name}`
+      ? `${(location as any).buildingId?.name ?? ''} › ${t('floorLabel', { number: (location as any).floorId?.number ?? '' })} › ${location.name}`
       : location?.locationType === 'floor'
       ? `${(location as any).buildingId?.name ?? ''} › ${location.name}`
-      : location?.name ?? 'Location'
+      : location?.name ?? t('locationFallback')
 
   // A visitor crosses seven states between scanning and leaving. Nothing
   // announced any of them, and when the active card unmounted, focus fell to
@@ -470,26 +478,32 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
     stepHeadingRef.current?.focus()
   }, [stepKey])
 
+  const locName = location?.name ?? t('thisLocation')
   const stepAnnouncement =
     step === 'identity'
       ? identitySubStep === 1
-        ? 'Enter your name to check in.'
-        : 'Optional details. You can skip these.'
+        ? t('annEnterName')
+        : t('annOptional')
       : step === 'checkin'
         ? isReturningVisitor
-          ? `Welcome back, ${firstNameOf(name)}. Ready to check in to ${location?.name ?? 'this location'}.`
-          : `Ready to check in to ${location?.name ?? 'this location'}.`
+          ? t('annReadyReturning', { name: firstNameOf(name), location: locName })
+          : t('annReady', { location: locName })
         : step === 'selfie'
-          ? 'Optional photo. Take a photo or skip.'
+          ? t('annSelfie')
           : step === 'checkedIn'
-            ? `Checked in to ${location?.name ?? 'this location'}.`
+            ? t('annCheckedIn', { location: locName })
             : step === 'checkedOut'
-              ? `Checked out of ${location?.name ?? 'this location'}${lastStayDuration && lastStayDuration !== '0m' ? ` after ${lastStayDuration}` : ''}.`
+              ? lastStayDuration && lastStayDuration !== `0${units.m}`
+                ? t('annCheckedOutAfter', { location: locName, duration: lastStayDuration })
+                : t('annCheckedOut', { location: locName })
               : step === 'questScan'
-                ? 'Scan your quest card.'
+                ? t('annQuest')
                 : ''
 
   const passkeyRequired = location?.checkInMode === 'passkey'
+  // Live-QR locations need proof of presence to check in, not to check out.
+  const needsLiveQr =
+    !!location?.requireDynamicQr && !kioskToken && (step === 'identity' || step === 'checkin')
   const checkoutSuggested = openLog
     ? getPredictedAction(openLog.timestamp, currentTime) === 'checkout_suggested'
     : false
@@ -499,8 +513,19 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
       <ScanNotice
         tone="danger"
         icon="missing"
-        title="That code doesn't match a location"
-        detail="The code scanned cleanly, but no building, floor or room here answers to it. It may have been retired. Nothing has been recorded."
+        title={t('missingTitle')}
+        detail={t('missingDetail')}
+      />
+    )
+  }
+
+  if (needsLiveQr) {
+    return (
+      <ScanNotice
+        tone="warning"
+        icon="expired"
+        title={tNotice('liveOnlyTitle')}
+        detail={tNotice('liveOnlyDetail')}
       />
     )
   }
@@ -526,21 +551,21 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
         href="#main"
         className="glass sr-only rounded-full px-4 py-2 text-sm font-semibold focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
       >
-        Skip to content
+        {t('skipToContent')}
       </a>
 
       <header className="relative z-10 border-b border-[var(--panel-border)]">
-        <nav aria-label="Primary" className="shell">
+        <nav aria-label={t('primaryNav')} className="shell">
           <div className="mx-auto flex h-16 w-full max-w-sm items-center sm:h-[4.5rem] [@media(max-height:540px)]:h-12">
           <Link
             href="/landing"
-            aria-label="Kamnotheat — home"
+            aria-label={tCommon('homeAriaLabel')}
             className="group flex items-center gap-3 rounded-2xl"
           >
             <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
             <span>
               <span className="block text-sm font-semibold tracking-tight">Kamnotheat</span>
-              <span className="block text-xs text-muted">Secure check-in logging</span>
+              <span className="block text-xs text-muted">{tCommon('tagline')}</span>
             </span>
           </Link>
           </div>
@@ -562,7 +587,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
         {/* Loading skeleton */}
         {step === 'loading' && (
           <div aria-busy="true" className="space-y-3">
-            <h1 className="sr-only">Loading this location</h1>
+            <h1 className="sr-only">{t('loadingLocation')}</h1>
             <Card className="overflow-hidden animate-pulse">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -605,14 +630,14 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${locTypeColor}`}>
-                    {{ building: 'Building', floor: 'Floor', room: 'Room' }[location.locationType] ?? location.locationType}
+                    {({ building: t('typeBuilding'), floor: t('typeFloor'), room: t('typeRoom') } as Record<string, string>)[location.locationType] ?? location.locationType}
                   </span>
                   {step === 'checkedIn' && (
                     <span
                       className={`inline-flex items-center gap-1 text-xs font-semibold text-[var(--status-success)] bg-emerald-500/10 px-2 py-0.5 rounded-full ${justCheckedIn ? 'animate-seal-lock' : ''}`}
                     >
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                      Checked In
+                      {t('badgeCheckedIn')}
                     </span>
                   )}
                 </div>
@@ -623,7 +648,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 )}
                 {(location as any).capacity && (
                   <p className="text-xs text-muted mt-1">
-                    <span className="font-medium">Capacity:</span> {(location as any).capacity}
+                    <span className="font-medium">{t('capacity')}</span> {(location as any).capacity}
                   </p>
                 )}
               </div>
@@ -641,31 +666,31 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             <CardContent className="p-4">
             <div className="mb-4">
               <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
-                Who are you?
+                {t('whoAreYou')}
               </h2>
-              <p className="text-sm text-muted mt-0.5">Enter your name to check in</p>
+              <p className="text-sm text-muted mt-0.5">{t('whoAreYouHint')}</p>
             </div>
             <form onSubmit={handleIdentityStep1} className="space-y-3.5">
               <div className="space-y-1.5">
                 <Label htmlFor="visitor-name">
-                  Full name <span className="text-[var(--status-danger)]">*</span>
+                  {t('fullName')} <span className="text-[var(--status-danger)]">*</span>
                 </Label>
                 <Input
                   id="visitor-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="John Smith"
+                  placeholder={t('fullNamePlaceholder')}
                   required
                   autoFocus
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="visitor-contact">Email or phone (optional)</Label>
+                <Label htmlFor="visitor-contact">{t('contactLabel')}</Label>
                 <Input
                   id="visitor-contact"
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
-                  placeholder="you@example.com or +1 555…"
+                  placeholder={t('contactPlaceholder')}
                 />
               </div>
               <Button
@@ -673,7 +698,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 type="submit"
                 className="w-full"
               >
-                Continue
+                {t('continue')}
               </Button>
             </form>
             <div className="mt-3.5">
@@ -689,35 +714,35 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             <CardContent className="p-4">
             <div className="mb-4">
               <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
-                A couple more details
+                {t('moreDetails')}
               </h2>
-              <p className="text-sm text-muted mt-0.5">Optional — you can skip these</p>
+              <p className="text-sm text-muted mt-0.5">{t('moreDetailsHint')}</p>
             </div>
             <div className="space-y-3.5">
               <div className="space-y-1.5">
                 <Label htmlFor="visit-purpose">
-                  Purpose of visit (optional)
+                  {t('purposeLabel')}
                 </Label>
                 <Input
                   id="visit-purpose"
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value)}
-                  placeholder="Meeting, interview, delivery…"
+                  placeholder={t('purposePlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="visitor-gender">Gender (optional)</Label>
+                <Label htmlFor="visitor-gender">{t('genderLabel')}</Label>
                 <Select value={gender} onValueChange={v => setGender(v ?? '')}>
                   <SelectTrigger id="visitor-gender" className="w-full">
-                    <SelectValue placeholder="Select…">
-                      {gender ? ({ male: 'Male', female: 'Female', non_binary: 'Non-binary', prefer_not_to_say: 'Prefer not to say' } as Record<string, string>)[gender] : undefined}
+                    <SelectValue placeholder={t('selectPlaceholder')}>
+                      {gender ? genderLabels[gender] : undefined}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="non_binary">Non-binary</SelectItem>
-                    <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                    <SelectItem value="male">{t('genderMale')}</SelectItem>
+                    <SelectItem value="female">{t('genderFemale')}</SelectItem>
+                    <SelectItem value="non_binary">{t('genderNonBinary')}</SelectItem>
+                    <SelectItem value="prefer_not_to_say">{t('genderPreferNot')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -727,7 +752,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 onClick={() => completeIdentity(false)}
                 className="w-full"
               >
-                Continue
+                {t('continue')}
               </Button>
               <Button
                 size="touch"
@@ -736,7 +761,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 variant="ghost"
                 className="w-full"
               >
-                Skip
+                {t('skip')}
               </Button>
             </div>
             </CardContent>
@@ -749,12 +774,12 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             <CardContent className="p-4 space-y-3">
             <div>
               <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
-                {isReturningVisitor ? `Welcome back, ${firstNameOf(name)}` : 'Ready to check in'}
+                {isReturningVisitor ? t('welcomeBack', { name: firstNameOf(name) }) : t('readyTitle')}
               </h2>
               <p className="text-sm text-muted mt-0.5">
                 {isReturningVisitor
-                  ? 'We already have your details on file — just confirm below.'
-                  : 'Confirm your details below to record your visit.'}
+                  ? t('readyReturningHint')
+                  : t('readyNewHint')}
               </p>
             </div>
             <div className="flex items-center gap-2.5 bg-muted/40 rounded-xl px-3.5 py-2.5">
@@ -766,7 +791,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 {contact && <p className="text-xs text-muted truncate">{contact}</p>}
                 {(gender || purpose) && (
                   <p className="text-xs text-muted truncate">
-                    {[purpose, gender && ({ male: 'Male', female: 'Female', non_binary: 'Non-binary', prefer_not_to_say: 'Prefer not to say' } as Record<string,string>)[gender]].filter(Boolean).join(' · ')}
+                    {[purpose, gender && genderLabels[gender]].filter(Boolean).join(' · ')}
                   </p>
                 )}
               </div>
@@ -783,9 +808,9 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 variant="ghost"
                 size="sm"
                 className="h-11 shrink-0 px-4"
-                aria-label="Edit your information"
+                aria-label={t('editAria')}
               >
-                Edit
+                {t('edit')}
               </Button>
             </div>
             {passkeyRequired ? (
@@ -798,8 +823,8 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                     actual constraint and the one path still open: a person. */}
                 <span>
                   {passkeySupport === false
-                    ? "This location requires a passkey, and this device can't create one. Please ask staff to check you in another way."
-                    : 'This location requires a passkey (Face ID, Touch ID, or PIN) to check in.'}
+                    ? t('passkeyRequiredNoSupport')
+                    : t('passkeyRequired')}
                 </span>
               </div>
             ) : (
@@ -809,13 +834,13 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 onClick={() => setStep('selfie')}
                 className="w-full"
               >
-                Check In
+                {t('checkIn')}
               </Button>
             )}
             {!passkeyRequired && passkeySupport !== false && (
               <div className="flex items-center gap-3 text-xs text-muted">
                 <div className="flex-1 h-px bg-border" />
-                <span>or use biometrics</span>
+                <span>{t('orBiometrics')}</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
             )}
@@ -845,7 +870,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 setCheckedInViaPasskey(true)
                 setJustCheckedIn(true)
                 setStep('checkedIn')
-                toast.success(`Checked in`)
+                toast.success(t('toastCheckedIn'))
               }}
               onRegistered={() => {
                 setVisitorPasskeyRegistered(true)
@@ -862,9 +887,9 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             <CardContent className="p-4">
             <div className="mb-4">
               <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
-                Optional Selfie
+                {t('selfieTitle')}
               </h2>
-              <p className="text-sm text-muted mt-0.5">Take a photo or skip</p>
+              <p className="text-sm text-muted mt-0.5">{t('selfieHint')}</p>
             </div>
             <SelfieCapture
               onCapture={(url) => {
@@ -884,12 +909,12 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             {openLog && (
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 space-y-1">
                 <p className="text-xs text-[var(--status-success)] font-semibold">
-                  Checked in at {formatCheckInTime(openLog.timestamp)} ·{' '}
-                  <LiveDuration since={openLog.timestamp} />
+                  {t('checkedInAt', { time: formatCheckInTime(openLog.timestamp, locale) })}{' '}
+                  <LiveDuration since={openLog.timestamp} units={units} />
                 </p>
                 {checkoutSuggested && (
                   <p className="text-xs font-semibold text-[var(--status-warning)]">
-                    Suggested: time to check out.
+                    {t('suggestedCheckout')}
                   </p>
                 )}
               </div>
@@ -910,7 +935,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 variant="destructive"
                 className="w-full"
               >
-                {loading ? 'Checking out…' : checkoutSuggested ? 'Check Out — Suggested' : 'Check Out'}
+                {loading ? t('checkingOut') : checkoutSuggested ? t('checkOutSuggested') : t('checkOut')}
               </Button>
             )}
             {/* Passkey checkout — only if guest checked in by passkey. When this
@@ -922,7 +947,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             {checkedInViaPasskey && passkeySupport === false && (
               <div className="flex items-center gap-2 text-xs text-[var(--status-warning)] bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2">
                 <Lock className="size-3.5 shrink-0" strokeWidth={2.3} aria-hidden />
-                <span>This device can&apos;t verify your passkey. Please ask staff to check you out.</span>
+                <span>{t('passkeyCheckoutNoSupport')}</span>
               </div>
             )}
             {checkedInViaPasskey && passkeySupport !== false && (
@@ -940,11 +965,11 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 deviceId={deviceId || undefined}
                 authOnly
                 onAuthenticated={() => {
-                  setLastStayDuration(openLog ? formatDuration(openLog.timestamp) : null)
+                  setLastStayDuration(openLog ? formatDuration(openLog.timestamp, new Date(), units) : null)
                   setJustCheckedIn(false)
                   clearActiveCheckIn(locationId)
                   setStep('checkedOut')
-                  toast.success(`Checked out`)
+                  toast.success(t('toastCheckedOut'))
                 }}
               />
             )}
@@ -954,7 +979,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
               <>
                 <div className="flex items-center gap-3 text-xs text-muted">
                   <div className="flex-1 h-px bg-border" />
-                  <span>save for next time</span>
+                  <span>{t('saveForNextTime')}</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
                 <VisitorPasskey
@@ -979,7 +1004,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             {passkeySavedThisVisit && (
               <div className="flex items-center justify-center gap-1.5 text-xs text-[var(--status-success)] font-semibold">
                 <CircleCheck className="size-3.5" strokeWidth={2.3} aria-hidden />
-                Passkey saved
+                {t('passkeySaved')}
               </div>
             )}
 
@@ -987,7 +1012,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
               <>
                 <div className="flex items-center gap-3 text-xs text-muted">
                   <div className="flex-1 h-px bg-border" />
-                  <span>quest</span>
+                  <span>{t('questDivider')}</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
                 <Button
@@ -998,13 +1023,13 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                   className="w-full"
                 >
                   <Star className="size-4" strokeWidth={2.3} aria-hidden />
-                  Scan Quest Card
+                  {t('scanQuestCard')}
                 </Button>
               </>
             )}
             {questRecorded && (
               <div className="flex items-center justify-center gap-1.5 text-sm text-[var(--status-success)] font-semibold">
-                <Star className="size-4" strokeWidth={2.3} aria-hidden /> Quest step recorded!
+                <Star className="size-4" strokeWidth={2.3} aria-hidden /> {t('questStepRecorded')}
               </div>
             )}
             </CardContent>
@@ -1017,9 +1042,9 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
             <CardContent className="p-4">
             <div className="mb-4">
               <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
-                Scan Quest Card
+                {t('scanQuestCard')}
               </h2>
-              <p className="text-sm text-muted mt-0.5">Point camera at your quest card QR code</p>
+              <p className="text-sm text-muted mt-0.5">{t('questPointCamera')}</p>
             </div>
             <QRScanner onResult={handleQuestCardScanned} redirectOnScan={false} />
             <Button
@@ -1029,7 +1054,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
               variant="ghost"
               className="w-full mt-3"
             >
-              Cancel
+              {t('cancel')}
             </Button>
             </CardContent>
           </Card>
@@ -1043,18 +1068,18 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
               <CircleCheck className="size-8 text-[var(--status-success)]" strokeWidth={2.2} aria-hidden />
             </div>
             <h2 ref={stepHeadingRef} tabIndex={-1} className="font-bold text-foreground text-lg outline-none">
-              All done!
+              {t('allDone')}
             </h2>
             <p className="text-sm text-muted mt-1.5">
-              You've checked out of <span className="font-medium text-foreground">{location.name}</span>
+              {t.rich('checkedOutOf', { location: location.name, b: (c) => <span className="font-medium text-foreground">{c}</span> })}
             </p>
             {/* Duration is carried from the sealed timestamps that were already
                 on screen a moment ago — a receipt, not a new claim. Omitted
                 under a minute, where "0m" would read as broken rather than true. */}
-            {lastStayDuration && lastStayDuration !== '0m' && (
-              <p className="text-sm text-muted mt-1">You were here for {lastStayDuration}.</p>
+            {lastStayDuration && lastStayDuration !== `0${units.m}` && (
+              <p className="text-sm text-muted mt-1">{t('stayDuration', { duration: lastStayDuration })}</p>
             )}
-            <p className="text-sm text-muted mt-1">Thanks for visiting. See you soon.</p>
+            <p className="text-sm text-muted mt-1">{t('thanks')}</p>
             </CardContent>
           </Card>
         )}

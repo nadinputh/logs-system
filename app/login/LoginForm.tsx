@@ -11,6 +11,7 @@ import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SESSION_MAX_AGE_DAYS } from '@/lib/sessionPolicy'
 
 type RedirectReason = 'session_expired' | 'session_revoked' | 'signed_out_others'
 
@@ -222,7 +223,7 @@ export function LoginForm() {
         <div aria-live="polite" className="empty:hidden space-y-3">
           {reason && !error && (
             <FormNotice tone={REASON_KEYS[reason].tone} title={t(REASON_KEYS[reason].titleKey)}>
-              {t(REASON_KEYS[reason].bodyKey)}
+              {t(REASON_KEYS[reason].bodyKey, { days: SESSION_MAX_AGE_DAYS })}
             </FormNotice>
           )}
           {error && <FormNotice tone="danger" title={error} />}

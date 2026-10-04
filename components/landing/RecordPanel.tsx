@@ -1,4 +1,5 @@
 import { Lock, ShieldCheck } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 /**
  * RecordPanel — the anatomy of one check-in, as the ledger actually stores it.
@@ -29,6 +30,8 @@ type Field = {
   value: string
   note?: string
   mono?: boolean
+  /** `value` is a message key, not data. */
+  translate?: boolean
 }
 
 const fields: Field[] = [
@@ -36,23 +39,24 @@ const fields: Field[] = [
   {
     label: 'timestamp',
     value: '2026-08-22T09:14:07.318Z',
-    note: 'server clock',
+    note: 'noteServerClock',
     mono: true,
   },
-  { label: 'location', value: 'Atrium · Floor 2 · Room 214' },
+  { label: 'location', value: 'locationValue', translate: true },
   { label: 'device_id', value: '7f3a1c04-9c21', mono: true },
   { label: 'ip_address', value: '10.24.6.118', mono: true },
-  { label: 'user_agent', value: 'Safari/17.4 · iPhone', note: 'from request headers' },
-  { label: 'passkey_verified', value: 'true', note: 'secure enclave' },
+  { label: 'user_agent', value: 'Safari/17.4 · iPhone', note: 'noteHeaders' },
+  { label: 'passkey_verified', value: 'true', note: 'noteEnclave' },
   {
     label: 'idempotency_key',
     value: 'sha256 a41f…c7d2',
-    note: '24h TTL',
+    note: 'noteTtl',
     mono: true,
   },
 ]
 
 export function RecordPanel() {
+  const t = useTranslations('recordPanel')
   return (
     <figure className="glass shadow-signal relative isolate overflow-hidden rounded-3xl">
       {/* The focal moment: the write path, performed once. Rows land, the sweep
@@ -64,16 +68,16 @@ export function RecordPanel() {
       />
 
       <figcaption className="flex items-center justify-between gap-4 border-b border-[var(--panel-border)] px-6 py-4 sm:px-7">
-        <span className="text-sm font-semibold tracking-tight">One record, sealed</span>
+        <span className="text-sm font-semibold tracking-tight">{t('sealedTitle')}</span>
         {/* Lands after the sweep has passed — the seal is its consequence. */}
         <span className="animate-seal-lock inline-flex items-center gap-1.5 rounded-full bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">
           <Lock className="size-3" strokeWidth={2.5} />
-          Append-only
+          {t('appendOnly')}
         </span>
       </figcaption>
 
       <dl className="divide-y divide-[var(--panel-border)]">
-        {fields.map(({ label, value, note, mono }, i) => (
+        {fields.map(({ label, value, note, mono, translate }, i) => (
           <div
             key={label}
             // A record is a list, so a sibling stagger is honest here. Capped at
@@ -87,10 +91,10 @@ export function RecordPanel() {
             <dd
               className={`min-w-0 text-sm ${mono ? 'font-data' : 'font-medium'} truncate text-foreground`}
             >
-              {value}
+              {translate ? t(value) : value}
               {note ? (
                 <span className="ml-2 font-sans text-xs font-normal normal-case text-muted">
-                  {note}
+                  {t(note)}
                 </span>
               ) : null}
             </dd>
@@ -105,12 +109,11 @@ export function RecordPanel() {
             strokeWidth={2.3}
           />
           <span>
-            This row is never rewritten. Check-out appends a second record; an admin
-            correction writes to a separate ledger and leaves this one intact.
+            {t('neverRewritten')}
           </span>
         </p>
         <p className="text-xs text-muted">
-          Example record — field names and capture rules are the ones the engine uses.
+          {t('example')}
         </p>
       </div>
     </figure>

@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Check-in takes a per-visitor lock in MongoDB; these tests have no database.
+vi.mock("@/lib/checkInLock", () => ({ acquireCheckInLock: async () => async () => {} }));
 import { NextRequest } from "next/server";
 
 const TEAM_ID = "507f1f77bcf86cd799439011";

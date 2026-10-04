@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Modal as HeroModal } from "@heroui/react"
 import { XIcon } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 // ---------------------------------------------------------------------------
 // Context — shared open/close state between Dialog and its children
@@ -117,6 +118,7 @@ function DialogInnerContainer({
   showCloseButton: boolean
   children?: React.ReactNode
 }) {
+  const tCommon = useTranslations("common")
   const ref = React.useRef<HTMLDivElement | null>(null)
   const [container, setContainer] = React.useState<HTMLElement | null>(null)
 
@@ -130,11 +132,11 @@ function DialogInnerContainer({
     >
       {showCloseButton && (
         <HeroModal.CloseTrigger
-          aria-label="Close dialog"
+          aria-label={tCommon("closeDialog")}
           onPress={onClose}
         >
           <XIcon className="h-4 w-4" aria-hidden />
-          <span className="sr-only">Close</span>
+          <span className="sr-only">{tCommon("close")}</span>
         </HeroModal.CloseTrigger>
       )}
       <DialogPortalContainerContext.Provider value={container}>
@@ -163,6 +165,7 @@ function DialogContent({
   showCloseButton?: boolean
   size?: React.ComponentProps<typeof HeroModal.Container>["size"]
 }) {
+  const tCommon = useTranslations("common")
   const context = React.useContext(DialogContext)
 
   if (!context) return null
@@ -174,7 +177,7 @@ function DialogContent({
     <HeroModal.Backdrop isOpen={context.open} onOpenChange={context.setOpen}>
       <HeroModal.Container placement="center" scroll="inside" size={size}>
         <HeroModal.Dialog
-          aria-label="Dialog"
+          aria-label={tCommon("dialog")}
           aria-labelledby={context.titleId}
           className={className}
         >

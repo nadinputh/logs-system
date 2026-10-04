@@ -6,9 +6,12 @@ import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/sonner'
-import { readApiError } from '@/lib/clientFetch'
+import { useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 
 export default function ReissueQuestCardButton({ questId }: { questId: string }) {
+  const t = useTranslations('adminReissue')
+  const apiError = useApiError()
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -18,12 +21,12 @@ export default function ReissueQuestCardButton({ questId }: { questId: string })
     try {
       const res = await fetch(`/api/quests/${questId}/reissue`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(readApiError(data, 'Failed to reissue card'))
-      toast.success('New QR issued — the lost one no longer works')
+      if (!res.ok) throw new Error(apiError(data, t('failedToReissueCard')))
+      toast.success(t('newQrIssuedTheLost'))
       setOpen(false)
       router.refresh()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reissue card')
+      toast.error(err instanceof Error ? err.message : t('failedToReissueCard'))
     } finally {
       setLoading(false)
     }
@@ -35,24 +38,20 @@ export default function ReissueQuestCardButton({ questId }: { questId: string })
         <Button type="button" variant="outline" size="sm" className="shrink-0" />
       }>
         <RefreshCw className="size-3.5" aria-hidden />
-        Card lost? Reissue
+        {t('cardLostReissue')}
       </DialogTrigger>
       <DialogContent size="sm">
         <DialogHeader>
-          <DialogTitle>Reissue this quest card?</DialogTitle>
+          <DialogTitle>{t('reissueThisQuestCard')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-2">
-          <p className="text-sm text-muted">
-            The old QR code stops working immediately, so whoever finds the lost card can&apos;t
-            use or claim it. This card&apos;s progress is kept — scan the new QR below to
-            continue exactly where it left off.
-          </p>
+          <p className="text-sm text-muted">{t('body')}</p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
-              Cancel
+              {t('cancel')}
             </Button>
             <Button type="button" variant="mono" onClick={handleReissue} disabled={loading}>
-              {loading ? 'Reissuing…' : 'Reissue Card'}
+              {loading ? t('reissuing') : t('reissueCard')}
             </Button>
           </div>
         </div>

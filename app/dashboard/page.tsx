@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
+import { useLocale, useTranslations } from 'next-intl'
+import { useMounted } from '@/lib/useMounted'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, TriangleAlert } from 'lucide-react'
@@ -58,14 +60,15 @@ function hasCounts(items: CountPoint[]) {
 // Screen-reader alternative for the chart: the bars are aria-hidden, so this
 // carries the full dataset as a proper table for assistive tech.
 function ChartDataTable({ caption, rows }: { caption: string; rows: { label: string; count: number; stillOpen: number }[] }) {
+  const t = useTranslations('dashboard')
   return (
     <table className="sr-only">
       <caption>{caption}</caption>
       <thead>
         <tr>
-          <th scope="col">Day</th>
-          <th scope="col">Check-ins</th>
-          <th scope="col">Still open</th>
+          <th scope="col">{t('day')}</th>
+          <th scope="col">{t('checkIns')}</th>
+          <th scope="col">{t('stillOpen')}</th>
         </tr>
       </thead>
       <tbody>
@@ -81,7 +84,15 @@ function ChartDataTable({ caption, rows }: { caption: string; rows: { label: str
   )
 }
 
-function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: boolean }) {
+function WeeklyTrendChart({ data: rawData, loading }: { data: DailyPoint[]; loading: boolean }) {
+  const t = useTranslations('dashboard')
+  const locale = useLocale()
+  // The server's own label is en-US; re-derive it from the UTC date key so the
+  // chart follows the app language. Same UTC reading the server used.
+  const data = rawData.map(d => ({
+    ...d,
+    label: new Date(`${d.date}T00:00:00Z`).toLocaleDateString(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+  }))
   const max = maxCount(data)
   const hasData = hasCounts(data)
   // The server always returns exactly 7 days, oldest first — today is
@@ -100,8 +111,8 @@ function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: bool
       <CardContent className="p-5 space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-foreground">Check-ins This Week</h2>
-            <p className="text-xs text-muted mt-1">Daily volume, resolved vs. still open</p>
+            <h2 className="text-sm font-semibold text-foreground">{t('weekTitle')}</h2>
+            <p className="text-xs text-muted mt-1">{t('weekSubtitle')}</p>
           </div>
           {/* Only the swatches that actually appear in this week's data — an
               all-resolved week shows no legend at all. Stacks below the title
@@ -114,18 +125,18 @@ function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: bool
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted sm:shrink-0 sm:justify-end">
               <span className="flex items-center gap-1.5">
                 <span className="size-2 rounded-full bg-accent" aria-hidden />
-                Resolved
+                {t('legendResolved')}
               </span>
               {todayStillOpen > 0 && (
                 <span className="flex items-center gap-1.5">
                   <span className="size-2 rounded-full bg-emerald-500" aria-hidden />
-                  Checked in now
+                  {t('legendNow')}
                 </span>
               )}
               {staleCount > 0 && (
                 <span className="flex items-center gap-1.5">
                   <span className="size-2 rounded-full bg-amber-500" aria-hidden />
-                  Needs review
+                  {t('legendReview')}
                 </span>
               )}
             </div>
@@ -139,7 +150,7 @@ function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: bool
             className="flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300 outline-none transition-colors hover:bg-amber-500/15 focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-            {staleCount} check-in{staleCount !== 1 ? 's' : ''} from earlier this week {staleCount !== 1 ? 'are' : 'is'} still open past auto-checkout — review
+            {t('staleBanner', { count: staleCount })}
           </Link>
         )}
         {loading ? (
@@ -162,8 +173,8 @@ function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: bool
                   const openNote = item.stillOpen === 0
                     ? ''
                     : isToday
-                      ? `, ${item.stillOpen} still checked in`
-                      : `, ${item.stillOpen} still open — check the log`
+                      ? t('noteStillIn', { count: item.stillOpen })
+                      : t('noteStillOpen', { count: item.stillOpen })
                   return (
                     <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
                       <div
@@ -181,7 +192,7 @@ function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: bool
                         <div
                           className="flex w-full flex-col overflow-hidden rounded-md transition-all"
                           style={{ height: `${totalHeight}%` }}
-                          title={`${item.label}: ${item.count} check-ins${openNote}`}
+                          title={t('barTitle', { label: item.label, count: item.count, note: openNote })}
                         >
                           {item.stillOpen > 0 && (
                             <div
@@ -200,11 +211,11 @@ function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: bool
                 })}
               </div>
             </div>
-            <ChartDataTable caption="Check-ins this week, by day, resolved vs. still open" rows={data} />
+            <ChartDataTable caption={t('chartCaption')} rows={data} />
           </>
         ) : (
           <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted">
-            No log data yet
+            {t('noLogData')}
           </div>
         )}
       </CardContent>
@@ -213,6 +224,7 @@ function WeeklyTrendChart({ data, loading }: { data: DailyPoint[]; loading: bool
 }
 
 function TopLocationsCard({ locations, loading }: { locations: TopLocationPoint[]; loading: boolean }) {
+  const t = useTranslations('dashboard')
   const items = locations.map(location => ({ ...location, label: location.name }))
   const max = maxCount(items)
 
@@ -220,8 +232,8 @@ function TopLocationsCard({ locations, loading }: { locations: TopLocationPoint[
     <Card>
       <CardContent className="p-5 space-y-5">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Top Locations</h2>
-          <p className="text-xs text-muted mt-1">Most visited places in the last 30 days</p>
+          <h2 className="text-sm font-semibold text-foreground">{t('topTitle')}</h2>
+          <p className="text-xs text-muted mt-1">{t('topSubtitle')}</p>
         </div>
         {loading ? (
           <div className="space-y-3.5">
@@ -256,7 +268,7 @@ function TopLocationsCard({ locations, loading }: { locations: TopLocationPoint[
                 <li key={item.locationId}>
                   <Link
                     href={`/admin/logs?locationId=${item.locationId}`}
-                    aria-label={`View logs for ${item.name}, ${item.count} total, ${item.stillIn} still checked in`}
+                    aria-label={t('viewLogsFor', { name: item.name, count: item.count, stillIn: item.stillIn })}
                     className={`grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-2.5 rounded-xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40 ${
                       isLeader
                         ? '-m-3 border border-accent/30 bg-accent/[0.06] p-3 hover:bg-accent/10'
@@ -283,7 +295,7 @@ function TopLocationsCard({ locations, loading }: { locations: TopLocationPoint[
                             the ink. */}
                         {item.stillIn > 0 && (
                           <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                            Still IN {item.stillIn}
+                            {t('stillInChip', { count: item.stillIn })}
                           </span>
                         )}
                         {/* Rightmost, so the counts land in one column. */}
@@ -311,7 +323,7 @@ function TopLocationsCard({ locations, loading }: { locations: TopLocationPoint[
           </ol>
         ) : (
           <div className="flex h-44 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted">
-            No location activity yet
+            {t('noLocationActivity')}
           </div>
         )}
       </CardContent>
@@ -320,6 +332,9 @@ function TopLocationsCard({ locations, loading }: { locations: TopLocationPoint[
 }
 
 export default function DashboardPage() {
+  const t = useTranslations('dashboard')
+  const locale = useLocale()
+  const mounted = useMounted()
   const { data: session } = useSession()
   const [metrics, setMetrics] = useState<DashboardMetrics>(emptyMetrics)
   const [loading, setLoading] = useState(true)
@@ -344,9 +359,9 @@ export default function DashboardPage() {
 
   const { stats } = metrics
 
-  const firstName = session?.user?.name?.split(' ')[0] ?? session?.user?.email?.split('@')[0] ?? 'there'
+  const firstName = session?.user?.name?.split(' ')[0] ?? session?.user?.email?.split('@')[0] ?? t('there')
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const greetingKey = hour < 12 ? 'goodMorning' : hour < 17 ? 'goodAfternoon' : 'goodEvening'
 
   return (
     <div className="p-6 sm:p-8 max-w-5xl mx-auto space-y-8">
@@ -355,20 +370,20 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            {greeting}, {firstName}{' '}
-            <span role="img" aria-label="waving hand">
+            {t(greetingKey, { name: firstName })}{' '}
+            <span role="img" aria-label={t('wave')}>
               👋
             </span>
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {mounted ? new Date().toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' }) : '\u00a0'}
           </p>
         </div>
         <Link
           href="/logs"
           className="flex items-center gap-1.5 rounded-full px-2 py-1.5 -mx-2 -my-1.5 text-sm font-medium text-accent outline-none transition-colors hover:text-accent/80 focus-visible:ring-2 focus-visible:ring-accent/40"
         >
-          View my logs
+          {t('viewMyLogs')}
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
@@ -380,11 +395,11 @@ export default function DashboardPage() {
           <div className="w-12 h-12 rounded-2xl bg-[var(--status-warning)]/10 flex items-center justify-center mb-3">
             <TriangleAlert className="w-6 h-6 text-[var(--status-warning)]" strokeWidth={1.75} aria-hidden />
           </div>
-          <p className="font-medium text-foreground text-sm">Couldn&apos;t load your overview</p>
-          <p className="text-xs text-muted mt-1">This isn&apos;t the same as a quiet day — something went wrong fetching it.</p>
+          <p className="font-medium text-foreground text-sm">{t('loadErrorTitle')}</p>
+          <p className="text-xs text-muted mt-1">{t('loadErrorBody')}</p>
           <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => { void refreshMetrics() }}>
             <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-            Try again
+            {t('tryAgain')}
           </Button>
         </div>
       ) : (
@@ -396,11 +411,11 @@ export default function DashboardPage() {
             <Card className="border-accent/30 bg-accent/[0.06]">
               <CardContent className="p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-accent">Right Now</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-accent">{t('rightNow')}</p>
                   {!loading && stats.currentlyIn > 0 && (
                     <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse motion-reduce:animate-none" />
-                      Live
+                      {t('live')}
                     </span>
                   )}
                 </div>
@@ -409,18 +424,18 @@ export default function DashboardPage() {
                 ) : (
                   <p className="text-4xl font-bold text-foreground tracking-tight">{stats.currentlyIn}</p>
                 )}
-                <p className="text-sm text-muted font-medium">Currently checked in</p>
+                <p className="text-sm text-muted font-medium">{t('currentlyIn')}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-5 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted">Today</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted">{t('today')}</p>
                 {loading ? (
                   <div className="h-10 w-20 bg-muted rounded-lg animate-pulse motion-reduce:animate-none" />
                 ) : (
                   <p className="text-4xl font-bold text-foreground tracking-tight">{stats.totalToday}</p>
                 )}
-                <p className="text-sm text-muted font-medium">Check-ins today</p>
+                <p className="text-sm text-muted font-medium">{t('checkInsToday')}</p>
               </CardContent>
             </Card>
           </div>

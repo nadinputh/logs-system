@@ -20,6 +20,10 @@ import { hasMinimumTeamRole } from "@/lib/teamPermissions";
 import { TeamRole } from "@/lib/models/TeamMember";
 import { assertSameOrigin } from "@/lib/csrf";
 import { kioskGate } from "@/lib/kioskGate";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
+import { acquireCheckInLock } from "@/lib/checkInLock";
+import { cachedLogId, publicLog } from "@/lib/checkoutLog";
 
 export const runtime = "nodejs";
 
@@ -84,7 +88,11 @@ export async function GET(req: NextRequest) {
   }
   const distinctLocationRefs = await Log.aggregate([
     { $match: aggregateMatch },
-    { $group: { _id: { locationType: "$locationType", locationId: "$locationId" } } },
+    {
+      $group: {
+        _id: { locationType: "$locationType", locationId: "$locationId" },
+      },
+    },
   ]);
   const distinctLocationLabels = await resolveLocationLabels(
     distinctLocationRefs.map((r) => ({
@@ -136,7 +144,8 @@ export async function GET(req: NextRequest) {
       action: "out",
       relatedLogId: { $ne: null },
     });
-    query._id = status === "in" ? { $nin: checkedOutIds } : { $in: checkedOutIds };
+    query._id =
+      status === "in" ? { $nin: checkedOutIds } : { $in: checkedOutIds };
   }
 
   const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1");
@@ -144,7 +153,10 @@ export async function GET(req: NextRequest) {
   // matching row for export (see /settings/team's own CSV export) can raise
   // this up to the same 5000-row ceiling used there.
   const limit = Math.min(
-    Math.max(parseInt(req.nextUrl.searchParams.get("limit") ?? "50", 10) || 50, 1),
+    Math.max(
+      parseInt(req.nextUrl.searchParams.get("limit") ?? "50", 10) || 50,
+      1,
+    ),
     5000,
   );
 
@@ -200,7 +212,10 @@ export async function GET(req: NextRequest) {
       newValue: entry.newValue,
       reasonForChange: entry.reasonForChange,
       timestamp: entry.timestamp,
-      modifiedByName: (entry.modifiedByUserId as any)?.name ?? (entry.modifiedByUserId as any)?.email ?? null,
+      modifiedByName:
+        (entry.modifiedByUserId as any)?.name ??
+        (entry.modifiedByUserId as any)?.email ??
+        null,
     });
     auditByLogId.set(key, list);
   }
@@ -212,7 +227,7 @@ export async function GET(req: NextRequest) {
     );
     const corrections = [
       ...(auditByLogId.get(l._id.toString()) ?? []),
-      ...(checkout ? auditByLogId.get(checkout._id.toString()) ?? [] : []),
+      ...(checkout ? (auditByLogId.get(checkout._id.toString()) ?? []) : []),
     ];
     return {
       ...l,
@@ -237,7 +252,18 @@ export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
-  const body = await req.json();
+  // Check-ins are anonymous by design (a fresh UUID is all a visitor needs), so
+  // this is the only brake on a script minting rows against a static QR. Sized
+  // for many visitors behind one office NAT; counted in MongoDB so it holds across instances.
+  const limited = await rateLimitShared(clientKey(req, "logs-in"), 60, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfter) } },
+    );
+  }
+
+  const body = await req.json().catch(() => null);
   const parsed = CreateLogSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -251,7 +277,15 @@ export async function POST(req: NextRequest) {
   if (idempotencyKey) {
     const cached = await checkIdempotency(idempotencyKey);
     if (cached) {
-      return NextResponse.json(cached.body, { status: cached.statusCode });
+      // The key repeats for every check-in of the day, so a cached response
+      // only counts while the visit it describes is still open. Once that
+      // visit has a check-out, this is a new visit and must be written.
+      const id = cachedLogId(cached.body);
+      const closed =
+        id && (await Log.exists({ relatedLogId: id, action: "out" }));
+      if (!closed) {
+        return NextResponse.json(cached.body, { status: cached.statusCode });
+      }
     }
   }
 
@@ -282,7 +316,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
 
-  const gate = await kioskGate(location, locationId, kioskToken);
+  const gate = await kioskGate(location, locationId, kioskToken, sessionToken);
   if (gate) return gate;
 
   const geofenceStatus = await computeGeofenceStatus(
@@ -326,55 +360,79 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Open check-in detection (append-only model)
-  const lastCheckin = await Log.findOne({
+  // Open check-in detection (append-only model), serialised per visitor
+  const release = await acquireCheckInLock(
     teamId,
     locationId,
-    locationType,
-    sessionToken,
-    action: "in",
-  }).sort({ timestamp: -1 });
-
-  if (lastCheckin) {
-    const existingCheckout = await Log.findOne({
+    actorUserId ?? sessionToken,
+  );
+  if (!release) {
+    return NextResponse.json(
+      {
+        error: "CHECKIN_IN_PROGRESS",
+        message: "Check-in already in progress, try again.",
+      },
+      { status: 409 },
+    );
+  }
+  try {
+    // A signed-in user is one person on every device, so match their userId as
+    // well as the browser's sessionToken (the passkey and terminal paths already
+    // key on userId). The lock above serialises this read-then-write: "open" is
+    // the absence of a later OUT, which no unique index can express.
+    const lastCheckin = await Log.findOne({
       teamId,
-      relatedLogId: lastCheckin._id,
-      action: "out",
-    });
-    if (!existingCheckout) {
-      return NextResponse.json(
-        { existing: true, log: lastCheckin },
-        { status: 200 },
-      );
+      locationId,
+      locationType,
+      action: "in",
+      ...(actorUserId
+        ? { $or: [{ sessionToken }, { userId: actorUserId }] }
+        : { sessionToken }),
+    }).sort({ timestamp: -1 });
+
+    if (lastCheckin) {
+      const existingCheckout = await Log.findOne({
+        teamId,
+        relatedLogId: lastCheckin._id,
+        action: "out",
+      });
+      if (!existingCheckout) {
+        return NextResponse.json(
+          { existing: true, log: publicLog(lastCheckin) },
+          { status: 200 },
+        );
+      }
     }
+
+    const log = await Log.create({
+      teamId,
+      locationId,
+      locationType,
+      sessionToken,
+      visitorName: visitorName ?? undefined,
+      visitorEmail: visitorEmail ?? undefined,
+      visitorPhone: visitorPhone ?? undefined,
+      visitorGender: visitorGender ?? undefined,
+      visitPurpose: visitPurpose ?? undefined,
+      userId: actorUserId ?? undefined,
+      deviceId: deviceId ?? undefined,
+      ipAddress,
+      userAgent,
+      geofenceStatus: geofenceStatus ?? undefined,
+      photo: photo ?? undefined,
+      questCardId: questCardId ?? undefined,
+      action: "in",
+      timestamp: new Date(),
+    });
+
+    publishLogCreated(log);
+
+    if (idempotencyKey) {
+      await saveIdempotency(idempotencyKey, 201, publicLog(log));
+    }
+
+    return NextResponse.json(publicLog(log), { status: 201 });
+  } finally {
+    await release();
   }
-
-  const log = await Log.create({
-    teamId,
-    locationId,
-    locationType,
-    sessionToken,
-    visitorName: visitorName ?? undefined,
-    visitorEmail: visitorEmail ?? undefined,
-    visitorPhone: visitorPhone ?? undefined,
-    visitorGender: visitorGender ?? undefined,
-    visitPurpose: visitPurpose ?? undefined,
-    userId: actorUserId ?? undefined,
-    deviceId: deviceId ?? undefined,
-    ipAddress,
-    userAgent,
-    geofenceStatus: geofenceStatus ?? undefined,
-    photo: photo ?? undefined,
-    questCardId: questCardId ?? undefined,
-    action: "in",
-    timestamp: new Date(),
-  });
-
-  publishLogCreated(log);
-
-  if (idempotencyKey) {
-    await saveIdempotency(idempotencyKey, 201, log.toObject());
-  }
-
-  return NextResponse.json(log, { status: 201 });
 }

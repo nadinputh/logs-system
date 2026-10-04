@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { urlBase64ToUint8Array } from '@/lib/pushClient'
+import { useTranslations } from 'next-intl'
 
 type Status = 'checking' | 'unsupported' | 'off' | 'denied' | 'on'
 
@@ -14,6 +15,7 @@ async function getExistingSubscription(): Promise<PushSubscription | null> {
 }
 
 export default function NotificationsToggle() {
+  const t = useTranslations('notifications')
   const [status, setStatus] = useState<Status>('checking')
   const [loading, setLoading] = useState(false)
 
@@ -35,7 +37,7 @@ export default function NotificationsToggle() {
     setLoading(true)
     try {
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!publicKey) throw new Error('Push notifications are not configured for this deployment')
+      if (!publicKey) throw new Error(t('pushNotificationsAreNotConfigured'))
 
       const registration = await navigator.serviceWorker.register('/sw.js')
       const permission = await Notification.requestPermission()
@@ -57,12 +59,12 @@ export default function NotificationsToggle() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ endpoint, keys }),
       })
-      if (!res.ok) throw new Error('Failed to save subscription')
+      if (!res.ok) throw new Error(t('failedToSaveSubscription'))
 
       setStatus('on')
-      toast.success('Notifications enabled')
+      toast.success(t('notificationsEnabled'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not enable notifications')
+      toast.error(err instanceof Error ? err.message : t('couldNotEnableNotifications'))
     } finally {
       setLoading(false)
     }
@@ -79,25 +81,25 @@ export default function NotificationsToggle() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         })
-        if (!res.ok) throw new Error('Failed to remove subscription')
+        if (!res.ok) throw new Error(t('failedToRemoveSubscription'))
       }
       setStatus('off')
-      toast.success('Notifications disabled')
+      toast.success(t('notificationsDisabled'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not disable notifications')
+      toast.error(err instanceof Error ? err.message : t('couldNotDisableNotifications'))
     } finally {
       setLoading(false)
     }
   }, [])
 
   if (status === 'unsupported') {
-    return <p className="text-sm text-muted">Not supported in this browser.</p>
+    return <p className="text-sm text-muted">{t('notSupportedInThisBrowser')}</p>
   }
 
   if (status === 'denied') {
     return (
       <p className="text-sm text-muted">
-        Blocked — enable notifications for this site in your browser settings to turn this on.
+        {t('blockedEnableNotificationsForThis')}
       </p>
     )
   }
@@ -105,7 +107,7 @@ export default function NotificationsToggle() {
   return (
     <div className="flex items-center justify-between gap-3">
       <p className="text-sm text-muted">
-        {status === 'on' ? "You'll get a push when there's activity to review." : 'Get a push notification instead of checking back here.'}
+        {status === 'on' ? t('youLlGetAPush') : t('getAPushNotificationInstead')}
       </p>
       <Button
         variant={status === 'on' ? 'outline' : 'default'}
@@ -114,7 +116,7 @@ export default function NotificationsToggle() {
         isDisabled={status === 'checking' || loading}
         isLoading={loading}
       >
-        {status === 'on' ? 'Disable' : 'Enable'}
+        {status === 'on' ? t('disable') : t('enable')}
       </Button>
     </div>
   )

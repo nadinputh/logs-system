@@ -4,6 +4,7 @@ import { useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { RoundedQRCode } from '@/components/qr/RoundedQRCode'
 import { Download } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface QRCodeDisplayProps {
   url: string
@@ -32,7 +33,8 @@ function downloadDataUrl(dataUrl: string, filename: string) {
   link.remove()
 }
 
-export default function QRCodeDisplay({ url, label, sublabel, description, exportTitle = 'QR Code', exportDescription = 'Scan to open' }: QRCodeDisplayProps) {
+export default function QRCodeDisplay({ url, label, sublabel, description, exportTitle, exportDescription }: QRCodeDisplayProps) {
+  const t = useTranslations('adminQr')
   const downloadButtonRef = useRef<HTMLButtonElement>(null)
 
   const handleDownloadPNG = async () => {
@@ -86,7 +88,7 @@ export default function QRCodeDisplay({ url, label, sublabel, description, expor
         size="sm"
       >
         <Download className="mr-2 size-4" />
-        Download PNG
+        {t('downloadPng')}
       </Button>
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { generateQRSVG } from '@/lib/qr'
 
 interface RoundedQRCodeProps {
@@ -10,19 +11,20 @@ interface RoundedQRCodeProps {
 }
 
 export function RoundedQRCode({ value, size = 240, className }: RoundedQRCodeProps) {
+  const label = useTranslations('common')('qrCode')
   const [svgContent, setSvgContent] = useState('')
 
   useEffect(() => {
     let mounted = true
 
-    generateQRSVG(value).then((svg) => {
+    generateQRSVG(value, { label }).then((svg) => {
       if (mounted) setSvgContent(svg)
     })
 
     return () => {
       mounted = false
     }
-  }, [value])
+  }, [value, label])
 
   return (
     <div

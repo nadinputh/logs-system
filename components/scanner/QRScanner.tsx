@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { Camera, CameraOff, Loader2, ShieldAlert, Smartphone, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { describeFailure, resolveDecoded, type Failure } from '@/lib/scanner/decode'
@@ -46,6 +47,7 @@ export default function QRScanner({
   idlePlaceholder,
 }: QRScannerProps) {
   const router = useRouter()
+  const t = useTranslations('scanner')
   const [phase, setPhase] = useState<Phase>('idle')
   const [failure, setFailure] = useState<Failure | null>(null)
   /** Read something unusable while the camera is still live. Not a failure. */
@@ -92,7 +94,7 @@ export default function QRScanner({
         // "still looking" keeps it true for as long as it is on screen.
         if (rejectedRef.current !== decodedText) {
           rejectedRef.current = decodedText
-          setNotice(resolved.notice)
+          setNotice(t(resolved.noticeKey))
         }
         return
       }
@@ -131,9 +133,9 @@ export default function QRScanner({
       busy.current = false
       setPhase('idle')
       setFailure({
-        title: 'The camera needs a secure connection',
-        detail:
-          'Browsers only allow camera access over HTTPS. Open this page on its https:// address to use the scanner.',
+        key: 'insecure',
+        title: t('insecureTitle'),
+        detail: t('insecureDetail'),
         retryable: false,
       })
       return
@@ -242,7 +244,7 @@ export default function QRScanner({
     <div className="space-y-4">
       {/* Heading navigation previously landed on "What happens" — the explainer —
           because the task itself had no accessible name. */}
-      <h2 className="sr-only">Scan the QR code</h2>
+      <h2 className="sr-only">{t('srTitle')}</h2>
       {/* Mounted and laid out from 'starting', not 'scanning'. html5-qrcode
           measures this container the instant start() runs; if it is still
           display:none it reads 0, writes an inline width:0px onto the <video>,
@@ -278,7 +280,7 @@ export default function QRScanner({
             <>
               <Camera className="size-7 text-muted" strokeWidth={1.8} />
               <p className="text-sm text-muted">
-                The camera preview appears here once you start the scanner.
+                {t('idleHint')}
               </p>
             </>
           )}
@@ -288,7 +290,7 @@ export default function QRScanner({
       {phase === 'scanning' ? (
         <Button variant="outline" className="press h-12 w-full text-sm font-semibold" onPress={stop}>
           <X className="size-4" strokeWidth={2.4} />
-          Stop scanner
+          {t('stop')}
         </Button>
       ) : deadEnd ? (
         /* A cause retrying cannot fix does not get a button that will fail
@@ -313,12 +315,12 @@ export default function QRScanner({
           {phase === 'starting' ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
-              Starting camera…
+              {t('starting')}
             </>
           ) : (
             <>
               <Camera className="size-4" strokeWidth={2.4} />
-              {failure ? 'Try again' : 'Start scanner'}
+              {failure ? t('retry') : t('start')}
             </>
           )}
         </Button>
@@ -335,7 +337,7 @@ export default function QRScanner({
       <div aria-live="polite" role="status">
         {phase === 'starting' && (
           <p className="text-center text-sm text-muted">
-            Starting the camera. This can take a few seconds.
+            {t('startingHint')}
           </p>
         )}
         {phase === 'scanning' &&
@@ -345,7 +347,7 @@ export default function QRScanner({
             </p>
           ) : (
             <p className="text-center text-sm text-muted">
-              Point the camera at the QR code. It reads the moment it is in frame.
+              {t('scanningHint')}
             </p>
           ))}
       </div>
@@ -369,8 +371,8 @@ export default function QRScanner({
               />
             )}
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--status-danger)]">{failure.title}</p>
-              <p className="mt-1 text-sm text-muted">{failure.detail}</p>
+              <p className="text-sm font-semibold text-[var(--status-danger)]">{t(`${failure.key}Title`)}</p>
+              <p className="mt-1 text-sm text-muted">{t(`${failure.key}Detail`)}</p>
             </div>
           </div>
         )}
@@ -391,7 +393,7 @@ export default function QRScanner({
         }
       >
         <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-          {deadEnd ? 'Two other ways in' : 'Not working?'}
+          {deadEnd ? t('twoOtherWays') : t('notWorking')}
         </h3>
         <ul className="mt-3 space-y-3">
           <li className="flex items-start gap-3">
@@ -401,10 +403,9 @@ export default function QRScanner({
             />
             <p className="text-sm text-muted">
               <span className="font-semibold text-foreground">
-                Use your phone&apos;s own camera app.
+                {t('ownCameraBold')}
               </span>{' '}
-              Point it at the same QR code — it opens the identical link without
-              needing this page.
+              {t('ownCameraBody')}
             </p>
           </li>
           <li className="flex items-start gap-3">
@@ -413,9 +414,8 @@ export default function QRScanner({
               strokeWidth={2.3}
             />
             <p className="text-sm text-muted">
-              <span className="font-semibold text-foreground">Ask at reception.</span>{' '}
-              A host can check you in if the code is damaged, missing, or your
-              camera will not open.
+              <span className="font-semibold text-foreground">{t('receptionBold')}</span>{' '}
+              {t('receptionBody')}
             </p>
           </li>
         </ul>

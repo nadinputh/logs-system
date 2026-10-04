@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { uploadSelfie } from '@/lib/cloudinary'
 
@@ -10,6 +11,7 @@ interface SelfieCaptureProps {
 }
 
 export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps) {
+  const t = useTranslations('selfie')
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -61,7 +63,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
       setError('')
       setStarted(true)
     } catch {
-      setError('Camera access denied. You can skip the photo.')
+      setError(t('cameraDenied'))
     }
   }
 
@@ -85,7 +87,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          setError('That photo could not be saved. Try again, or skip it.')
+          setError(t('saveFailed'))
           return
         }
         discardCapture()
@@ -116,7 +118,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
       const url = await uploadSelfie(blob)
       handOff(() => onCapture(url))
     } catch {
-      setError('Photo upload failed. You can skip it, or try again.')
+      setError(t('uploadFailed'))
     } finally {
       setUploading(false)
     }
@@ -127,7 +129,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
       {!started && !captured && (
         <div className="space-y-2">
           <Button size="touch" onClick={startCamera} variant="outline" className="w-full">
-            Take Selfie (optional)
+            {t('take')}
           </Button>
           <Button
             size="touch"
@@ -137,7 +139,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
             isLoading={handingOff}
             loadingBehavior="busy"
           >
-            {handingOff ? 'Checking in…' : 'Skip'}
+            {handingOff ? t('checkingIn') : t('skip')}
           </Button>
           <p role="alert" className="text-sm text-[var(--status-danger)] empty:hidden">
             {error}
@@ -157,8 +159,8 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
             muted
             className="aspect-[4/3] w-full max-h-[min(45vh,20rem)] rounded-lg object-cover [@media(max-height:540px)]:aspect-auto [@media(max-height:540px)]:h-28 bg-black"
           />
-          <Button size="touch" onClick={capture} className="w-full">Capture</Button>
-          <Button size="touch" onClick={() => { stopCamera(); setStarted(false) }} variant="ghost" className="w-full">Cancel</Button>
+          <Button size="touch" onClick={capture} className="w-full">{t('capture')}</Button>
+          <Button size="touch" onClick={() => { stopCamera(); setStarted(false) }} variant="ghost" className="w-full">{t('cancel')}</Button>
         </div>
       )}
 
@@ -166,7 +168,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
         <div className="space-y-2">
           <img
             src={captured}
-            alt="The photo you just took, for review before it is uploaded"
+            alt={t('reviewAlt')}
             className="aspect-[4/3] w-full max-h-[min(45vh,20rem)] rounded-lg object-cover [@media(max-height:540px)]:aspect-auto [@media(max-height:540px)]:h-28 bg-black"
           />
           <Button
@@ -176,9 +178,9 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
             isLoading={uploading || handingOff}
             loadingBehavior="busy"
           >
-            {uploading ? 'Uploading…' : 'Use this photo'}
+            {uploading ? t('uploading') : t('use')}
           </Button>
-          <Button size="touch" onClick={retake} variant="outline" className="w-full">Retake</Button>
+          <Button size="touch" onClick={retake} variant="outline" className="w-full">{t('retake')}</Button>
           <Button
             size="touch"
             onClick={() => handOff(onSkip)}
@@ -187,7 +189,7 @@ export default function SelfieCapture({ onCapture, onSkip }: SelfieCaptureProps)
             isLoading={handingOff}
             loadingBehavior="busy"
           >
-            {handingOff ? 'Checking in…' : 'Skip'}
+            {handingOff ? t('checkingIn') : t('skip')}
           </Button>
           <p role="alert" className="text-sm text-[var(--status-danger)] empty:hidden">
             {error}

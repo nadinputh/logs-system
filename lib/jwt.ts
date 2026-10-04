@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 
 const enc = new TextEncoder();
@@ -17,6 +18,7 @@ export async function signKioskToken(
 ): Promise<string> {
   return new SignJWT({ locationId })
     .setProtectedHeader({ alg: "HS256" })
+    .setJti(randomUUID())
     .setIssuedAt()
     .setExpirationTime(ttl)
     .sign(kioskSecret());
@@ -24,27 +26,34 @@ export async function signKioskToken(
 
 export async function verifyKioskToken(
   token: string,
-): Promise<{ locationId: string }> {
+): Promise<{ locationId: string; jti?: string }> {
   const { payload } = await jwtVerify(token, kioskSecret(), {
     algorithms: ["HS256"],
     clockTolerance: 5,
   });
-  return { locationId: payload.locationId as string };
+  return { locationId: payload.locationId as string, jti: payload.jti };
+}
+
+function sessionQrSecret() {
+  const s = process.env.SESSION_QR_SECRET;
+  if (!s) throw new Error("SESSION_QR_SECRET not configured");
+  return enc.encode(s);
 }
 
 export async function signSessionQrToken(userId: string): Promise<string> {
-  const secret = enc.encode(process.env.SESSION_QR_SECRET!);
   return new SignJWT({ userId })
     .setProtectedHeader({ alg: "HS256" })
+    .setJti(randomUUID())
     .setIssuedAt()
     .setExpirationTime("30s")
-    .sign(secret);
+    .sign(sessionQrSecret());
 }
 
 export async function verifySessionQrToken(
   token: string,
-): Promise<{ userId: string }> {
-  const secret = enc.encode(process.env.SESSION_QR_SECRET!);
-  const { payload } = await jwtVerify(token, secret);
-  return { userId: payload.userId as string };
+): Promise<{ userId: string; jti?: string }> {
+  const { payload } = await jwtVerify(token, sessionQrSecret(), {
+    algorithms: ["HS256"],
+  });
+  return { userId: payload.userId as string, jti: payload.jti };
 }

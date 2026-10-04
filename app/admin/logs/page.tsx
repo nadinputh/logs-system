@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 import { useSearchParams } from 'next/navigation'
 import { ChevronDown, Download, EyeIcon, LogOut, MapPin, RefreshCw, Search, ShieldCheck, TriangleAlert, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -51,23 +53,23 @@ interface Correction {
 
 // AuditLog stores raw schema field names ("manualCheckout", "visitorName");
 // this is the only place that needs to speak both languages.
-const CORRECTION_FIELD_LABELS: Record<string, string> = {
-  manualCheckout: 'Manual checkout',
-  visitorName: 'Name',
-  locationId: 'Location',
-  locationType: 'Location type',
-  timestamp: 'Check-in time',
-  action: 'Action',
+const CORRECTION_FIELD_KEYS: Record<string, string> = {
+  manualCheckout: 'fieldManualCheckout',
+  visitorName: 'fieldName',
+  locationId: 'sectionLocation',
+  locationType: 'fieldType',
+  timestamp: 'fieldCheckInTime',
+  action: 'fieldAction',
 }
 
-function formatValue(value?: string | boolean | null) {
+function formatValue(value: string | boolean | null | undefined, yes: string, no: string) {
   if (value === undefined || value === null || value === '') return '—'
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'boolean') return value ? yes : no
   return value
 }
 
-function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : '—'
+function formatDate(value: string | null | undefined, locale: string) {
+  return value ? new Date(value).toLocaleString(locale) : '—'
 }
 
 // A cell starting with =, +, -, @, or a tab/CR is a live formula to Excel/
@@ -87,23 +89,24 @@ function csvBool(value?: boolean) {
   return value === undefined || value === null ? '' : value ? 'Yes' : 'No'
 }
 
-function durationLabel(entry: LogEntry) {
-  if (!entry.checkoutAt) return 'Still checked in'
+function durationLabel(entry: LogEntry, units: { h: string; m: string }, stillIn: string) {
+  if (!entry.checkoutAt) return stillIn
   const ms = new Date(entry.checkoutAt).getTime() - new Date(entry.timestamp).getTime()
   const minutes = Math.max(0, Math.round(ms / 60000))
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
-  return hours ? `${hours}h ${rest}m` : `${rest}m`
+  return hours ? `${hours}${units.h} ${rest}${units.m}` : `${rest}${units.m}`
 }
 
 // `full` spans both grid columns once the dialog is wide enough to run two —
 // for values that run long (paths, emails, free text, ids) where a half-width
 // cell would wrap or crowd its neighbor.
 function DetailItem({ label, value, full }: { label: string; value?: string | boolean | null; full?: boolean }) {
+  const t = useTranslations('logs')
   return (
     <div className={`min-w-0 rounded-xl bg-muted/40 px-3 py-2 ${full ? '@sm:col-span-2' : ''}`}>
       <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-1 break-words text-sm leading-5 text-foreground">{formatValue(value)}</p>
+      <p className="mt-1 break-words text-sm leading-5 text-foreground">{formatValue(value, t('yes'), t('no'))}</p>
     </div>
   )
 }
@@ -127,11 +130,12 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
 // dialog into an undifferentiated data dump. Collapsed by default so the
 // facts an admin actually scans for aren't competing with ones they rarely need.
 function TechnicalDetails({ children }: { children: React.ReactNode }) {
+  const t = useTranslations('logs')
   return (
     <details className="group space-y-2.5">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
         <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" aria-hidden />
-        Technical details
+        {t('technicalDetails')}
       </summary>
       <div className="grid grid-cols-1 gap-2 pt-2.5 @sm:grid-cols-2">{children}</div>
     </details>
@@ -139,6 +143,10 @@ function TechnicalDetails({ children }: { children: React.ReactNode }) {
 }
 
 function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const t = useTranslations('logs')
+  const locale = useLocale()
+  const units = { h: t('unitHour'), m: t('unitMinute') }
+  const typeLabel = (v: string) => (['building', 'floor', 'room'].includes(v) ? t(`type${v[0].toUpperCase()}${v.slice(1)}`) : v)
   if (!log) return null
 
   return (
@@ -156,56 +164,56 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
               <UserRound className="size-5" aria-hidden />
             </div>
             <div className="min-w-0">
-              <DialogTitle className="text-base font-semibold text-foreground">Guest Details</DialogTitle>
+              <DialogTitle className="text-base font-semibold text-foreground">{t('guestDetails')}</DialogTitle>
               <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
                 <MapPin className="size-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{log.locationName ?? 'Unknown location'}</span>
+                <span className="truncate">{log.locationName ?? t('unknownLocation')}</span>
               </p>
             </div>
           </div>
         </div>
         <DialogBody className="@container min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
           <div className="w-full space-y-4">
-            <DetailSection title="Visitor">
-              <DetailItem label="Name" value={log.visitorName} />
-              <DetailItem label="Email" value={log.visitorEmail} full />
-              <DetailItem label="Phone" value={log.visitorPhone} />
-              <DetailItem label="Gender" value={log.visitorGender} />
-              <DetailItem label="Purpose" value={log.visitPurpose} full />
+            <DetailSection title={t('sectionVisitor')}>
+              <DetailItem label={t('fieldName')} value={log.visitorName} />
+              <DetailItem label={t('fieldEmail')} value={log.visitorEmail} full />
+              <DetailItem label={t('fieldPhone')} value={log.visitorPhone} />
+              <DetailItem label={t('fieldGender')} value={log.visitorGender} />
+              <DetailItem label={t('fieldPurpose')} value={log.visitPurpose} full />
             </DetailSection>
 
-            <DetailSection title="Location">
-              <DetailItem label="Name" value={log.locationName} />
-              <DetailItem label="Type" value={log.locationType} />
-              <DetailItem label="Path" value={log.locationPath} full />
+            <DetailSection title={t('sectionLocation')}>
+              <DetailItem label={t('fieldName')} value={log.locationName} />
+              <DetailItem label={t('fieldType')} value={typeLabel(log.locationType)} />
+              <DetailItem label={t('fieldPath')} value={log.locationPath} full />
             </DetailSection>
 
-            <DetailSection title="Check-in / Check-out">
-              <DetailItem label="Check-in" value={formatDate(log.timestamp)} />
-              <DetailItem label="Check-out" value={formatDate(log.checkoutAt)} />
-              <DetailItem label="Duration" value={durationLabel(log)} />
-              <DetailItem label="Passkey verified" value={log.passkeyVerified} />
+            <DetailSection title={t('sectionStay')}>
+              <DetailItem label={t('fieldCheckIn')} value={formatDate(log.timestamp, locale)} />
+              <DetailItem label={t('fieldCheckOut')} value={formatDate(log.checkoutAt, locale)} />
+              <DetailItem label={t('fieldDuration')} value={durationLabel(log, units, t('stillCheckedIn'))} />
+              <DetailItem label={t('fieldPasskey')} value={log.passkeyVerified} />
               {(log.checkoutLog?.autoCheckedOut ?? log.autoCheckedOut) && (
                 <div className="min-w-0 rounded-xl bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/25 px-3 py-2 @sm:col-span-2">
                   <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--status-warning)]">
                     <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-                    Auto checked out
+                    {t('autoOutTitle')}
                   </p>
                   <p className="mt-1 text-sm leading-5 text-foreground">
-                    Nobody checked out — the system closed this visit automatically after 12 hours.
+                    {t('autoOutAdmin')}
                   </p>
                 </div>
               )}
             </DetailSection>
 
             <TechnicalDetails>
-              <DetailItem label="Location ID" value={log.locationId} />
-              <DetailItem label="Checkout log ID" value={log.checkoutLog?._id} />
-              <DetailItem label="IP address" value={log.ipAddress} />
-              <DetailItem label="Geofence matched" value={log.geofenceStatus} />
-              <DetailItem label="Session token" value={log.sessionToken} full />
-              <DetailItem label="Device ID" value={log.deviceId} full />
-              <DetailItem label="User agent" value={log.userAgent} full />
+              <DetailItem label={t('techLocationId')} value={log.locationId} />
+              <DetailItem label={t('techCheckoutLogId')} value={log.checkoutLog?._id} />
+              <DetailItem label={t('techIp')} value={log.ipAddress} />
+              <DetailItem label={t('techGeofence')} value={log.geofenceStatus} />
+              <DetailItem label={t('techSession')} value={log.sessionToken} full />
+              <DetailItem label={t('techDevice')} value={log.deviceId} full />
+              <DetailItem label={t('techUserAgent')} value={log.userAgent} full />
             </TechnicalDetails>
 
             {/* The ledger is append-only, so a correction never overwrites
@@ -217,15 +225,15 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
                 single-column even where its siblings now pair up. */}
             {!!log.corrections?.length && (
               <section className="space-y-2.5">
-                <h2 className="text-sm font-semibold text-foreground">Correction</h2>
+                <h2 className="text-sm font-semibold text-foreground">{t('sectionCorrection')}</h2>
                 <div className="grid gap-2">
                   {log.corrections.map((c, i) => (
                     <div key={i} className="min-w-0 rounded-xl bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/25 px-3 py-2">
                       <p className="text-xs font-medium text-[var(--status-warning)]">
-                        {CORRECTION_FIELD_LABELS[c.field] ?? c.field} · {formatDate(c.timestamp)}
+                        {CORRECTION_FIELD_KEYS[c.field] ? t(CORRECTION_FIELD_KEYS[c.field]) : c.field} · {formatDate(c.timestamp, locale)}
                       </p>
                       <p className="mt-1 break-words text-sm leading-5 text-foreground">{c.reasonForChange}</p>
-                      <p className="mt-1 text-xs text-muted">By {c.modifiedByName ?? 'Unknown user'}</p>
+                      <p className="mt-1 text-xs text-muted">{t('correctedBy', { name: c.modifiedByName ?? t('unknownUser') })}</p>
                     </div>
                   ))}
                 </div>
@@ -242,6 +250,11 @@ const PAGE_SIZE = 50
 const EXPORT_LIMIT = 5000
 
 function AdminLogsContent() {
+  const t = useTranslations('logs')
+  const locale = useLocale()
+  const apiError = useApiError()
+  const units = { h: t('unitHour'), m: t('unitMinute') }
+  const typeLabel = (v: string) => (['building', 'floor', 'room'].includes(v) ? t(`type${v[0].toUpperCase()}${v.slice(1)}`) : v)
   // Top Locations on the dashboard links here with ?locationId=... so a click
   // lands pre-filtered instead of making the admin re-navigate and rebuild
   // the filter by hand.
@@ -350,9 +363,9 @@ function AdminLogsContent() {
         l.locationPath ?? l.locationName ?? '',
         l.locationType,
         l.checkoutAt ? 'Out' : 'In',
-        formatDate(l.timestamp),
-        formatDate(l.checkoutAt),
-        durationLabel(l),
+        formatDate(l.timestamp, locale),
+        formatDate(l.checkoutAt, locale),
+        durationLabel(l, { h: 'h', m: 'm' }, 'Still checked in'),
         csvBool(l.passkeyVerified),
         csvBool(l.checkoutLog?.autoCheckedOut ?? l.autoCheckedOut),
         l.deviceId ?? '',
@@ -370,7 +383,7 @@ function AdminLogsContent() {
       a.click()
       URL.revokeObjectURL(url)
     } catch {
-      toast.error('Export failed — could not fetch logs')
+      toast.error(t('toastExportFailed'))
     } finally {
       setExporting(false)
     }
@@ -378,14 +391,14 @@ function AdminLogsContent() {
 
   function openManualCheckout(log: LogEntry) {
     setManualCheckoutLog(log)
-    setManualCheckoutReason(log.passkeyVerified ? 'Manual checkout due to passkey verification issue' : '')
+    setManualCheckoutReason(log.passkeyVerified ? t('manualDefaultReason') : '')
   }
 
   async function submitManualCheckout() {
     if (!manualCheckoutLog) return
     const reasonForChange = manualCheckoutReason.trim()
     if (reasonForChange.length < 3) {
-      toast.error('Add a reason before checking out manually')
+      toast.error(t('toastNeedReason'))
       return
     }
 
@@ -397,15 +410,15 @@ function AdminLogsContent() {
         body: JSON.stringify({ reasonForChange }),
       })
       const payload = await res.json()
-      if (!res.ok) throw new Error(readApiError(payload, 'Manual checkout failed'))
+      if (!res.ok) throw new Error(apiError(payload, t('toastManualFailed')))
 
-      toast.success(payload.already ? 'Log was already checked out' : 'Checked out manually')
+      toast.success(payload.already ? t('toastAlreadyOut') : t('toastManualDone'))
       setManualCheckoutLog(null)
       setManualCheckoutReason('')
       setSelectedLog(null)
       await fetchLogs(false)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Manual checkout failed')
+      toast.error(error instanceof Error ? error.message : t('toastManualFailed'))
     } finally {
       setManualCheckoutLoading(false)
     }
@@ -416,13 +429,13 @@ function AdminLogsContent() {
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">All Logs</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('adminTitle')}</h1>
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
             <p className="text-sm text-muted mt-0.5" aria-live="polite">
-              {totalCount} {totalCount === 1 ? 'entry' : 'entries'} total
-              {pageCount > 1 && ` · page ${page} of ${pageCount}`}
+              {t('adminTotal', { count: totalCount })}
+              {pageCount > 1 && ` · ${t('pageOf', { page, pages: pageCount })}`}
             </p>
           )}
         </div>
@@ -435,7 +448,7 @@ function AdminLogsContent() {
             size="sm"
           >
             <Download className={`w-4 h-4 ${exporting ? 'animate-pulse' : ''}`} aria-hidden />
-            {exporting ? 'Exporting…' : 'Export CSV'}
+            {exporting ? t('exporting') : t('exportCsv')}
           </Button>
           <Button
             type="button"
@@ -445,7 +458,7 @@ function AdminLogsContent() {
             size="sm"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden />
-            {loading ? 'Loading…' : 'Refresh'}
+            {loading ? t('loadingBtn') : t('refresh')}
           </Button>
         </div>
       </div>
@@ -455,7 +468,7 @@ function AdminLogsContent() {
         <div className="relative w-full max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
           <Input
-            placeholder="Filter by visitor name…"
+            placeholder={t('filterPlaceholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-9 pr-9"
@@ -463,7 +476,7 @@ function AdminLogsContent() {
           {search && (
             <button
               type="button"
-              aria-label="Clear search"
+              aria-label={t('clearSearch')}
               onClick={() => setSearch('')}
               className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-muted/60 hover:text-foreground"
             >
@@ -476,11 +489,11 @@ function AdminLogsContent() {
           onValueChange={v => { setStatusFilter((v as 'all' | 'in' | 'out') ?? 'all'); setPage(1) }}
           fullWidth={false}
         >
-          <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-36"><SelectValue placeholder={t('statusPlaceholder')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="in">Currently in</SelectItem>
-            <SelectItem value="out">Checked out</SelectItem>
+            <SelectItem value="all">{t('allStatuses')}</SelectItem>
+            <SelectItem value="in">{t('currentlyIn')}</SelectItem>
+            <SelectItem value="out">{t('checkedOut')}</SelectItem>
           </SelectContent>
         </Select>
         <Select
@@ -488,9 +501,9 @@ function AdminLogsContent() {
           onValueChange={v => { setLocationFilter(v ?? 'all'); setPage(1) }}
           fullWidth={false}
         >
-          <SelectTrigger className="w-48"><SelectValue placeholder="Location" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder={t('locationPlaceholder')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All locations</SelectItem>
+            <SelectItem value="all">{t('allLocations')}</SelectItem>
             {locations.map(loc => (
               <SelectItem key={loc.id} value={loc.id}>{loc.label}</SelectItem>
             ))}
@@ -504,9 +517,9 @@ function AdminLogsContent() {
             max={dateTo || undefined}
             onChange={e => { setDateFrom(e.target.value); setPage(1) }}
             className="w-[9.5rem]"
-            aria-label="Check-in from"
+            aria-label={t('checkInFrom')}
           />
-          <span className="text-xs text-muted" aria-hidden>to</span>
+          <span className="text-xs text-muted" aria-hidden>{t('to')}</span>
           <Input
             id="checkin-to"
             type="date"
@@ -514,7 +527,7 @@ function AdminLogsContent() {
             min={dateFrom || undefined}
             onChange={e => { setDateTo(e.target.value); setPage(1) }}
             className="w-[9.5rem]"
-            aria-label="Check-in to"
+            aria-label={t('checkInTo')}
           />
         </div>
         {hasActiveFilters && (
@@ -523,7 +536,7 @@ function AdminLogsContent() {
             onClick={clearFilters}
             className="ml-1 border-l border-border pl-3 py-2 text-xs font-medium text-muted hover:text-foreground underline underline-offset-2"
           >
-            Clear filters
+            {t('clearFilters')}
           </button>
         )}
       </div>
@@ -531,15 +544,15 @@ function AdminLogsContent() {
       {/* Table */}
       <div>
         {loading ? (
-          <Table aria-label="Admin logs loading table">
+          <Table aria-label={t('adminLoadingTable')}>
             <TableHeader>
-              <TableHead isRowHeader>Visitor</TableHead>
-              <TableHead className="hidden md:table-cell">Location</TableHead>
-              <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden lg:table-cell">Check-in</TableHead>
-              <TableHead className="hidden lg:table-cell">Check-out</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead isRowHeader>{t('colVisitor')}</TableHead>
+              <TableHead className="hidden md:table-cell">{t('colLocation')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t('colType')}</TableHead>
+              <TableHead>{t('colStatus')}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t('colCheckIn')}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t('colCheckOut')}</TableHead>
+              <TableHead>{t('colActions')}</TableHead>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 6 }).map((_, index) => (
@@ -573,11 +586,11 @@ function AdminLogsContent() {
             <div className="w-12 h-12 rounded-2xl bg-[var(--status-warning)]/10 flex items-center justify-center mb-3">
               <TriangleAlert className="w-6 h-6 text-[var(--status-warning)]" strokeWidth={1.75} aria-hidden />
             </div>
-            <p className="font-medium text-foreground text-sm">Couldn&apos;t load logs</p>
-            <p className="text-xs text-muted mt-1">Something went wrong fetching the audit log — this isn&apos;t the same as an empty ledger.</p>
+            <p className="font-medium text-foreground text-sm">{t('adminLoadErrorTitle')}</p>
+            <p className="text-xs text-muted mt-1">{t('adminLoadErrorBody')}</p>
             <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => { void fetchLogs() }}>
               <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-              Try again
+              {t('tryAgain')}
             </Button>
           </div>
         ) : logs.length === 0 ? (
@@ -585,24 +598,24 @@ function AdminLogsContent() {
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <ShieldCheck className="w-6 h-6 text-muted/50" strokeWidth={1.75} aria-hidden />
             </div>
-            <p className="font-medium text-foreground text-sm">{hasActiveFilters ? 'No matching logs' : 'No logs yet'}</p>
-            <p className="text-xs text-muted mt-1">{hasActiveFilters ? 'Try different filters' : 'Logs will appear here as visitors check in'}</p>
+            <p className="font-medium text-foreground text-sm">{hasActiveFilters ? t('noMatching') : t('emptyTitle')}</p>
+            <p className="text-xs text-muted mt-1">{hasActiveFilters ? t('tryDifferent') : t('adminEmptyBody')}</p>
             {hasActiveFilters && (
               <Button type="button" variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
-                Clear filters
+                {t('clearFilters')}
               </Button>
             )}
           </div>
         ) : (
-          <Table aria-label="Admin logs table">
+          <Table aria-label={t('adminTable')}>
             <TableHeader>
-              <TableHead isRowHeader>Visitor</TableHead>
-              <TableHead className="hidden md:table-cell">Location</TableHead>
-              <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden lg:table-cell">Check-in</TableHead>
-              <TableHead className="hidden lg:table-cell">Check-out</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead isRowHeader>{t('colVisitor')}</TableHead>
+              <TableHead className="hidden md:table-cell">{t('colLocation')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t('colType')}</TableHead>
+              <TableHead>{t('colStatus')}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t('colCheckIn')}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t('colCheckOut')}</TableHead>
+              <TableHead>{t('colActions')}</TableHead>
             </TableHeader>
             <TableBody>
               {logs.map(l => {
@@ -616,24 +629,24 @@ function AdminLogsContent() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="font-medium text-sm text-foreground truncate">{l.visitorName ?? 'Unknown visitor'}</p>
+                            <p className="font-medium text-sm text-foreground truncate">{l.visitorName ?? t('unknownVisitor')}</p>
                             {!!l.corrections?.length && (
                               <span
-                                title={`${l.corrections.length} correction${l.corrections.length !== 1 ? 's' : ''} on this log — see Guest Details`}
+                                title={t('correctedTooltip', { count: l.corrections.length })}
                                 className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--status-warning)] bg-[var(--status-warning)]/10 px-1.5 py-0.5 rounded-full"
                               >
                                 <TriangleAlert className="size-3" aria-hidden />
-                                Corrected
+                                {t('correctedChip')}
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-muted mt-0.5 truncate max-w-[200px] md:hidden">{l.locationPath ?? l.locationName ?? 'Unknown location'}</p>
+                          <p className="text-xs text-muted mt-0.5 truncate max-w-[200px] md:hidden">{l.locationPath ?? l.locationName ?? t('unknownLocation')}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <p className="text-sm text-foreground truncate max-w-[260px]" title={l.locationPath ?? undefined}>
-                        {l.locationName ?? <span className="text-muted/60">Unknown</span>}
+                        {l.locationName ?? <span className="text-muted/60">{t('unknown')}</span>}
                       </p>
                       {l.locationPath && l.locationPath !== l.locationName && (
                         <p className="text-xs text-muted truncate max-w-[260px]">{l.locationPath}</p>
@@ -641,7 +654,7 @@ function AdminLogsContent() {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-foreground bg-muted">
-                        {l.locationType}
+                        {typeLabel(l.locationType)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -654,20 +667,20 @@ function AdminLogsContent() {
                         // "something is live" read a status pill needs.
                         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground border border-foreground/40 px-2.5 py-0.5 rounded-full">
                           <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-pulse" />
-                          In
+                          {t('statusIn')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center text-xs font-medium text-muted bg-muted px-2.5 py-0.5 rounded-full">
-                          Out
+                          {t('statusOut')}
                         </span>
                       )}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <p className="text-xs text-muted">{new Date(l.timestamp).toLocaleString()}</p>
+                      <p className="text-xs text-muted">{new Date(l.timestamp).toLocaleString(locale)}</p>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <p className="text-xs text-muted">
-                        {l.checkoutAt ? new Date(l.checkoutAt).toLocaleString() : '—'}
+                        {l.checkoutAt ? new Date(l.checkoutAt).toLocaleString(locale) : '—'}
                       </p>
                     </TableCell>
                     <TableCell>
@@ -676,8 +689,8 @@ function AdminLogsContent() {
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`View details for ${l.visitorName ?? 'log'}`}
-                          title="View details"
+                          aria-label={t('viewDetailsFor', { name: l.visitorName ?? t('logFallback') })}
+                          title={t('viewDetails')}
                           onClick={() => setSelectedLog(l)}
                         >
                           <EyeIcon className="h-4 w-4" aria-hidden />
@@ -687,11 +700,11 @@ function AdminLogsContent() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            aria-label={`Manually check out ${l.visitorName ?? 'visitor'}`}
+                            aria-label={t('manualCheckoutAria', { name: l.visitorName ?? t('visitorFallback') })}
                             onClick={() => openManualCheckout(l)}
                           >
                             <LogOut className="h-3.5 w-3.5" aria-hidden />
-                            Check out
+                            {t('checkOutBtn')}
                           </Button>
                         )}
                       </div>
@@ -706,7 +719,7 @@ function AdminLogsContent() {
 
       {!loading && !error && pageCount > 1 && (
         <div className="flex items-center justify-between gap-4">
-          <p className="text-xs text-muted">Page {page} of {pageCount}</p>
+          <p className="text-xs text-muted">{t('pageOfLabel', { page, pages: pageCount })}</p>
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -715,7 +728,7 @@ function AdminLogsContent() {
               disabled={page <= 1}
               onClick={() => setPage(p => Math.max(1, p - 1))}
             >
-              Previous
+              {t('previous')}
             </Button>
             <Button
               type="button"
@@ -724,7 +737,7 @@ function AdminLogsContent() {
               disabled={page >= pageCount}
               onClick={() => setPage(p => Math.min(pageCount, p + 1))}
             >
-              Next
+              {t('next')}
             </Button>
           </div>
         </div>
@@ -747,15 +760,15 @@ function AdminLogsContent() {
       >
         <DialogContent size="sm" className="bg-overlay">
           <DialogHeader className="px-5 pt-5 sm:px-6 sm:pt-6">
-            <DialogTitle className="text-base font-semibold text-foreground">Manual checkout</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-foreground">{t('manualTitle')}</DialogTitle>
           </DialogHeader>
           <DialogBody className="px-5 pb-2 pt-0 sm:px-6">
             <div className="space-y-3">
               <p className="text-sm text-muted">
-                This will append a checkout log for {manualCheckoutLog?.visitorName ?? 'this visitor'} and record the reason in the audit ledger.
+                {t('manualBody', { name: manualCheckoutLog?.visitorName ?? t('thisVisitor') })}
               </p>
               <Textarea
-                placeholder="Reason for manual checkout"
+                placeholder={t('manualReasonPlaceholder')}
                 value={manualCheckoutReason}
                 disabled={manualCheckoutLoading}
                 onChange={(event) => setManualCheckoutReason(event.target.value)}
@@ -773,7 +786,7 @@ function AdminLogsContent() {
                 setManualCheckoutReason('')
               }}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               type="button"
@@ -781,7 +794,7 @@ function AdminLogsContent() {
               disabled={manualCheckoutLoading}
               onClick={submitManualCheckout}
             >
-              {manualCheckoutLoading ? 'Checking out…' : 'Check out manually'}
+              {manualCheckoutLoading ? t('manualSubmitting') : t('manualSubmit')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn } from 'next-auth/react'
+import { useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
@@ -11,6 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export default function SetPasswordPage() {
+  const t = useTranslations('setPassword')
+  const apiError = useApiError()
   const params = useParams<{ token: string }>()
   const router = useRouter()
   const [password, setPassword] = useState('')
@@ -57,7 +61,7 @@ export default function SetPasswordPage() {
       })
       setResent(true)
     } catch {
-      setError('Could not request a new link just now. Try again in a moment.')
+      setError(t('requestFailed'))
     } finally {
       setResending(false)
     }
@@ -67,7 +71,7 @@ export default function SetPasswordPage() {
     e.preventDefault()
     setError('')
     if (password !== confirm) {
-      setError('Passwords do not match')
+      setError(t('mismatch'))
       return
     }
     setBusy(true)
@@ -78,7 +82,7 @@ export default function SetPasswordPage() {
         body: JSON.stringify({ token: params.token, password }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? 'Could not set password')
+      if (!res.ok) throw new Error(apiError(data, t('setFailed')))
 
       const result = await signIn('credentials', {
         email: data.email,
@@ -92,7 +96,7 @@ export default function SetPasswordPage() {
         router.refresh()
       }
     } catch (err: any) {
-      setError(err?.message ?? 'Could not set password')
+      setError(err?.message ?? t('setFailed'))
     } finally {
       setBusy(false)
     }
@@ -102,32 +106,32 @@ export default function SetPasswordPage() {
     <AuthLayout
       headline={
         <>
-          Your account is waiting.
+          {t('headline1')}
           <br />
-          <span className="gradient-text">Give it a password.</span>
+          <span className="gradient-text">{t('headline2')}</span>
         </>
       }
-      subhead="Someone created this account for you. Setting a password activates it and verifies the address in one step."
+      subhead={t('subhead')}
     >
       <div className="auth-stack">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {status === 'expired' ? 'This link has expired' : 'Set your password'}
+            {status === 'expired' ? t('expiredTitle') : t('title')}
           </h1>
           <p className="mt-1.5 text-sm text-muted">
             {status === 'checking'
-              ? 'Checking your link…'
+              ? t('checking')
               : status === 'expired'
-                ? 'Set-password links last 7 days. Your account is still here — request a new link and it will arrive at the same address.'
-                : 'Choose a password to activate your account.'}
+                ? t('expiredBody')
+                : t('validBody')}
           </p>
         </div>
 
         <div aria-live="polite" className="empty:hidden">
           {error && <FormNotice tone="danger" title={error} />}
           {status === 'expired' && resent && (
-            <FormNotice tone="success" title="A new link is on its way">
-              Check {tokenEmail || 'your inbox'} for a fresh set-password link.
+            <FormNotice tone="success" title={t('newLinkTitle')}>
+              {t('newLinkBody', { email: tokenEmail || t('yourInbox') })}
             </FormNotice>
           )}
         </div>
@@ -141,19 +145,19 @@ export default function SetPasswordPage() {
             loadingBehavior="busy"
             onPress={() => void requestNewLink()}
           >
-            {resending ? 'Sending…' : 'Email me a new link'}
+            {resending ? t('sending') : t('emailNew')}
           </Button>
         )}
 
         {status === 'valid' && (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" />
+            <Label htmlFor="password">{t('password')}</Label>
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" placeholder={t('passwordPlaceholder')} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="confirm">Confirm password</Label>
-            <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} autoComplete="new-password" placeholder="Re-enter password" />
+            <Label htmlFor="confirm">{t('confirm')}</Label>
+            <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} autoComplete="new-password" placeholder={t('confirmPlaceholder')} />
           </div>
           <Button
             size="touch"
@@ -163,7 +167,7 @@ export default function SetPasswordPage() {
             isLoading={busy}
             loadingBehavior="busy"
           >
-            {busy ? 'Activating…' : 'Set password & sign in'}
+            {busy ? t('activating') : t('submit')}
           </Button>
         </form>
         )}
@@ -173,7 +177,7 @@ export default function SetPasswordPage() {
             href="/login"
             className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
           >
-            Back to sign in
+            {t('backSignIn')}
           </Link>
         </p>
       </div>

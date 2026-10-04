@@ -8,6 +8,7 @@ import { QuestProgress } from '@/lib/models/QuestProgress'
 import { resolveLocationLabels } from '@/lib/locationLabels'
 import { requireTeamPageAccess } from '@/lib/server/requireTeamPageAccess'
 import { ArrowLeft, CheckCircle2, ListChecks, MapPin, QrCode, Sparkles } from 'lucide-react'
+import { getTranslations } from 'next-intl/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,15 +47,16 @@ async function getQuest(id: string, teamId: string) {
 
 export default async function AdminQuestDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const t = await getTranslations('adminQuestDetail')
   const access = await requireTeamPageAccess('manager', '/admin/quests')
   const quest = await getQuest(id, access.teamId)
-  if (!quest) return <div className="p-8 text-[var(--status-danger)]">Quest not found</div>
+  if (!quest) return <div className="p-8 text-[var(--status-danger)]">{t('questNotFound')}</div>
 
   const appUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
   const qrUrl = `${appUrl}/quest/${quest.qrToken}`
-  const questTypeLabel = quest.type === 'location_chain' ? 'Location Chain' : 'Custom'
+  const questTypeLabel = quest.type === 'location_chain' ? t('locationChain') : t('custom')
   const cardLabel = quest.batchSize > 1
-    ? `${questTypeLabel} · Card ${quest.cardNumber} of ${quest.batchSize}`
+    ? t('cardLabel', { type: questTypeLabel, n: quest.cardNumber, total: quest.batchSize })
     : questTypeLabel
   const steps = [...(quest.steps ?? [])].sort((a: any, b: any) => a.order - b.order)
 
@@ -66,7 +68,7 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
           className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
-          Back to quests
+          {t('backToQuests')}
         </Link>
 
         <div className="grid gap-4 lg:grid-cols-[24rem_minmax(0,1fr)] lg:items-start">
@@ -84,10 +86,10 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                         text-foreground/text-muted flip to near-white in dark
                         mode and were rendering illegibly on this permanently
                         light card. */}
-                    <p className="text-base font-semibold text-neutral-900">Quest Card QR</p>
+                    <p className="text-base font-semibold text-neutral-900">{t('questCardQr')}</p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
                       <Sparkles className="size-3.5 shrink-0" />
-                      Give this to participants
+                      {t('giveThisToParticipants')}
                     </p>
                   </div>
                 </div>
@@ -97,8 +99,8 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                     label={quest.title}
                     sublabel={cardLabel}
                     description={quest.description}
-                    exportTitle="Quest Card QR"
-                    exportDescription="Give this to participants"
+                    exportTitle={t('questCardQr')}
+                    exportDescription={t('giveThisToParticipants')}
                   />
                 </div>
               </div>
@@ -114,18 +116,18 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                     </div>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-base font-semibold text-foreground">Steps ({steps.length})</p>
+                        <p className="text-base font-semibold text-foreground">{t('stepsCount', { count: steps.length })}</p>
                         <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                           {cardLabel}
                         </span>
                         {quest.completedAt ? (
                           <span className="inline-flex items-center gap-1 rounded-full border border-foreground/40 px-2 py-0.5 text-xs font-semibold text-foreground">
                             <CheckCircle2 className="size-3" />
-                            Completed
+                            {t('completed')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                            {quest.completedCount}/{steps.length} done
+                            {t('doneOf', { done: quest.completedCount, total: steps.length })}
                           </span>
                         )}
                       </div>
@@ -156,10 +158,10 @@ export default async function AdminQuestDetailPage({ params }: { params: Promise
                       </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground" title={step.locationPath ?? undefined}>
-                          {step.locationName ?? <span className="text-muted-foreground italic">Unknown location</span>}
+                          {step.locationName ?? <span className="text-muted-foreground italic">{t('unknownLocation')}</span>}
                         </p>
                         <p className="text-xs text-muted-foreground capitalize">
-                          {step.locationType}{step.locationPath && step.locationPath !== step.locationName ? ` · ${step.locationPath}` : ''}
+                          {['building', 'floor', 'room'].includes(step.locationType) ? t(`type${step.locationType[0].toUpperCase()}${step.locationType.slice(1)}`) : step.locationType}{step.locationPath && step.locationPath !== step.locationName ? ` · ${step.locationPath}` : ''}
                         </p>
                         {step.challenge && <p className="mt-0.5 text-xs text-muted-foreground italic">{step.challenge}</p>}
                       </div>

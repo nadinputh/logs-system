@@ -3,6 +3,7 @@
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import { Moon, Sun } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 /**
  * The icon swap is a state change, so it is shown as one: the outgoing mark
@@ -11,6 +12,7 @@ import { Moon, Sun } from 'lucide-react'
  * swapping the element instead would only ever snap.
  */
 export function ThemeToggle() {
+  const t = useTranslations('common')
   const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
@@ -24,7 +26,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label={isDark ? t('themeToLight') : t('themeToDark')}
       className="press relative flex size-11 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm hover:bg-accent/10 hover:text-accent [&_svg]:text-current"
     >
       <Sun

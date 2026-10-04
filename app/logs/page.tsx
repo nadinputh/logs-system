@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useLocale, useTranslations } from 'next-intl'
 import { ChevronDown, ClipboardList, EyeIcon, MapPin, RefreshCw, TriangleAlert, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -37,33 +38,34 @@ interface LogEntry {
   } | null
 }
 
-function formatValue(value?: string | boolean | null) {
+function formatValue(value: string | boolean | null | undefined, yes: string, no: string) {
   if (value === undefined || value === null || value === '') return '—'
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+  if (typeof value === 'boolean') return value ? yes : no
   return value
 }
 
-function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : '—'
+function formatDate(value: string | null | undefined, locale: string) {
+  return value ? new Date(value).toLocaleString(locale) : '—'
 }
 
-function detailDurationLabel(entry: LogEntry) {
-  if (!entry.checkoutAt) return 'Still checked in'
+function detailDurationLabel(entry: LogEntry, units: { h: string; m: string }, stillIn: string) {
+  if (!entry.checkoutAt) return stillIn
   const ms = new Date(entry.checkoutAt).getTime() - new Date(entry.timestamp).getTime()
   const minutes = Math.max(0, Math.round(ms / 60000))
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
-  return hours ? `${hours}h ${rest}m` : `${rest}m`
+  return hours ? `${hours}${units.h} ${rest}${units.m}` : `${rest}${units.m}`
 }
 
 // `full` spans both grid columns once the dialog is wide enough to run two —
 // for values that run long (paths, emails, free text, ids) where a half-width
 // cell would wrap or crowd its neighbor.
 function DetailItem({ label, value, full }: { label: string; value?: string | boolean | null; full?: boolean }) {
+  const t = useTranslations('logs')
   return (
     <div className={`min-w-0 rounded-xl bg-muted/40 px-3 py-2 ${full ? '@sm:col-span-2' : ''}`}>
       <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-1 break-words text-sm leading-5 text-foreground">{formatValue(value)}</p>
+      <p className="mt-1 break-words text-sm leading-5 text-foreground">{formatValue(value, t('yes'), t('no'))}</p>
     </div>
   )
 }
@@ -86,11 +88,12 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
 // to their own history for — collapsed by default so it stays available
 // without competing with Visitor/Location/Duration for attention.
 function TechnicalDetails({ children }: { children: React.ReactNode }) {
+  const t = useTranslations('logs')
   return (
     <details className="group space-y-2.5">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-foreground [&::-webkit-details-marker]:hidden">
         <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" aria-hidden />
-        Technical details
+        {t('technicalDetails')}
       </summary>
       <div className="grid grid-cols-1 gap-2 pt-2.5 @sm:grid-cols-2">{children}</div>
     </details>
@@ -98,6 +101,10 @@ function TechnicalDetails({ children }: { children: React.ReactNode }) {
 }
 
 function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const t = useTranslations('logs')
+  const locale = useLocale()
+  const units = { h: t('unitHour'), m: t('unitMinute') }
+  const typeLabel = (v: string) => (['building', 'floor', 'room'].includes(v) ? t(`type${v[0].toUpperCase()}${v.slice(1)}`) : v)
   if (!log) return null
 
   return (
@@ -115,56 +122,56 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
               <UserRound className="size-5" aria-hidden />
             </div>
             <div className="min-w-0">
-              <DialogTitle className="text-base font-semibold text-foreground">Guest Details</DialogTitle>
+              <DialogTitle className="text-base font-semibold text-foreground">{t('guestDetails')}</DialogTitle>
               <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted">
                 <MapPin className="size-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{log.locationName ?? 'Unknown location'}</span>
+                <span className="truncate">{log.locationName ?? t('unknownLocation')}</span>
               </p>
             </div>
           </div>
         </div>
         <DialogBody className="@container min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-0 sm:px-6 sm:pb-6">
           <div className="w-full space-y-4">
-            <DetailSection title="Visitor">
-              <DetailItem label="Name" value={log.visitorName} />
-              <DetailItem label="Email" value={log.visitorEmail} full />
-              <DetailItem label="Phone" value={log.visitorPhone} />
-              <DetailItem label="Gender" value={log.visitorGender} />
-              <DetailItem label="Purpose" value={log.visitPurpose} full />
+            <DetailSection title={t('sectionVisitor')}>
+              <DetailItem label={t('fieldName')} value={log.visitorName} />
+              <DetailItem label={t('fieldEmail')} value={log.visitorEmail} full />
+              <DetailItem label={t('fieldPhone')} value={log.visitorPhone} />
+              <DetailItem label={t('fieldGender')} value={log.visitorGender} />
+              <DetailItem label={t('fieldPurpose')} value={log.visitPurpose} full />
             </DetailSection>
 
-            <DetailSection title="Location">
-              <DetailItem label="Name" value={log.locationName} />
-              <DetailItem label="Type" value={log.locationType} />
-              <DetailItem label="Path" value={log.locationPath} full />
+            <DetailSection title={t('sectionLocation')}>
+              <DetailItem label={t('fieldName')} value={log.locationName} />
+              <DetailItem label={t('fieldType')} value={typeLabel(log.locationType)} />
+              <DetailItem label={t('fieldPath')} value={log.locationPath} full />
             </DetailSection>
 
-            <DetailSection title="Check-in / Check-out">
-              <DetailItem label="Check-in" value={formatDate(log.timestamp)} />
-              <DetailItem label="Check-out" value={formatDate(log.checkoutAt)} />
-              <DetailItem label="Duration" value={detailDurationLabel(log)} />
-              <DetailItem label="Passkey verified" value={log.passkeyVerified} />
+            <DetailSection title={t('sectionStay')}>
+              <DetailItem label={t('fieldCheckIn')} value={formatDate(log.timestamp, locale)} />
+              <DetailItem label={t('fieldCheckOut')} value={formatDate(log.checkoutAt, locale)} />
+              <DetailItem label={t('fieldDuration')} value={detailDurationLabel(log, units, t('stillCheckedIn'))} />
+              <DetailItem label={t('fieldPasskey')} value={log.passkeyVerified} />
               {(log.checkoutLog?.autoCheckedOut ?? log.autoCheckedOut) && (
                 <div className="min-w-0 rounded-xl bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/25 px-3 py-2 @sm:col-span-2">
                   <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--status-warning)]">
                     <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-                    Auto checked out
+                    {t('autoOutTitle')}
                   </p>
                   <p className="mt-1 text-sm leading-5 text-foreground">
-                    You didn&apos;t check out — the system closed this visit automatically after 12 hours.
+                    {t('autoOutSelf')}
                   </p>
                 </div>
               )}
             </DetailSection>
 
             <TechnicalDetails>
-              <DetailItem label="Location ID" value={log.locationId} />
-              <DetailItem label="Checkout log ID" value={log.checkoutLog?._id} />
-              <DetailItem label="IP address" value={log.ipAddress} />
-              <DetailItem label="Geofence matched" value={log.geofenceStatus} />
-              <DetailItem label="Session token" value={log.sessionToken} full />
-              <DetailItem label="Device ID" value={log.deviceId} full />
-              <DetailItem label="User agent" value={log.userAgent} full />
+              <DetailItem label={t('techLocationId')} value={log.locationId} />
+              <DetailItem label={t('techCheckoutLogId')} value={log.checkoutLog?._id} />
+              <DetailItem label={t('techIp')} value={log.ipAddress} />
+              <DetailItem label={t('techGeofence')} value={log.geofenceStatus} />
+              <DetailItem label={t('techSession')} value={log.sessionToken} full />
+              <DetailItem label={t('techDevice')} value={log.deviceId} full />
+              <DetailItem label={t('techUserAgent')} value={log.userAgent} full />
             </TechnicalDetails>
           </div>
         </DialogBody>
@@ -174,6 +181,10 @@ function LogDetailsDialog({ log, open, onOpenChange }: { log: LogEntry | null; o
 }
 
 export default function LogsPage() {
+  const t = useTranslations('logs')
+  const locale = useLocale()
+  const units = { h: t('unitHour'), m: t('unitMinute') }
+  const typeLabel = (v: string) => (['building', 'floor', 'room'].includes(v) ? t(`type${v[0].toUpperCase()}${v.slice(1)}`) : v)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [loading, setLoading] = useState(true)
@@ -205,30 +216,30 @@ export default function LogsPage() {
     const minutes = Math.max(0, Math.round(ms / 60000))
     const hours = Math.floor(minutes / 60)
     const rest = minutes % 60
-    return hours ? `${hours}h ${rest}m` : `${rest}m`
+    return hours ? `${hours}${units.h} ${rest}${units.m}` : `${rest}${units.m}`
   }
 
   return (
     <div className="p-6 sm:p-8 space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground">My Logs</h1>
+        <h1 className="text-xl font-bold text-foreground">{t('myTitle')}</h1>
         {loading ? (
           <Skeleton className="mt-1.5 h-4 w-32" />
         ) : (
-          <p className="text-sm text-muted mt-0.5">{logs.length} check-in{logs.length !== 1 ? 's' : ''} total</p>
+          <p className="text-sm text-muted mt-0.5">{t('myTotal', { count: logs.length })}</p>
         )}
       </div>
 
       <div>
         {loading ? (
-          <Table aria-label="My logs loading table">
+          <Table aria-label={t('myLoadingTable')}>
             <TableHeader>
-              <TableHead isRowHeader>Visitor</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden md:table-cell">When</TableHead>
-              <TableHead>Details</TableHead>
+              <TableHead isRowHeader>{t('colVisitor')}</TableHead>
+              <TableHead>{t('colLocation')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t('colType')}</TableHead>
+              <TableHead>{t('colStatus')}</TableHead>
+              <TableHead className="hidden md:table-cell">{t('colWhen')}</TableHead>
+              <TableHead>{t('colDetails')}</TableHead>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 5 }).map((_, index) => (
@@ -258,11 +269,11 @@ export default function LogsPage() {
             <div className="w-12 h-12 rounded-2xl bg-[var(--status-warning)]/10 flex items-center justify-center mb-3">
               <TriangleAlert className="w-6 h-6 text-[var(--status-warning)]" strokeWidth={1.75} aria-hidden />
             </div>
-            <p className="font-medium text-foreground text-sm">Couldn&apos;t load your logs</p>
-            <p className="text-xs text-muted mt-1">Something went wrong fetching your check-in history.</p>
+            <p className="font-medium text-foreground text-sm">{t('myLoadErrorTitle')}</p>
+            <p className="text-xs text-muted mt-1">{t('myLoadErrorBody')}</p>
             <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => { void fetchLogs() }}>
               <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-              Try again
+              {t('tryAgain')}
             </Button>
           </div>
         ) : logs.length === 0 ? (
@@ -270,18 +281,18 @@ export default function LogsPage() {
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <ClipboardList className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
-            <p className="font-medium text-foreground text-sm">No logs yet</p>
-            <p className="text-xs text-muted mt-1">Your check-in history will appear here</p>
+            <p className="font-medium text-foreground text-sm">{t('emptyTitle')}</p>
+            <p className="text-xs text-muted mt-1">{t('myEmptyBody')}</p>
           </div>
         ) : (
-          <Table aria-label="My logs table">
+          <Table aria-label={t('myTable')}>
             <TableHeader>
-              <TableHead isRowHeader>Visitor</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead className="hidden sm:table-cell">Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden md:table-cell">When</TableHead>
-              <TableHead>Details</TableHead>
+              <TableHead isRowHeader>{t('colVisitor')}</TableHead>
+              <TableHead>{t('colLocation')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t('colType')}</TableHead>
+              <TableHead>{t('colStatus')}</TableHead>
+              <TableHead className="hidden md:table-cell">{t('colWhen')}</TableHead>
+              <TableHead>{t('colDetails')}</TableHead>
             </TableHeader>
             <TableBody>
               {logs.map(l => {
@@ -293,12 +304,12 @@ export default function LogsPage() {
                         <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center shrink-0 text-xs font-semibold text-accent-foreground">
                           {(l.visitorName ?? '?')[0].toUpperCase()}
                         </div>
-                        <p className="font-medium text-sm text-foreground">{l.visitorName ?? 'Unknown'}</p>
+                        <p className="font-medium text-sm text-foreground">{l.visitorName ?? t('unknown')}</p>
                       </div>
                     </TableCell>
                     <TableCell>
                       <p className="text-sm text-foreground truncate max-w-[220px]" title={l.locationPath ?? undefined}>
-                        {l.locationName ?? <span className="text-muted/60">Unknown</span>}
+                        {l.locationName ?? <span className="text-muted/60">{t('unknown')}</span>}
                       </p>
                       {l.locationPath && l.locationPath !== l.locationName && (
                         <p className="text-xs text-muted truncate max-w-[220px]">{l.locationPath}</p>
@@ -306,20 +317,20 @@ export default function LogsPage() {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       <span className="inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full text-foreground bg-muted">
-                        {l.locationType}
+                        {typeLabel(l.locationType)}
                       </span>
                     </TableCell>
                     <TableCell>
                       {!l.checkoutAt ? (
                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--status-success)] bg-[var(--status-success)]/10 px-2.5 py-0.5 rounded-full">
                           <span className="w-1.5 h-1.5 bg-[var(--status-success)] rounded-full animate-pulse" />
-                          In
+                          {t('statusIn')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-muted bg-muted px-2.5 py-0.5 rounded-full">
-                          {dur ? `${dur}` : 'Out'}
+                          {dur ? `${dur}` : t('statusOut')}
                           {(l.checkoutLog?.autoCheckedOut ?? l.autoCheckedOut) && (
-                            <span title="Automatically checked out after 12 hours">
+                            <span title={t('autoOutTooltip')}>
                               <TriangleAlert className="size-3 text-[var(--status-warning)]" aria-hidden />
                             </span>
                           )}
@@ -327,15 +338,15 @@ export default function LogsPage() {
                       )}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <p className="text-xs text-muted">{new Date(l.timestamp).toLocaleString()}</p>
+                      <p className="text-xs text-muted">{new Date(l.timestamp).toLocaleString(locale)}</p>
                     </TableCell>
                     <TableCell>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={`View details for ${l.visitorName ?? 'log'}`}
-                        title="View details"
+                        aria-label={t('viewDetailsFor', { name: l.visitorName ?? t('logFallback') })}
+                        title={t('viewDetails')}
                         onClick={() => setSelectedLog(l)}
                       >
                         <EyeIcon className="h-4 w-4" aria-hidden />

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { ListBox, Select as HeroSelect } from "@heroui/react"
+import { useTranslations } from "next-intl"
 
 interface SelectMarkerProps {
   className?: string
@@ -46,6 +47,7 @@ function Select({
   ariaLabel,
   children,
 }: SelectProps) {
+  const selectOptionLabel = useTranslations("common")("selectOption")
   const isControlled = value !== undefined
   const [internalValue, setInternalValue] = React.useState(defaultValue)
   const currentValue = isControlled ? value ?? "" : internalValue
@@ -127,7 +129,7 @@ function Select({
   // announcing the same generic fallback string.
   const resolvedAriaLabel = ariaLabel ?? placeholder
   const labelledBy = !resolvedAriaLabel && triggerId ? `${triggerId}-label` : undefined
-  const finalAriaLabel = resolvedAriaLabel ?? (labelledBy ? undefined : "Select option")
+  const finalAriaLabel = resolvedAriaLabel ?? (labelledBy ? undefined : selectOptionLabel)
 
   return (
     <HeroSelect.Root
@@ -154,7 +156,7 @@ function Select({
       <HeroSelect.Popover>
         <ListBox.Root
           selectionMode="single"
-          aria-label={finalAriaLabel ?? "Select option"}
+          aria-label={finalAriaLabel ?? selectOptionLabel}
           selectedKeys={currentValue === "" ? new Set() : new Set([currentValue])}
           onSelectionChange={(selection) => {
             if (selection === "all") {

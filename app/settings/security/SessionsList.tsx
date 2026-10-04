@@ -25,6 +25,9 @@ import {
   DialogIcon,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useLocale, useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
+import { useMounted } from '@/lib/useMounted'
 
 export type SessionRow = {
   id: string
@@ -37,35 +40,39 @@ export type SessionRow = {
   current: boolean
 }
 
-function relativeTime(iso: string): string {
+// Intl.RelativeTimeFormat follows the app language (km included) instead of a
+// hard-coded English "Ns ago".
+function relativeTime(iso: string, locale: string, mounted: boolean): string {
+  if (!mounted) return '…'
   const now = Date.now()
   const then = new Date(iso).getTime()
   const seconds = Math.max(1, Math.round((now - then) / 1000))
-  if (seconds < 60) return `${seconds}s ago`
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'narrow' })
+  if (seconds < 60) return rtf.format(-seconds, 'second')
   const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 60) return rtf.format(-minutes, 'minute')
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return rtf.format(-hours, 'hour')
   const days = Math.round(hours / 24)
-  if (days < 30) return `${days}d ago`
-  return new Date(iso).toLocaleDateString()
+  if (days < 30) return rtf.format(-days, 'day')
+  return new Date(iso).toLocaleDateString(locale)
 }
 
-function summarizeUserAgent(ua: string): { label: string; kind: 'phone' | 'desktop' } {
+function summarizeUserAgent(ua: string, t: (k: string, v?: any) => string): { label: string; kind: 'phone' | 'desktop' } {
   const s = ua.toLowerCase()
   const isPhone = /iphone|android.*mobile|mobile safari/.test(s)
-  let os = 'Unknown OS'
+  let os = t('uaUnknownOs')
   if (/iphone|ipad|ipod/.test(s)) os = 'iOS'
   else if (/android/.test(s)) os = 'Android'
   else if (/mac os x|macintosh/.test(s)) os = 'macOS'
   else if (/windows/.test(s)) os = 'Windows'
   else if (/linux/.test(s)) os = 'Linux'
-  let browser = 'browser'
+  let browser = t('uaBrowser')
   if (/edg\//.test(s)) browser = 'Edge'
   else if (/chrome\//.test(s) && !/edg\//.test(s)) browser = 'Chrome'
   else if (/firefox\//.test(s)) browser = 'Firefox'
   else if (/safari\//.test(s) && !/chrome\//.test(s)) browser = 'Safari'
-  return { label: `${browser} on ${os}`, kind: isPhone ? 'phone' : 'desktop' }
+  return { label: t('uaLabel', { browser, os }), kind: isPhone ? 'phone' : 'desktop' }
 }
 
 // A session earns its own group by how recently it was *used*, not when it
@@ -79,6 +86,10 @@ function recencyGroup(lastSeenAt: string): 'today' | 'thisWeek' | 'older' {
 }
 
 export function SessionsList({ initial }: { initial: SessionRow[] }) {
+  const t = useTranslations('sessions')
+  const locale = useLocale()
+  const mounted = useMounted()
+  const apiError = useApiError()
   const [sessions, setSessions] = useState<SessionRow[]>(initial)
   const [query, setQuery] = useState('')
   const [revokingId, setRevokingId] = useState<string | null>(null)
@@ -98,7 +109,7 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
     const q = query.trim().toLowerCase()
     if (!q) return sorted
     return sorted.filter((s) => {
-      const { label } = summarizeUserAgent(s.userAgent)
+      const { label } = summarizeUserAgent(s.userAgent, t)
       return label.toLowerCase().includes(q) || s.ipAddress.toLowerCase().includes(q)
     })
   }, [otherSessions, query])
@@ -118,13 +129,13 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Could not end that session')
+        throw new Error(apiError(data, t('revokeFailed')))
       }
       setSessions((prev) => prev.filter((s) => s.id !== rowToRevoke.id))
-      toast.success('That session is ended — the device lands on the login page within a minute.')
+      toast.success(t('revokeDone'))
       setRowToRevoke(null)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not end that session')
+      toast.error(err instanceof Error ? err.message : t('revokeFailed'))
     } finally {
       setRevokingId(null)
     }
@@ -136,14 +147,14 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
       const res = await fetch('/api/auth/signout-others', { method: 'POST' })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Could not end every session')
+        throw new Error(apiError(data, t('nukeFailed')))
       }
       // Our own cookie is now stamped with a stale sessionsVersion. End the
       // client session and land on /login with the receipt the redirect can
       // announce — the toast would unmount before it's readable.
       await signOut({ callbackUrl: '/login?reason=signed_out_others' })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not end every session')
+      toast.error(err instanceof Error ? err.message : t('nukeFailed'))
       setNuking(false)
       setNukeOpen(false)
     }
@@ -156,7 +167,7 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
       <div aria-live="polite" className="empty:hidden">
         {otherSessions.length === 0 && (
           <p className="text-sm text-muted">
-            You&apos;re only signed in on this device. Nothing else to end here.
+            {t('onlyThis')}
           </p>
         )}
       </div>
@@ -172,20 +183,20 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
             <Input
-              placeholder="Filter by device or IP…"
+              placeholder={t('filterPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="pl-9"
-              aria-label="Filter other sessions by device or IP"
+              aria-label={t('filterAria')}
             />
           </div>
 
           {query.trim() && filteredOther.length === 0 ? (
-            <p className="px-1 text-sm text-muted">No sessions match &ldquo;{query}&rdquo;.</p>
+            <p className="px-1 text-sm text-muted">{t('noMatch', { query })}</p>
           ) : (
             <div className="space-y-4">
-              <SessionGroup label="Today" rows={grouped.today} revokingId={revokingId} onRevoke={setRowToRevoke} />
-              <SessionGroup label="This week" rows={grouped.thisWeek} revokingId={revokingId} onRevoke={setRowToRevoke} />
+              <SessionGroup label={t('groupToday')} rows={grouped.today} revokingId={revokingId} onRevoke={setRowToRevoke} />
+              <SessionGroup label={t('groupWeek')} rows={grouped.thisWeek} revokingId={revokingId} onRevoke={setRowToRevoke} />
               <OlderSessionGroup rows={grouped.older} revokingId={revokingId} onRevoke={setRowToRevoke} />
             </div>
           )}
@@ -197,13 +208,10 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">
-                End every session on this account
+                {t('nukeTitle')}
               </p>
               <p className="text-xs text-muted mt-0.5 max-w-md">
-                Nuclear option: bumps{' '}
-                <span className="font-mono text-xs">sessionsVersion</span> and drops
-                every inventory row. This device lands on the login page too — you can
-                sign back in from here.
+                {t.rich('nukeBody', { mono: (c) => <span className="font-mono text-xs">{c}</span> })}
               </p>
             </div>
             <Button
@@ -213,7 +221,7 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
               isDisabled={nuking}
             >
               <ShieldOff className="mr-1.5 size-3.5" strokeWidth={2.2} />
-              End every session
+              {t('endEvery')}
             </Button>
           </div>
         </div>
@@ -235,22 +243,20 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
               <Trash2 className="size-5" aria-hidden />
             </DialogIcon>
             <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
-              End this session?
+              {t('revokeOneTitle')}
             </DialogTitle>
           </DialogHeader>
           <DialogBody className="mt-3 text-sm leading-6 text-muted">
             {rowToRevoke && (
               <>
                 <span className="block font-medium text-foreground">
-                  {summarizeUserAgent(rowToRevoke.userAgent).label}
+                  {summarizeUserAgent(rowToRevoke.userAgent, t).label}
                 </span>
                 <span className="block text-xs mt-0.5">
-                  Signed in {relativeTime(rowToRevoke.createdAt)} · Last seen{' '}
-                  {relativeTime(rowToRevoke.lastSeenAt)} · IP {rowToRevoke.ipAddress}
+                  {t('signedInSeen', { signed: relativeTime(rowToRevoke.createdAt, locale, mounted), seen: relativeTime(rowToRevoke.lastSeenAt, locale, mounted), ip: rowToRevoke.ipAddress })}
                 </span>
                 <span className="block mt-3">
-                  That device lands on the login page within a minute. Your other
-                  sessions stay signed in.
+                  {t('revokeOneNote')}
                 </span>
               </>
             )}
@@ -262,7 +268,7 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
               onPress={() => setRowToRevoke(null)}
               isDisabled={Boolean(revokingId)}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -270,7 +276,7 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
               onPress={handleRevokeOne}
               isLoading={revokingId === rowToRevoke?.id}
             >
-              End this session
+              {t('endThis')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -290,17 +296,15 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
               <ShieldOff className="size-5" aria-hidden />
             </DialogIcon>
             <DialogTitle className="mt-4 text-xl font-semibold tracking-normal">
-              End every session?
+              {t('nukeDialogTitle')}
             </DialogTitle>
           </DialogHeader>
           <DialogBody className="mt-3 text-sm leading-6 text-muted">
             <FormNotice
               tone="warning"
-              title="This ends every session — including the one you&apos;re using now"
+              title={t('nukeNoticeTitle')}
             >
-              You&apos;ll be sent to the login page in a moment and can sign back in
-              here. Every other browser and phone with an old cookie lands on the login
-              page on its next request — usually within a minute of pressing this.
+              {t('nukeNoticeBody')}
             </FormNotice>
           </DialogBody>
           <DialogFooter className="mt-5 gap-2">
@@ -310,7 +314,7 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
               onPress={() => setNukeOpen(false)}
               isDisabled={nuking}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -319,7 +323,7 @@ export function SessionsList({ initial }: { initial: SessionRow[] }) {
               isLoading={nuking}
               loadingBehavior="busy"
             >
-              End every session
+              {t('endEvery')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -364,14 +368,15 @@ function OlderSessionGroup({
   revokingId: string | null
   onRevoke: (row: SessionRow) => void
 }) {
+  const t = useTranslations('sessions')
   if (rows.length === 0) return null
-  if (rows.length <= 5) return <SessionGroup label="Older" rows={rows} revokingId={revokingId} onRevoke={onRevoke} />
+  if (rows.length <= 5) return <SessionGroup label={t('groupOlder')} rows={rows} revokingId={revokingId} onRevoke={onRevoke} />
 
   return (
     <details className="group">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted [&::-webkit-details-marker]:hidden">
         <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden />
-        Older ({rows.length})
+        {t('groupOlderCount', { count: rows.length })}
       </summary>
       <ul className="divide-y divide-border/60 mt-1" role="list">
         {rows.map((s) => (
@@ -391,7 +396,10 @@ function SessionCard({
   revoking: boolean
   onRevoke: () => void
 }) {
-  const ua = summarizeUserAgent(session.userAgent)
+  const t = useTranslations('sessions')
+  const locale = useLocale()
+  const mounted = useMounted()
+  const ua = summarizeUserAgent(session.userAgent, t)
   const DeviceIcon = ua.kind === 'phone' ? Smartphone : Monitor
   const ProviderIcon = session.provider === 'passkey' ? Fingerprint : KeyRound
 
@@ -414,20 +422,19 @@ function SessionCard({
             <p className="text-sm font-medium text-foreground truncate">{ua.label}</p>
             {session.current && (
               <span className="inline-flex items-center text-xs font-semibold uppercase tracking-[0.08em] text-accent bg-accent/10 border border-accent/20 px-1.5 py-0.5 rounded-full">
-                This device
+                {t('thisDevice')}
               </span>
             )}
             <span
               className="inline-flex items-center gap-1 text-xs font-medium text-muted"
-              title={`Signed in via ${session.provider}`}
+              title={t('signedInVia', { provider: session.provider === 'passkey' ? t('providerPasskey') : t('providerPassword') })}
             >
               <ProviderIcon className="w-3 h-3" strokeWidth={2.2} aria-hidden />
-              {session.provider === 'passkey' ? 'Passkey' : 'Password'}
+              {session.provider === 'passkey' ? t('providerPasskey') : t('providerPassword')}
             </span>
           </div>
           <p className="text-xs text-muted mt-0.5 truncate">
-            Signed in {relativeTime(session.createdAt)} · Last seen{' '}
-            {relativeTime(session.lastSeenAt)} · IP {session.ipAddress}
+            {t('signedInSeen', { signed: relativeTime(session.createdAt, locale, mounted), seen: relativeTime(session.lastSeenAt, locale, mounted), ip: session.ipAddress })}
           </p>
         </div>
       </div>
@@ -435,7 +442,7 @@ function SessionCard({
           squeezing into the same line as the badge and truncating. */}
       <div className="pl-12 sm:pl-0 shrink-0">
         {session.current ? (
-          <span className="text-xs text-muted">Sign out from the menu</span>
+          <span className="text-xs text-muted">{t('signOutFromMenu')}</span>
         ) : (
           <Button
             variant="ghost"
@@ -444,7 +451,7 @@ function SessionCard({
             // Rounded relative time ("8h ago") collides across rows signed
             // in the same hour; the absolute signed-in instant is unique in
             // practice, which a rounded label never is.
-            aria-label={`Revoke session: ${ua.label}, signed in ${new Date(session.createdAt).toLocaleString()}, IP ${session.ipAddress}`}
+            aria-label={t('revokeAria', { label: ua.label, date: mounted ? new Date(session.createdAt).toLocaleString(locale) : '', ip: session.ipAddress })}
             onPress={onRevoke}
             isDisabled={revoking}
           >

@@ -7,6 +7,7 @@ import { User } from "./models/User";
 import { PreAuthToken } from "./models/PreAuthToken";
 import { SessionInventory } from "./models/SessionInventory";
 import { rateLimit } from "./rateLimit";
+import { SESSION_MAX_AGE_DAYS } from "@/lib/sessionPolicy";
 
 /**
  * Read-through cache for the User.sessionsVersion column.
@@ -163,7 +164,7 @@ export const authOptions: NextAuthOptions = {
      * indefinite lingering. Revocation via `sessionsVersion` closes the gap
      * for anything shorter than that.
      */
-    maxAge: 14 * 24 * 60 * 60,
+    maxAge: SESSION_MAX_AGE_DAYS * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
   },
   providers: [

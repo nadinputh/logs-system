@@ -13,6 +13,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// Check-in takes a per-visitor lock in MongoDB; these tests have no database.
+vi.mock("@/lib/checkInLock", () => ({ acquireCheckInLock: async () => async () => {} }));
 import { NextRequest } from "next/server";
 
 // ─── helpers ────────────────────────────────────────────────────────────────

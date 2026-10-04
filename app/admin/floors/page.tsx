@@ -15,12 +15,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
 import DynamicQrToggle from '@/components/admin/DynamicQrToggle'
 import { toast } from '@/components/ui/sonner'
-import { fetchJsonOnce, readApiError } from '@/lib/clientFetch'
+import { fetchJsonOnce } from '@/lib/clientFetch'
+import { useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 
 interface Building { _id: string; name: string }
 interface Floor { _id: string; name: string; number: number; buildingId: string | Building; description?: string; checkInMode?: 'click' | 'passkey'; requireDynamicQr?: boolean }
 
 function FloorsContent() {
+  const t = useTranslations('adminFloors')
+  const tCommon = useTranslations('common')
+  const apiError = useApiError()
   const searchParams = useSearchParams()
   const buildingFilter = searchParams.get('buildingId')
 
@@ -76,13 +81,13 @@ function FloorsContent() {
         body: JSON.stringify({ buildingId, number: parseInt(number), name, description }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(readApiError(data, 'Failed to create floor'))
-      toast.success('Floor created')
+      if (!res.ok) throw new Error(apiError(data, t('failedToCreateFloor')))
+      toast.success(t('floorCreated'))
       setOpen(false)
       setName(''); setNumber(''); setDescription('')
       reloadFloors()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create floor')
+      toast.error(err instanceof Error ? err.message : t('failedToCreateFloor'))
     } finally {
       setSaving(false)
     }
@@ -106,12 +111,12 @@ function FloorsContent() {
         body: JSON.stringify({ number: parseInt(editNumber), name: editName, description: editDescription }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(readApiError(data, 'Failed to update floor'))
-      toast.success('Floor updated')
+      if (!res.ok) throw new Error(apiError(data, t('failedToUpdateFloor')))
+      toast.success(t('floorUpdated'))
       setEditing(null)
       reloadFloors()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update floor')
+      toast.error(err instanceof Error ? err.message : t('failedToUpdateFloor'))
     } finally {
       setEditSaving(false)
     }
@@ -131,19 +136,19 @@ function FloorsContent() {
           className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" aria-hidden />
-          Back to buildings
+          {t('backToBuildings')}
         </Link>
       )}
 
       {/* Page header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Floors</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('floors')}</h1>
           {loading ? (
             <Skeleton className="mt-1.5 h-4 w-28" />
           ) : (
             <p className="text-sm text-muted mt-0.5">
-              {scoped.length} floor{scoped.length !== 1 ? 's' : ''}
+              {t('count', { count: scoped.length })}
               {buildingFilter && buildings.length > 0 && ` in ${getBuildingName(buildingFilter)}`}
             </p>
           )}
@@ -153,20 +158,20 @@ function FloorsContent() {
             <Button />
           }>
             <Plus className="w-4 h-4" aria-hidden />
-            Add Floor
+            {t('addFloor')}
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>New Floor</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t('newFloor')}</DialogTitle></DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 pt-2">
               <div className="space-y-1.5">
-                <Label>Building</Label>
+                <Label>{t('building')}</Label>
                 <Select
                   value={buildingId}
                   onValueChange={v => setBuildingId(v ?? '')}
                   items={Object.fromEntries(buildings.map(b => [b._id, b.name]))}
                   required
                 >
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select building" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t('selectBuilding')} /></SelectTrigger>
                   <SelectContent>
                     {buildings.map(b => <SelectItem key={b._id} value={b._id}>{b.name}</SelectItem>)}
                   </SelectContent>
@@ -174,19 +179,19 @@ function FloorsContent() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Floor Number</Label>
+                  <Label>{t('floorNumber')}</Label>
                   <Input type="number" value={number} onChange={e => setNumber(e.target.value)} required placeholder="1" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Name</Label>
-                  <Input value={name} onChange={e => setName(e.target.value)} required placeholder="Ground Floor" />
+                  <Label>{t('name')}</Label>
+                  <Input value={name} onChange={e => setName(e.target.value)} required placeholder={t('groundFloor')} />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Description (optional)</Label>
-                <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Brief description…" />
+                <Label>{t('descriptionOptional')}</Label>
+                <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder={t('briefDescription')} />
               </div>
-              <Button type="submit" variant="mono" className="w-full" disabled={saving}>{saving ? 'Creating…' : 'Create Floor'}</Button>
+              <Button type="submit" variant="mono" className="w-full" disabled={saving}>{saving ? t('creating') : t('createFloor')}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -195,23 +200,23 @@ function FloorsContent() {
       {/* Edit dialog */}
       <Dialog open={!!editing} onOpenChange={(o: boolean) => { if (!o) setEditing(null) }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Floor</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('editFloor')}</DialogTitle></DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Floor Number</Label>
+                <Label>{t('floorNumber')}</Label>
                 <Input type="number" value={editNumber} onChange={e => setEditNumber(e.target.value)} required placeholder="1" />
               </div>
               <div className="space-y-1.5">
-                <Label>Name</Label>
-                <Input value={editName} onChange={e => setEditName(e.target.value)} required placeholder="Ground Floor" />
+                <Label>{t('name')}</Label>
+                <Input value={editName} onChange={e => setEditName(e.target.value)} required placeholder={t('groundFloor')} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Description (optional)</Label>
-              <Textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} placeholder="Brief description…" />
+              <Label>{t('descriptionOptional')}</Label>
+              <Textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} placeholder={t('briefDescription')} />
             </div>
-            <Button type="submit" variant="mono" className="w-full" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save Changes'}</Button>
+            <Button type="submit" variant="mono" className="w-full" disabled={editSaving}>{editSaving ? t('saving') : t('saveChanges')}</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -220,7 +225,7 @@ function FloorsContent() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/60" aria-hidden />
         <Input
-          placeholder="Search by name or number…"
+          placeholder={t('searchByNameOrNumber')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="pl-9"
@@ -230,12 +235,12 @@ function FloorsContent() {
       {/* Table */}
       <div>
         {loading ? (
-          <Table aria-label="Floors loading table">
+          <Table aria-label={t('floorsLoadingTable')}>
             <TableHeader>
-              <TableHead isRowHeader>Floor</TableHead>
-              <TableHead className="hidden sm:table-cell">Building</TableHead>
-              <TableHead className="hidden md:table-cell">Check-in</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead isRowHeader>{t('floor')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t('building')}</TableHead>
+              <TableHead className="hidden md:table-cell">{t('checkIn')}</TableHead>
+              <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
               {Array.from({ length: 4 }).map((_, index) => (
@@ -266,24 +271,24 @@ function FloorsContent() {
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <Layers3 className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
-            <p className="font-medium text-foreground text-sm">No floors yet</p>
-            <p className="text-xs text-muted mt-1">Add a floor to begin organising rooms</p>
+            <p className="font-medium text-foreground text-sm">{t('noFloorsYet')}</p>
+            <p className="text-xs text-muted mt-1">{t('addAFloorToBegin')}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
               <Search className="w-6 h-6 text-foreground" strokeWidth={1.75} aria-hidden />
             </div>
-            <p className="font-medium text-foreground text-sm">No matching floors</p>
-            <p className="text-xs text-muted mt-1">Try a different search term</p>
+            <p className="font-medium text-foreground text-sm">{t('noMatchingFloors')}</p>
+            <p className="text-xs text-muted mt-1">{t('tryADifferentSearchTerm')}</p>
           </div>
         ) : (
-          <Table aria-label="Floors table">
+          <Table aria-label={t('floorsTable')}>
             <TableHeader>
-              <TableHead isRowHeader>Floor</TableHead>
-              <TableHead className="hidden sm:table-cell">Building</TableHead>
-              <TableHead className="hidden md:table-cell">Check-in</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead isRowHeader>{t('floor')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t('building')}</TableHead>
+              <TableHead className="hidden md:table-cell">{t('checkIn')}</TableHead>
+              <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
               {filtered.map(f => (
@@ -314,10 +319,10 @@ function FloorsContent() {
                         type="button"
                         onClick={() => openEdit(f)}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-muted bg-muted/40 hover:bg-muted/60 hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
-                        title="Edit floor"
+                        title={t('editFloor2')}
                       >
                         <Pencil className="w-3.5 h-3.5" aria-hidden />
-                        Edit
+                        {tCommon('edit')}
                       </button>
                       <Link
                         href={`/admin/qr/${f._id}`}
@@ -331,7 +336,7 @@ function FloorsContent() {
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         <DoorOpen className="w-3.5 h-3.5" aria-hidden />
-                        Rooms
+                        {t('roomsBtn')}
                       </Link>
                     </div>
                   </TableCell>

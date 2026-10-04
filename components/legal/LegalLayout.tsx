@@ -40,7 +40,7 @@ export async function LegalLayout({
       </a>
 
       <header className="border-b border-[var(--panel-border)]">
-        <nav aria-label="Primary" className="shell flex h-16 items-center gap-3 sm:h-[4.5rem]">
+        <nav aria-label={t('primaryNav')} className="shell flex h-16 items-center gap-3 sm:h-[4.5rem]">
           <Link
             href="/landing"
             aria-label={t('homeAriaLabel')}
@@ -78,14 +78,14 @@ export async function LegalLayout({
             className="mt-8 max-w-[68ch] rounded-2xl border border-border bg-muted/30 p-5"
           >
             <h2 id="plain-words" className="text-base font-semibold tracking-tight">
-              In plain words
+              {tLegal('inPlainWords')}
             </h2>
             <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
               {summary.map((line) => (
                 <li key={line}>{line}</li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-muted">The full text below is what applies.</p>
+            <p className="mt-3 text-xs text-muted">{tLegal('fullTextApplies')}</p>
           </section>
 
           <details className="mt-6 rounded-xl border border-border px-4 py-3 text-sm lg:hidden">

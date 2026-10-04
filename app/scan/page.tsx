@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import QRScanner from '@/components/scanner/QRScanner'
 import { ParticleField } from '@/components/ParticleField'
 import { LogoTile } from '@/components/Logo'
@@ -19,32 +20,25 @@ import { Camera, ScanLine, ShieldCheck } from 'lucide-react'
  * two-column composition built to fill a front door's width.
  */
 
-export const metadata: Metadata = {
-  title: 'Scan to check in — Kamnotheat',
-  description:
-    'Point your camera at the QR code posted at your location to record your entry.',
-  robots: { index: false },
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('scanHome')
+  return {
+    title: t('metaTitle'),
+    description: t('metaDescription'),
+    robots: { index: false },
+  }
 }
 
 const steps = [
-  {
-    Icon: Camera,
-    title: 'Point your camera',
-    text: 'Aim at the QR code posted at your door, kiosk, or terminal.',
-  },
-  {
-    Icon: ScanLine,
-    title: 'It reads itself',
-    text: 'No button to press — the code is picked up the moment it is in frame.',
-  },
+  { Icon: Camera, key: 'step1' },
+  { Icon: ScanLine, key: 'step2' },
   {
     Icon: ShieldCheck,
-    title: 'Confirm over a few short screens',
+    key: 'step3',
     // Verified against components/location/CheckInOut.tsx: identity (name and
     // contact) -> identity step 2 (purpose, gender) -> checkin -> an optional
     // selfie. "Confirm and you are logged" skipped all of it; "give your name
     // and confirm" then understated it. This names the real shape.
-    text: 'Your name is the only required field — the details and photo that follow are skippable.',
   },
 ]
 
@@ -65,37 +59,35 @@ const steps = [
  * No location claim appears here: `geofenceStatus` exists on the Log schema and
  * is read by the admin viewer, but nothing in the visitor flow ever sends it.
  */
-function CaptureDisclosure() {
+async function CaptureDisclosure() {
+  const t = await getTranslations('scanHome')
   return (
     <>
       <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-        What this writes
+        {t('disclosureHeading')}
       </h3>
       <dl className="space-y-2 text-xs leading-snug [@media(max-height:540px)]:space-y-1">
         <div>
-          <dt className="font-semibold text-foreground">Automatically</dt>
-          <dd className="text-muted">
-            The time, the code you scan, your IP address, your browser, and a random ID for
-            this browser.
-          </dd>
+          <dt className="font-semibold text-foreground">{t('autoTitle')}</dt>
+          <dd className="text-muted">{t('autoBody')}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-foreground">From you</dt>
-          <dd className="text-muted">Your name — the only required field.</dd>
+          <dt className="font-semibold text-foreground">{t('fromYouTitle')}</dt>
+          <dd className="text-muted">{t('fromYouBody')}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-foreground">Only if you choose</dt>
-          <dd className="text-muted">
-            Contact details, purpose, and a photo. A photo is uploaded and stored with your
-            entry.
-          </dd>
+          <dt className="font-semibold text-foreground">{t('optionalTitle')}</dt>
+          <dd className="text-muted">{t('optionalBody')}</dd>
         </div>
       </dl>
     </>
   )
 }
 
-export default function ScanPage() {
+export default async function ScanPage() {
+  const t = await getTranslations('scanHome')
+  const tCommon = await getTranslations('common')
+  const tNotice = await getTranslations('scanNotice')
   return (
     <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
       {/* The same two atmosphere layers as the landing. */}
@@ -112,7 +104,7 @@ export default function ScanPage() {
           href="#main"
           className="glass sr-only rounded-full px-4 py-2 text-sm font-semibold focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
         >
-          Skip to content
+          {tCommon('skipToContent')}
         </a>
 
         {/* No ThemeToggle, no Sign in. Both served staff on the one surface whose
@@ -123,17 +115,17 @@ export default function ScanPage() {
             wordmark is no longer hidden on phones: this page asks for a camera,
             so it has to say who is asking. */}
         <header className="border-b border-[var(--panel-border)]">
-          <nav aria-label="Primary" className="shell">
+          <nav aria-label={tNotice('primaryNav')} className="shell">
             <div className="mx-auto flex h-16 w-full max-w-[34rem] items-center sm:h-[4.5rem]">
             <Link
               href="/landing"
-              aria-label="Kamnotheat — home"
+              aria-label={tCommon('homeAriaLabel')}
               className="group flex items-center gap-3 rounded-2xl"
             >
               <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
               <span>
                 <span className="block text-sm font-semibold tracking-tight">Kamnotheat</span>
-                <span className="block text-xs text-muted">Secure check-in logging</span>
+                <span className="block text-xs text-muted">{tCommon('tagline')}</span>
               </span>
             </Link>
             </div>
@@ -143,7 +135,7 @@ export default function ScanPage() {
         <main id="main" className="shell pb-20 pt-8 sm:pt-12 [@media(max-height:540px)]:pt-3">
           <div className="mx-auto w-full max-w-[34rem]">
             <h1 className="text-balance text-[clamp(1.75rem,4vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.02em]">
-              Scan to <span className="gradient-text">check in</span>
+              {t('headingBefore')}<span className="gradient-text">{t('headingAccent')}</span>
             </h1>
             {/* The owner confirmed this is the fallback: the ordinary way in is a
                 phone's own camera opening the door code. Saying so is the first
@@ -152,8 +144,7 @@ export default function ScanPage() {
                 bolted onto this line now sits in full directly above the
                 button, where consent belongs. */}
             <p className="mt-3 text-pretty text-muted [@media(max-height:540px)]:mt-1.5">
-              If your phone&apos;s camera app didn&apos;t open the QR at your location, scan it
-              here instead. Your entry is written once and never edited.
+              {t('lead')}
             </p>
 
             {/* The task, as high as the page can put it. */}
@@ -166,19 +157,18 @@ export default function ScanPage() {
                 heading went with it — three eyebrow-styled section heads in a
                 row made every part of this page read as metadata. */}
             <p className="mt-5 text-sm text-muted">
-              The camera feed never leaves your device; only the code is read. Entries are
-              readable by this organisation&apos;s staff.{' '}
+              {t('reassurance')}{' '}
               <span className="font-semibold text-foreground">
-                You do not need an account.
+                {t('noAccount')}
               </span>
             </p>
 
             <h2 className="mt-10 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-              What happens
+              {t('whatHappens')}
             </h2>
             <ol className="mt-4 space-y-5">
-              {steps.map(({ Icon, title, text }, i) => (
-                <li key={title} className="flex items-start gap-3.5">
+              {steps.map(({ Icon, key }, i) => (
+                <li key={key} className="flex items-start gap-3.5">
                   <span className="glass inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-[var(--accent)]">
                     <Icon className="size-4" strokeWidth={2.2} />
                   </span>
@@ -187,21 +177,21 @@ export default function ScanPage() {
                       <span aria-hidden className="tabular text-xs font-semibold text-muted">
                         {i + 1}
                       </span>
-                      <span className="font-semibold tracking-tight">{title}</span>
+                      <span className="font-semibold tracking-tight">{t(`${key}Title`)}</span>
                     </span>
-                    <span className="mt-0.5 block text-sm text-muted">{text}</span>
+                    <span className="mt-0.5 block text-sm text-muted">{t(`${key}Text`)}</span>
                   </span>
                 </li>
               ))}
             </ol>
 
             <p className="mt-10 border-t border-[var(--panel-border)] pt-5 text-sm text-muted">
-              Staff or admin?{' '}
+              {t('staffPrompt')}{' '}
               <Link
                 href="/login"
                 className="inline-block py-3 -my-3 font-semibold text-[var(--accent)] hover:underline"
               >
-                Open the console
+                {t('openConsole')}
               </Link>
             </p>
           </div>

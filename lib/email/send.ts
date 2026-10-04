@@ -14,6 +14,26 @@ declare global {
  * meant a half-configured environment skipped the safe path and threw at send
  * time, after the caller had already committed its writes.
  */
+import { EMAIL_STRINGS, isEmailLocale, type EmailLocale } from "@/lib/email/strings";
+
+/**
+ * Language for a message. An explicit `locale` wins; otherwise it is the
+ * requester's NEXT_LOCALE cookie — exact for self-service mail (register,
+ * resend, forgot-password go to the person in the browser), and the sender's
+ * language for mail an admin triggers for someone else. Outside a request
+ * (tests, scripts) there is no cookie and it is English.
+ */
+async function resolveLocale(explicit?: EmailLocale): Promise<EmailLocale> {
+  if (explicit && isEmailLocale(explicit)) return explicit;
+  try {
+    const { cookies } = await import("next/headers");
+    const v = (await cookies()).get("NEXT_LOCALE")?.value;
+    return isEmailLocale(v) ? v : "en";
+  } catch {
+    return "en";
+  }
+}
+
 export function smtpConfigured() {
   return Boolean(
     process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS,
@@ -210,8 +230,8 @@ function headerSafe(value: string) {
 }
 
 /** "Thursday 3 September" — a date a recipient can act on, not "soon". */
-function formatExpiry(at: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
+function formatExpiry(at: Date, locale: EmailLocale = "en") {
+  return new Intl.DateTimeFormat(locale === "km" ? "km-KH" : "en-GB", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -219,8 +239,6 @@ function formatExpiry(at: Date) {
   }).format(at);
 }
 
-const IGNORE_LINE =
-  "If you weren't expecting this, you can ignore this email — nothing happens until you open the link.";
 
 /**
  * Table-based shell with a real <head>.
@@ -241,10 +259,12 @@ function shell(
   bodyHtml: string,
   cta: { label: string; href: string },
   preheader: string,
+  locale: EmailLocale = "en",
 ) {
   const href = encodeURI(cta.href);
-  return `<!doctype html>
-<html lang="en" dir="ltr">
+  const S = EMAIL_STRINGS[locale];
+  const html = `<!doctype html>
+<html lang="${locale}" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -331,68 +351,65 @@ function shell(
 <a href="${escapeHtml(href)}" class="kt-cta-label" style="display:inline-block;min-height:48px;line-height:48px;padding:0 28px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;border-radius:24px">${escapeHtml(cta.label)}</a>
 <!--<![endif]-->
 </td></tr></table>
-<p class="kt-fine" style="margin:24px 0 0;color:#57575e;font-size:12px;line-height:1.5">If the button doesn't work, use this link:<br>
+<p class="kt-fine" style="margin:24px 0 0;color:#57575e;font-size:12px;line-height:1.5">${escapeHtml(S.fallbackLink)}<br>
 <a href="${escapeHtml(href)}" class="kt-link" style="color:#0e7490;word-wrap:break-word;overflow-wrap:anywhere;word-break:break-all">${escapeHtml(href)}</a></p>
-<p class="kt-fine" style="margin:16px 0 0;color:#57575e;font-size:12px;line-height:1.5">${escapeHtml(IGNORE_LINE)}</p>
+<p class="kt-fine" style="margin:16px 0 0;color:#57575e;font-size:12px;line-height:1.5">${escapeHtml(S.ignoreLine)}</p>
 </td></tr>
 </table>
 </td></tr>
 </table>
 </body></html>`;
+  // Public Sans has no Khmer glyphs; give mail clients that honour web fonts
+  // (or have it installed) a Khmer face ahead of the generic fallback.
+  return locale === "km"
+    ? html.replaceAll("'Public Sans',system-ui", "'Noto Sans Khmer','Public Sans',system-ui")
+    : html;
 }
 
 /** What each role actually grants, in words the recipient did not have to look up. */
-const ROLE_CLAUSE: Record<string, string> = {
-  admin: "an <b>admin</b> — full access to the console, including team and location management",
-  manager: "a <b>manager</b> — you can manage locations, quests and logs for the team",
-  member: "a <b>member</b> — you can check in and out and see your own logs",
-  auditor: "an <b>auditor</b> — read-only access to logs and reports",
-};
-
-const roleClause = (role: string) =>
-  ROLE_CLAUSE[role] ?? `<b>${escapeHtml(role)}</b>`;
+const roleClause = (role: string, locale: EmailLocale) =>
+  EMAIL_STRINGS[locale].roles[role] ?? `<b>${escapeHtml(role)}</b>`;
 
 export async function sendVerificationEmail(
   to: string,
   link: string,
+  opts: { locale?: EmailLocale } = {},
 ): Promise<boolean> {
+  const locale = await resolveLocale(opts.locale);
+  const S = EMAIL_STRINGS[locale];
   return sendMail({
     to,
-    subject: "Kamnotheat — verify your email",
-    text: `Confirm this address to activate your Kamnotheat account. The link is single-use and expires 1 hour after it was sent: ${link}\n\n${IGNORE_LINE}`,
-    html: shell(
-      "Verify your email",
-      "Confirm this address to activate your Kamnotheat account. The link is single-use and expires 1 hour after it was sent.",
-      { label: "Verify email", href: link },
-      "Single-use link, expires in 1 hour.",
-    ),
+    subject: S.brandSubjectPrefix + S.verify.subject,
+    text: `${S.verify.body} ${link}\n\n${S.ignoreLine}`,
+    html: shell(S.verify.title, S.verify.body, { label: S.verify.cta, href: link }, S.verify.pre, locale),
   });
 }
 
 export async function sendSetPasswordEmail(
   to: string,
   link: string,
-  opts: { teamName?: string; invitedByName?: string; expiresAt?: Date } = {},
+  opts: { teamName?: string; invitedByName?: string; expiresAt?: Date; locale?: EmailLocale } = {},
 ): Promise<boolean> {
   const { teamName, invitedByName, expiresAt } = opts;
-  // Who created the account is the fact a recipient needs to judge whether this
-  // is legitimate, and it was being discarded at the call site.
-  const actor = invitedByName ? autoDir(invitedByName) : "An administrator";
-  const on = teamName ? ` on <b>${autoDir(teamName)}</b>` : "";
-  const actorText = invitedByName ?? "An administrator";
-  const onText = teamName ? ` on ${teamName}` : "";
+  const locale = await resolveLocale(opts.locale);
+  const S = EMAIL_STRINGS[locale];
+  const actor = invitedByName ? autoDir(invitedByName) : S.setPassword.admin;
+  const on = teamName ? S.on(`<b>${autoDir(teamName)}</b>`) : "";
+  const actorText = invitedByName ?? S.setPassword.admin;
+  const onText = teamName ? S.on(teamName) : "";
   const expiry = expiresAt
-    ? ` The link is single-use and expires on ${formatExpiry(expiresAt)}.`
-    : " The link is single-use.";
+    ? S.setPassword.expires(formatExpiry(expiresAt, locale))
+    : S.setPassword.singleUse;
   return sendMail({
     to,
-    subject: "Kamnotheat — set your password",
-    text: `${actorText} created a Kamnotheat account for you${onText}. Set a password to sign in.${expiry}\n\n${link}\n\n${IGNORE_LINE}`,
+    subject: S.brandSubjectPrefix + S.setPassword.subject,
+    text: `${S.setPassword.created({ actor: actorText, on: onText })}${expiry}\n\n${link}\n\n${S.ignoreLine}`,
     html: shell(
-      "Set your password",
-      `${actor} created a Kamnotheat account for you${on}. Set a password to sign in.${escapeHtml(expiry)}`,
-      { label: "Set password", href: link },
-      `${actorText} created this account for you.`,
+      S.setPassword.title,
+      `${S.setPassword.created({ actor, on })}${escapeHtml(expiry)}`,
+      { label: S.setPassword.cta, href: link },
+      S.setPassword.pre(actorText),
+      locale,
     ),
   });
 }
@@ -405,24 +422,25 @@ export async function sendInviteEmail(
     role: string;
     invitedByName?: string;
     expiresAt?: Date;
+    locale?: EmailLocale;
   },
 ): Promise<boolean> {
   const { teamName, role, invitedByName, expiresAt } = opts;
-  const actor = invitedByName ? autoDir(invitedByName) : "Someone";
-  const actorText = invitedByName ?? "Someone";
-  // "Expires soon" read as hours on a seven-day window. State the day.
-  const expiry = expiresAt
-    ? ` This invite expires on ${formatExpiry(expiresAt)}.`
-    : "";
+  const locale = await resolveLocale(opts.locale);
+  const S = EMAIL_STRINGS[locale];
+  const actor = invitedByName ? autoDir(invitedByName) : S.invite.someone;
+  const actorText = invitedByName ?? S.invite.someone;
+  const expiry = expiresAt ? S.invite.expires(formatExpiry(expiresAt, locale)) : "";
   return sendMail({
     to,
-    subject: headerSafe(`Kamnotheat — you're invited to ${teamName}`),
-    text: `${actorText} invited you to join ${teamName} on Kamnotheat as ${role}. Accepting will create or link your account.${expiry}\n\n${link}\n\n${IGNORE_LINE}`,
+    subject: headerSafe(S.brandSubjectPrefix + S.invite.subject(teamName)),
+    text: `${S.invite.body({ actor: actorText, team: teamName, role })}${expiry}\n\n${link}\n\n${S.ignoreLine}`,
     html: shell(
-      `Join ${teamName}`,
-      `${actor} invited you to join <b>${autoDir(teamName)}</b> on Kamnotheat as ${roleClause(role)}. Accepting will create or link your account.${escapeHtml(expiry)}`,
-      { label: "Accept invite", href: link },
-      `${actorText} invited you to join ${teamName}.`,
+      S.invite.title(teamName),
+      `${S.invite.body({ actor, team: `<b>${autoDir(teamName)}</b>`, role: roleClause(role, locale) })}${escapeHtml(expiry)}`,
+      { label: S.invite.cta, href: link },
+      S.invite.pre({ actor: actorText, team: teamName }),
+      locale,
     ),
   });
 }
@@ -430,22 +448,24 @@ export async function sendInviteEmail(
 export async function sendPasswordResetEmail(
   to: string,
   link: string,
-  opts: { expiresAt?: Date } = {},
+  opts: { expiresAt?: Date; locale?: EmailLocale } = {},
 ): Promise<boolean> {
   const { expiresAt } = opts;
-  // Password-reset links live an hour; state the exact time when we can.
+  const locale = await resolveLocale(opts.locale);
+  const S = EMAIL_STRINGS[locale];
   const expiry = expiresAt
-    ? ` The link is single-use and expires on ${formatExpiry(expiresAt)}.`
-    : " The link is single-use and expires in 1 hour.";
+    ? S.reset.expires(formatExpiry(expiresAt, locale))
+    : S.reset.singleUse;
   return sendMail({
     to,
-    subject: "Kamnotheat — reset your password",
-    text: `Someone asked to reset the Kamnotheat password for this address. Open the link below to choose a new one.${expiry}\n\n${link}\n\n${IGNORE_LINE}`,
+    subject: S.brandSubjectPrefix + S.reset.subject,
+    text: `${S.reset.body}${expiry}\n\n${link}\n\n${S.ignoreLine}`,
     html: shell(
-      "Reset your password",
-      `Someone asked to reset the Kamnotheat password for this address. Open the link below to choose a new one.${escapeHtml(expiry)}`,
-      { label: "Reset password", href: link },
-      "You asked to reset your password. Single-use link, expires in 1 hour.",
+      S.reset.title,
+      `${S.reset.body}${escapeHtml(expiry)}`,
+      { label: S.reset.cta, href: link },
+      S.reset.pre,
+      locale,
     ),
   });
 }

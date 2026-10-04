@@ -8,12 +8,17 @@ type QRCodeSymbol = {
   };
 };
 
+const escapeAttr = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
 interface RoundedQROptions {
   dark?: string;
   light?: string;
   margin?: number;
   moduleGap?: number;
   moduleRadius?: number;
+  /** Accessible name of the SVG; defaults to English. */
+  label?: string;
 }
 
 export async function generateQRDataURL(text: string): Promise<string> {
@@ -90,7 +95,7 @@ export async function generateQRSVG(
   }
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxSize} ${viewBoxSize}" width="100%" height="100%" role="img" aria-label="QR code">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewBoxSize} ${viewBoxSize}" width="100%" height="100%" role="img" aria-label="${escapeAttr(options.label ?? "QR code")}">`,
     rect(0, 0, viewBoxSize, viewBoxSize, light, 2.5),
     finder(margin, margin),
     finder(margin + size - 7, margin),

@@ -11,6 +11,7 @@ import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { resolveBuildingId, computeGeofenceStatus } from "@/lib/geofence";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
+import { acquireCheckInLock } from "@/lib/checkInLock";
 
 export const runtime = "nodejs";
 
@@ -148,7 +149,9 @@ export async function POST(req: NextRequest) {
     ? staffCred.transports
     : visitorCred!.transports;
 
-  const origin = process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`;
+  const origin =
+    process.env.NEXTAUTH_URL ??
+    `http://localhost:${process.env.PORT ?? "4000"}`;
   const rpID = new URL(origin).hostname;
 
   // Step 6: Cryptographic verification
@@ -200,161 +203,188 @@ export async function POST(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") ?? undefined;
   const visitorName = intentDoc.visitorName ?? bodyVisitorName;
 
-  // Step 9: Write the append-only log entry with passkeyVerified: true
-  let log;
-  if (action === "in") {
-    // Idempotency check: reject if already checked in without checkout
-    const checkinQuery = resolvedUserId
-      ? { teamId, locationId, userId: resolvedUserId, action: "in" as const }
-      : { teamId, locationId, sessionToken, action: "in" as const };
-    const lastCheckin = await Log.findOne(checkinQuery).sort({ timestamp: -1 });
-    if (lastCheckin) {
-      const existingCheckout = await Log.findOne({
+  // Step 9: Write the append-only log entry with passkeyVerified: true.
+  // Check-in is serialised per visitor (see lib/checkInLock.ts); check-out is
+  // already closed once by the unique index on relatedLogId.
+  const release =
+    action === "in"
+      ? await acquireCheckInLock(
+          teamId,
+          locationId,
+          resolvedUserId ?? sessionToken,
+        )
+      : async () => {};
+  if (!release) {
+    return NextResponse.json(
+      {
+        error: "CHECKIN_IN_PROGRESS",
+        message: "Check-in already in progress, try again.",
+      },
+      { status: 409 },
+    );
+  }
+  try {
+    let log;
+    if (action === "in") {
+      // Idempotency check: reject if already checked in without checkout
+      const checkinQuery = resolvedUserId
+        ? { teamId, locationId, userId: resolvedUserId, action: "in" as const }
+        : { teamId, locationId, sessionToken, action: "in" as const };
+      const lastCheckin = await Log.findOne(checkinQuery).sort({
+        timestamp: -1,
+      });
+      if (lastCheckin) {
+        const existingCheckout = await Log.findOne({
+          teamId,
+          relatedLogId: lastCheckin._id,
+          action: "out",
+        });
+        if (!existingCheckout) {
+          const payload = { existing: true, log: lastCheckin };
+          await saveIdempotency(idempotencyKey, 200, payload);
+          return NextResponse.json(payload, { status: 200 });
+        }
+      }
+
+      const passkeyLocation = await findOwnedLocationByType(
+        locationType as LocationType,
+        locationId,
+      );
+      const geofenceStatus = passkeyLocation
+        ? await computeGeofenceStatus(
+            resolveBuildingId(locationType as LocationType, passkeyLocation),
+            latitude,
+            longitude,
+          )
+        : undefined;
+
+      log = await Log.create({
         teamId,
-        relatedLogId: lastCheckin._id,
+        locationId,
+        locationType,
+        sessionToken,
+        ...(resolvedUserId && { userId: resolvedUserId }),
+        visitorName: visitorName ?? undefined,
+        visitorEmail: intentDoc.visitorEmail ?? undefined,
+        visitorPhone: intentDoc.visitorPhone ?? undefined,
+        visitorGender: intentDoc.visitorGender ?? undefined,
+        visitPurpose: intentDoc.visitPurpose ?? undefined,
+        deviceId: intentDoc.deviceId ?? undefined,
+        ipAddress,
+        userAgent,
+        geofenceStatus,
+        action: "in",
+        passkeyVerified: true,
+        passkeyCredentialId: credId,
+        timestamp: new Date(),
+      });
+    } else {
+      // action === 'out'
+      if (!relatedLogId) {
+        return NextResponse.json(
+          { error: "relatedLogId required for checkout" },
+          { status: 400 },
+        );
+      }
+
+      const checkinLog = await Log.findOne({
+        _id: relatedLogId,
+        teamId,
+        action: "in",
+      });
+      if (!checkinLog) {
+        return NextResponse.json(
+          { error: "Check-in log not found" },
+          { status: 404 },
+        );
+      }
+
+      if (!checkinLog.passkeyVerified) {
+        return NextResponse.json(
+          {
+            code: "CHECKIN_NOT_PASSKEY_VERIFIED",
+            error: "Original check-in was not passkey verified",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (!checkinLog.passkeyCredentialId) {
+        return NextResponse.json(
+          {
+            code: "PASSKEY_CREDENTIAL_CONTEXT_MISSING",
+            error: "Original check-in is missing passkey credential context",
+          },
+          { status: 409 },
+        );
+      }
+
+      if (checkinLog.passkeyCredentialId !== credId) {
+        return NextResponse.json(
+          {
+            code: "PASSKEY_MISMATCH",
+            error: "This is not the same passkey used to check in",
+          },
+          { status: 403 },
+        );
+      }
+
+      if (cached) {
+        const cachedBody = cached.body as any;
+        const cachedLogId = cachedBody?.log?._id ?? cachedBody?.log?.id;
+        if (cachedLogId) {
+          const cachedCheckout = await Log.findOne({
+            _id: cachedLogId,
+            teamId,
+            relatedLogId,
+            action: "out",
+          })
+            .select("_id")
+            .lean();
+
+          if (cachedCheckout) {
+            return NextResponse.json(cached.body, {
+              status: cached.statusCode,
+            });
+          }
+        }
+      }
+
+      const existing = await Log.findOne({
+        teamId,
+        relatedLogId: checkinLog._id,
         action: "out",
       });
-      if (!existingCheckout) {
-        const payload = { existing: true, log: lastCheckin };
+      if (existing) {
+        const payload = { already: true, log: existing };
         await saveIdempotency(idempotencyKey, 200, payload);
         return NextResponse.json(payload, { status: 200 });
       }
+
+      log = await Log.create({
+        teamId,
+        locationId: checkinLog.locationId,
+        locationType: checkinLog.locationType,
+        sessionToken: checkinLog.sessionToken,
+        ...(checkinLog.userId && { userId: checkinLog.userId }),
+        visitorName: checkinLog.visitorName,
+        ipAddress,
+        userAgent,
+        action: "out",
+        relatedLogId: checkinLog._id,
+        passkeyVerified: true,
+        passkeyCredentialId: credId,
+        timestamp: new Date(),
+      });
     }
 
-    const passkeyLocation = await findOwnedLocationByType(
-      locationType as LocationType,
-      locationId,
-    );
-    const geofenceStatus = passkeyLocation
-      ? await computeGeofenceStatus(
-          resolveBuildingId(locationType as LocationType, passkeyLocation),
-          latitude,
-          longitude,
-        )
-      : undefined;
+    // Step 10: Commit idempotency key so the same ceremony can never write twice
+    publishLogCreated(log);
+    const responsePayload = { verified: true, log: log.toObject() };
+    await saveIdempotency(idempotencyKey, 201, responsePayload);
 
-    log = await Log.create({
-      teamId,
-      locationId,
-      locationType,
-      sessionToken,
-      ...(resolvedUserId && { userId: resolvedUserId }),
-      visitorName: visitorName ?? undefined,
-      visitorEmail: intentDoc.visitorEmail ?? undefined,
-      visitorPhone: intentDoc.visitorPhone ?? undefined,
-      visitorGender: intentDoc.visitorGender ?? undefined,
-      visitPurpose: intentDoc.visitPurpose ?? undefined,
-      deviceId: intentDoc.deviceId ?? undefined,
-      ipAddress,
-      userAgent,
-      geofenceStatus,
-      action: "in",
-      passkeyVerified: true,
-      passkeyCredentialId: credId,
-      timestamp: new Date(),
-    });
-  } else {
-    // action === 'out'
-    if (!relatedLogId) {
-      return NextResponse.json(
-        { error: "relatedLogId required for checkout" },
-        { status: 400 },
-      );
-    }
-
-    const checkinLog = await Log.findOne({
-      _id: relatedLogId,
-      teamId,
-      action: "in",
-    });
-    if (!checkinLog) {
-      return NextResponse.json(
-        { error: "Check-in log not found" },
-        { status: 404 },
-      );
-    }
-
-    if (!checkinLog.passkeyVerified) {
-      return NextResponse.json(
-        {
-          code: "CHECKIN_NOT_PASSKEY_VERIFIED",
-          error: "Original check-in was not passkey verified",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!checkinLog.passkeyCredentialId) {
-      return NextResponse.json(
-        {
-          code: "PASSKEY_CREDENTIAL_CONTEXT_MISSING",
-          error: "Original check-in is missing passkey credential context",
-        },
-        { status: 409 },
-      );
-    }
-
-    if (checkinLog.passkeyCredentialId !== credId) {
-      return NextResponse.json(
-        {
-          code: "PASSKEY_MISMATCH",
-          error: "This is not the same passkey used to check in",
-        },
-        { status: 403 },
-      );
-    }
-
-    if (cached) {
-      const cachedBody = cached.body as any;
-      const cachedLogId = cachedBody?.log?._id ?? cachedBody?.log?.id;
-      if (cachedLogId) {
-        const cachedCheckout = await Log.findOne({
-          _id: cachedLogId,
-          teamId,
-          relatedLogId,
-          action: "out",
-        })
-          .select("_id")
-          .lean();
-
-        if (cachedCheckout) {
-          return NextResponse.json(cached.body, { status: cached.statusCode });
-        }
-      }
-    }
-
-    const existing = await Log.findOne({
-      teamId,
-      relatedLogId: checkinLog._id,
-      action: "out",
-    });
-    if (existing) {
-      const payload = { already: true, log: existing };
-      await saveIdempotency(idempotencyKey, 200, payload);
-      return NextResponse.json(payload, { status: 200 });
-    }
-
-    log = await Log.create({
-      teamId,
-      locationId: checkinLog.locationId,
-      locationType: checkinLog.locationType,
-      sessionToken: checkinLog.sessionToken,
-      ...(checkinLog.userId && { userId: checkinLog.userId }),
-      visitorName: checkinLog.visitorName,
-      ipAddress,
-      userAgent,
-      action: "out",
-      relatedLogId: checkinLog._id,
-      passkeyVerified: true,
-      passkeyCredentialId: credId,
-      timestamp: new Date(),
-    });
+    return NextResponse.json(responsePayload, { status: 201 });
+  } finally {
+    await release();
   }
-
-  // Step 10: Commit idempotency key so the same ceremony can never write twice
-  publishLogCreated(log);
-  const responsePayload = { verified: true, log: log.toObject() };
-  await saveIdempotency(idempotencyKey, 201, responsePayload);
-
-  return NextResponse.json(responsePayload, { status: 201 });
 }

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn, useSession } from 'next-auth/react'
+import { useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
@@ -20,6 +22,8 @@ type Invite = {
 }
 
 export default function InvitePage() {
+  const t = useTranslations('invite')
+  const apiError = useApiError()
   const params = useParams<{ token: string }>()
   const router = useRouter()
   const { status: sessionStatus } = useSession()
@@ -34,7 +38,7 @@ export default function InvitePage() {
     fetch(`/api/teams/invites/${params.token}`)
       .then((r) => r.json())
       .then(setInvite)
-      .catch(() => setInvite({ valid: false, error: 'Could not load invite.' }))
+      .catch(() => setInvite({ valid: false, error: t('loadFailed') }))
   }, [params.token])
 
   // Logged-in users with the matching account accept directly.
@@ -44,11 +48,11 @@ export default function InvitePage() {
     try {
       const res = await fetch(`/api/teams/invites/${params.token}/accept`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? 'Could not accept invite')
+      if (!res.ok) throw new Error(apiError(data, t('acceptFailed')))
       router.push('/dashboard')
       router.refresh()
     } catch (err: any) {
-      setError(err?.message ?? 'Could not accept invite')
+      setError(err?.message ?? t('acceptFailed'))
     } finally {
       setBusy(false)
     }
@@ -66,7 +70,7 @@ export default function InvitePage() {
         body: JSON.stringify({ name, password }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? 'Could not create account')
+      if (!res.ok) throw new Error(apiError(data, t('createFailed')))
 
       const result = await signIn('credentials', {
         email: data.email,
@@ -80,7 +84,7 @@ export default function InvitePage() {
         router.refresh()
       }
     } catch (err: any) {
-      setError(err?.message ?? 'Could not create account')
+      setError(err?.message ?? t('createFailed'))
     } finally {
       setBusy(false)
     }
@@ -90,25 +94,25 @@ export default function InvitePage() {
     <AuthLayout
       headline={
         <>
-          Join the team,
+          {t('headline1')}
           <br />
-          <span className="gradient-text">keep the ledger whole.</span>
+          <span className="gradient-text">{t('headline2')}</span>
         </>
       }
-      subhead="An invite links your account to a team and its locations. Accepting is all that is left."
+      subhead={t('subhead')}
     >
       <div className="auth-stack" aria-live="polite">
-        {!invite && <h1 className="text-2xl font-bold tracking-tight">Loading invite…</h1>}
+        {!invite && <h1 className="text-2xl font-bold tracking-tight">{t('loading')}</h1>}
 
         {invite && !invite.valid && (
           <>
-            <h1 className="text-2xl font-bold tracking-tight">Invite unavailable</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('unavailable')}</h1>
             <p className="text-sm text-muted">{invite.error}</p>
             <Link
               href="/login"
               className="inline-block py-3 -my-3 text-sm font-semibold text-[var(--accent)] hover:underline"
             >
-              Go to sign in
+              {t('goSignIn')}
             </Link>
           </>
         )}
@@ -116,9 +120,9 @@ export default function InvitePage() {
         {invite?.valid && (
           <>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Join {invite.teamName}</h1>
+              <h1 className="text-2xl font-bold tracking-tight">{t('joinTeam', { team: invite.teamName ?? '' })}</h1>
               <p className="mt-1.5 text-sm text-muted">
-                Invited as <span className="font-semibold text-foreground">{invite.role}</span> · {invite.email}
+                {t.rich('invitedAs', { role: invite.role ?? '', email: invite.email ?? '', b: (c) => <span className="font-semibold text-foreground">{c}</span> })}
               </p>
             </div>
 
@@ -136,30 +140,30 @@ export default function InvitePage() {
                   loadingBehavior="busy"
                   onClick={acceptAsCurrentUser}
                 >
-                  {busy ? 'Joining…' : `Accept and join ${invite.teamName}`}
+                  {busy ? t('joining') : t('acceptJoin', { team: invite.teamName ?? '' })}
                 </Button>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted">You already have an account. Sign in to accept this invite.</p>
+                  <p className="text-sm text-muted">{t('haveAccount')}</p>
                   <Button
                     size="touch"
                     variant="brand"
                     className="w-full"
                     onClick={() => router.push(`/login?next=/invite/${params.token}`)}
                   >
-                    Sign in to accept
+                    {t('signInAccept')}
                   </Button>
                 </div>
               )
             ) : (
               <form onSubmit={createAccount} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="name">Your name</Label>
-                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required placeholder="Jane Doe" />
+                  <Label htmlFor="name">{t('yourName')}</Label>
+                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required placeholder={t('namePlaceholder')} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="password">Create a password</Label>
-                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" />
+                  <Label htmlFor="password">{t('createPassword')}</Label>
+                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" placeholder={t('passwordPlaceholder')} />
                 </div>
                 <Button
                   size="touch"
@@ -169,7 +173,7 @@ export default function InvitePage() {
                   isLoading={busy}
                   loadingBehavior="busy"
                 >
-                  {busy ? 'Creating…' : 'Create account & join'}
+                  {busy ? t('creating') : t('createJoin')}
                 </Button>
               </form>
             )}

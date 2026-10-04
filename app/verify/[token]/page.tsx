@@ -3,10 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 import { AuthLayout } from '@/components/auth/AuthLayout'
 import { Button } from '@/components/ui/button'
 
 export default function VerifyEmailPage() {
+  const t = useTranslations('verify')
+  const apiError = useApiError()
   const params = useParams<{ token: string }>()
   const router = useRouter()
   const [status, setStatus] = useState<'pending' | 'ok' | 'error'>('pending')
@@ -34,12 +38,12 @@ export default function VerifyEmailPage() {
           setStatus('ok')
         } else {
           setStatus('error')
-          setMessage(data.error ?? 'This link is invalid or has expired.')
+          setMessage(apiError(data, t('invalidLink')))
         }
       } catch {
         if (active) {
           setStatus('error')
-          setMessage('Something went wrong. Please try again.')
+          setMessage(t('wentWrong'))
         }
       }
     })()
@@ -52,47 +56,47 @@ export default function VerifyEmailPage() {
     <AuthLayout
       headline={
         <>
-          One address,
+          {t('headline1')}
           <br />
-          <span className="gradient-text">confirmed once.</span>
+          <span className="gradient-text">{t('headline2')}</span>
         </>
       }
-      subhead="Verifying your email is what activates the account. The link is single-use and expires an hour after it was sent."
+      subhead={t('subhead')}
     >
       {/* The outcome replaces a line of status text, so it is announced rather
           than silently swapped. */}
       <div className="auth-stack" aria-live="polite">
         {status === 'pending' && (
           <>
-            <h1 className="text-2xl font-bold tracking-tight">Verifying your email…</h1>
-            <p className="text-sm text-muted">This only takes a moment.</p>
+            <h1 className="text-2xl font-bold tracking-tight">{t('pendingTitle')}</h1>
+            <p className="text-sm text-muted">{t('pendingBody')}</p>
           </>
         )}
 
         {status === 'ok' && (
           <>
-            <h1 className="text-2xl font-bold tracking-tight">Email verified</h1>
-            <p className="text-sm text-muted">Your account is active. You can sign in now.</p>
+            <h1 className="text-2xl font-bold tracking-tight">{t('okTitle')}</h1>
+            <p className="text-sm text-muted">{t('okBody')}</p>
             <Button
               size="touch"
               variant="brand"
               className="w-full"
               onClick={() => router.push('/login')}
             >
-              Go to sign in
+              {t('goSignIn')}
             </Button>
           </>
         )}
 
         {status === 'error' && (
           <>
-            <h1 className="text-2xl font-bold tracking-tight">That link did not work</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('errorTitle')}</h1>
             <p className="text-sm text-muted">{message}</p>
             <Link
               href="/login"
               className="inline-block py-3 -my-3 text-sm font-semibold text-[var(--accent)] hover:underline"
             >
-              Back to sign in
+              {t('backSignIn')}
             </Link>
           </>
         )}

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { LogoTile } from '@/components/Logo'
 import { CalendarX, CircleAlert, MapPinOff, ScanLine, UserRound } from 'lucide-react'
 
@@ -27,6 +28,8 @@ export function ScanNotice({
   title: string
   detail: string
 }) {
+  const t = useTranslations('scanNotice')
+  const tCommon = useTranslations('common')
   const toneText = tone === 'warning' ? 'text-[var(--status-warning)]' : 'text-[var(--status-danger)]'
   const Icon = icon === 'expired' ? CalendarX : icon === 'mismatch' ? MapPinOff : CircleAlert
 
@@ -38,17 +41,17 @@ export function ScanNotice({
 
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="border-b border-[var(--panel-border)]">
-          <nav aria-label="Primary" className="shell">
+          <nav aria-label={t('primaryNav')} className="shell">
             <div className="mx-auto flex h-16 w-full max-w-[34rem] items-center sm:h-[4.5rem]">
             <Link
               href="/landing"
-              aria-label="Kamnotheat — home"
+              aria-label={tCommon('homeAriaLabel')}
               className="group flex items-center gap-3 rounded-2xl"
             >
               <LogoTile className="size-10 transition-transform group-hover:scale-[1.03]" />
               <span>
                 <span className="block text-sm font-semibold tracking-tight">Kamnotheat</span>
-                <span className="block text-xs text-muted">Secure check-in logging</span>
+                <span className="block text-xs text-muted">{tCommon('tagline')}</span>
               </span>
             </Link>
             </div>
@@ -67,7 +70,7 @@ export function ScanNotice({
               {/* The same two routes the scanner offers, for the same reason: a
                   physical door already has them, and neither needs an account. */}
               <h2 className="mt-7 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-                Two other ways in
+                {t('twoOtherWays')}
               </h2>
               <ul className="mt-3 space-y-3">
                 <li className="flex items-start gap-3">
@@ -76,9 +79,8 @@ export function ScanNotice({
                     strokeWidth={2.3}
                   />
                   <p className="text-sm text-muted">
-                    <span className="font-semibold text-foreground">Scan the code again.</span>{' '}
-                    Point your phone&apos;s camera at the QR posted at your location — a kiosk
-                    code refreshes every few seconds.
+                    <span className="font-semibold text-foreground">{t('scanAgainBold')}</span>{' '}
+                    {t('scanAgainBody')}
                   </p>
                 </li>
                 <li className="flex items-start gap-3">
@@ -87,8 +89,8 @@ export function ScanNotice({
                     strokeWidth={2.3}
                   />
                   <p className="text-sm text-muted">
-                    <span className="font-semibold text-foreground">Ask at reception.</span> A
-                    host can check you in if the code is damaged, missing, or will not open.
+                    <span className="font-semibold text-foreground">{t('askReceptionBold')}</span>{' '}
+                    {t('askReceptionBody')}
                   </p>
                 </li>
               </ul>

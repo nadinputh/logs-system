@@ -6,6 +6,7 @@ import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { assertSameOrigin } from "@/lib/csrf";
+import { checkoutFields, publicLog } from "@/lib/checkoutLog";
 
 export const runtime = "nodejs";
 
@@ -17,8 +18,8 @@ export async function PATCH(
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
   const { id } = await params;
-  const body = await req.json();
-  const { sessionToken } = body;
+  const body = await req.json().catch(() => null);
+  const sessionToken = body?.sessionToken;
 
   if (!sessionToken) {
     return NextResponse.json(
@@ -34,7 +35,9 @@ export async function PATCH(
   const idempotencyKey = req.headers.get("idempotency-key");
   if (idempotencyKey) {
     const cached = await checkIdempotency(idempotencyKey);
-    if (cached) {
+    // The key is the same for every check-out of the day. It only replays the
+    // check-out of *this* check-in; another visit's cached OUT is stale.
+    if (cached && String((cached.body as any)?.relatedLogId) === id) {
       return NextResponse.json(cached.body, { status: cached.statusCode });
     }
   }
@@ -54,7 +57,10 @@ export async function PATCH(
     checkinLog.locationId.toString(),
   );
   const mode = location?.checkInMode ?? "click";
-  if (mode === "passkey") {
+  // Passkey check-out only applies to a passkey-verified check-in. One made
+  // by click before the location switched modes can never satisfy the passkey
+  // route (it requires the same credential), so it must stay closable here.
+  if (mode === "passkey" && checkinLog.passkeyVerified) {
     return NextResponse.json(
       {
         error: "PASSKEY_REQUIRED",
@@ -70,29 +76,21 @@ export async function PATCH(
     action: "out",
   });
   if (existing)
-    return NextResponse.json({ already: true, log: existing }, { status: 200 });
+    return NextResponse.json({ already: true, log: publicLog(existing) }, { status: 200 });
 
   // Append-only: create a new OUT document instead of mutating the check-in
   const checkoutLog = await Log.create({
-    teamId: checkinLog.teamId,
-    locationId: checkinLog.locationId,
-    locationType: checkinLog.locationType,
-    sessionToken: checkinLog.sessionToken,
-    userId: checkinLog.userId,
-    visitorName: checkinLog.visitorName,
-    deviceId: checkinLog.deviceId,
+    ...checkoutFields(checkinLog),
     ipAddress: getClientIp(req),
     userAgent: req.headers.get("user-agent") ?? undefined,
-    action: "out",
-    relatedLogId: checkinLog._id,
     timestamp: new Date(),
   });
 
   publishLogCreated(checkoutLog);
 
   if (idempotencyKey) {
-    await saveIdempotency(idempotencyKey, 201, checkoutLog.toObject());
+    await saveIdempotency(idempotencyKey, 201, publicLog(checkoutLog));
   }
 
-  return NextResponse.json(checkoutLog, { status: 201 });
+  return NextResponse.json(publicLog(checkoutLog), { status: 201 });
 }

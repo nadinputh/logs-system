@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Fingerprint } from 'lucide-react'
 import { toast } from '@/components/ui/sonner'
 import { buildIdempotencyKey } from '@/lib/idempotency-key'
+import { useTranslations } from 'next-intl'
+import { useApiError } from '@/lib/useApiError'
 import { usePasskeySupport } from '@/lib/usePasskeySupport'
 import { getClientCoordinates } from '@/lib/geolocation'
 
@@ -46,23 +48,6 @@ function contactFields(contact?: string) {
   return contact.includes('@') ? { visitorEmail: contact } : { visitorPhone: contact }
 }
 
-function passkeyVerificationMessage(data: any, action: 'in' | 'out') {
-  switch (data?.code) {
-    case 'PASSKEY_NOT_REGISTERED':
-      return action === 'out'
-        ? 'This passkey is not registered here. Use the same passkey that checked in.'
-        : 'This passkey is not registered here. Save a passkey first or use normal check-in.'
-    case 'PASSKEY_MISMATCH':
-      return 'This is not the same passkey used to check in. Please use the original passkey.'
-    case 'PASSKEY_CREDENTIAL_CONTEXT_MISSING':
-      return 'This check-in is missing passkey details. Please ask staff to help check out.'
-    case 'CHECKIN_NOT_PASSKEY_VERIFIED':
-      return 'This check-in was not made with passkey. Please use normal checkout.'
-    default:
-      return data?.error ?? 'Verification failed'
-  }
-}
-
 export default function VisitorPasskey({
   locationId,
   locationType,
@@ -81,6 +66,13 @@ export default function VisitorPasskey({
   onAuthenticated,
   onRegistered,
 }: Props) {
+  const t = useTranslations('visitorPasskey')
+  const apiError = useApiError()
+  const passkeyVerificationMessage = (data: any, act: 'in' | 'out') =>
+    data?.code === 'PASSKEY_NOT_REGISTERED'
+      ? t(act === 'out' ? 'notRegisteredOut' : 'notRegisteredIn')
+      : apiError(data, t('verifyFailed'))
+
   const supported = usePasskeySupport()
   const [loading, setLoading] = useState(false)
 
@@ -116,7 +108,7 @@ export default function VisitorPasskey({
       })
       if (!challengeRes.ok) {
         const d = await challengeRes.json()
-        throw new Error(d.error ?? 'Failed to get challenge')
+        throw new Error(apiError(d, t('challengeFailed')))
       }
       const options = await challengeRes.json()
       const response = await startAuthentication({ optionsJSON: options })
@@ -130,11 +122,11 @@ export default function VisitorPasskey({
       if (!verifyRes.ok) throw new Error(passkeyVerificationMessage(data, action))
 
       const logId = data.log?._id ?? data.log?.id ?? ''
-      if (!logId) throw new Error('Passkey verified, but no log was recorded. Please try again.')
+      if (!logId) throw new Error(t('noLog'))
       onAuthenticated?.(logId, data.log)
       return true
     } catch (err: any) {
-      if (err.name !== 'NotAllowedError') toast.error(err.message ?? 'Biometric check-in failed')
+      if (err.name !== 'NotAllowedError') toast.error(err.message ?? t('authFailed'))
       return false
     } finally {
       setLoading(false)
@@ -162,7 +154,7 @@ export default function VisitorPasskey({
       })
       if (!optionsRes.ok) {
         const d = await optionsRes.json()
-        throw new Error(d.error ?? 'Failed to get registration options')
+        throw new Error(apiError(d, t('regOptionsFailed')))
       }
       const options = await optionsRes.json()
       const response = await startRegistration({ optionsJSON: options })
@@ -174,7 +166,7 @@ export default function VisitorPasskey({
       })
       if (!verifyRes.ok) {
         const d = await verifyRes.json()
-        throw new Error(d.error ?? 'Registration failed')
+        throw new Error(apiError(d, t('regFailed')))
       }
       if (registerOnly) {
         onRegistered?.()
@@ -183,7 +175,7 @@ export default function VisitorPasskey({
         if (success) onRegistered?.()
       }
     } catch (err: any) {
-      if (err.name !== 'NotAllowedError') toast.error(err.message ?? 'Biometric registration failed')
+      if (err.name !== 'NotAllowedError') toast.error(err.message ?? t('regAuthFailed'))
     } finally {
       setLoading(false)
     }
@@ -209,11 +201,11 @@ export default function VisitorPasskey({
     if (loading) return
     void performAction()
   }
-  const baseLabel = action === 'out' ? 'Check Out' : registerOnly ? 'Save Passkey for next visit' : 'Check In'
+  const baseLabel = action === 'out' ? t('checkOut') : registerOnly ? t('saveForNext') : t('checkIn')
   const label = loading
-    ? (useRegister ? 'Saving…' : 'Verifying…')
+    ? (useRegister ? t('saving') : t('verifying'))
     : useRegister
-      ? (registerOnly ? baseLabel : `${baseLabel} & Save Passkey`)
+      ? (registerOnly ? baseLabel : t('andSave', { label: baseLabel }))
       : baseLabel
 
   return (
@@ -223,7 +215,7 @@ export default function VisitorPasskey({
         {label}
       </Button>
       <p className="text-xs text-center text-muted">
-        Uses Face ID, Touch ID, or device PIN
+        {t('uses')}
       </p>
     </div>
   )

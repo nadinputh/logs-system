@@ -6,6 +6,7 @@ import { Building } from '@/lib/models/Building'
 import { Floor } from '@/lib/models/Floor'
 import { Room } from '@/lib/models/Room'
 import { ArrowLeft, MapPin, QrCode } from 'lucide-react'
+import { getTranslations } from 'next-intl/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,12 +32,13 @@ async function getLocation(id: string) {
 
 export default async function AdminQRPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const t = await getTranslations('adminQrPage')
   const location = await getLocation(id)
 
   if (!location) {
     return (
       <div className="p-8">
-        <p className="text-[var(--status-danger)]">Location not found</p>
+        <p className="text-[var(--status-danger)]">{t('locationNotFound')}</p>
       </div>
     )
   }
@@ -45,7 +47,7 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
   const qrUrl = `${appUrl}/scan/${id}`
   const sublabel =
     location.locationType === 'room'
-      ? `Floor ${location.floorId?.number} · ${location.buildingId?.name}`
+      ? t('floorLine', { number: location.floorId?.number, building: location.buildingId?.name })
       : location.locationType === 'floor'
       ? location.buildingId?.name
       : location.address
@@ -57,10 +59,10 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
       : '/admin/buildings'
   const backLabel =
     location.locationType === 'room'
-      ? 'Back to rooms'
+      ? t('backToRooms')
       : location.locationType === 'floor'
-      ? 'Back to floors'
-      : 'Back to buildings'
+      ? t('backToFloors')
+      : t('backToBuildings')
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center p-4">
@@ -85,10 +87,10 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
                       printed sheet regardless of app theme), so its own text
                       must be equally theme-invariant rather than flipping to
                       near-white in dark mode. */}
-                  <p className="text-base font-semibold text-neutral-900">Location QR Code</p>
+                  <p className="text-base font-semibold text-neutral-900">{t('locationQrCode')}</p>
                   <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
                     <MapPin className="size-3.5" />
-                    Scan to check in / out
+                    {t('scanToCheckInOut')}
                   </p>
                 </div>
               </div>
@@ -97,8 +99,8 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
                   url={qrUrl}
                   label={location.name}
                   sublabel={sublabel}
-                  exportTitle="Location QR Code"
-                  exportDescription="Scan to check in / out"
+                  exportTitle={t('locationQrCode')}
+                  exportDescription={t('scanToCheckInOut')}
                 />
               </div>
             </div>
