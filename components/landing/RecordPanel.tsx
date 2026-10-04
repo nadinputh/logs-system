@@ -44,8 +44,6 @@ const fields: Field[] = [
   },
   { label: 'location', value: 'locationValue', translate: true },
   { label: 'device_id', value: '7f3a1c04-9c21', mono: true },
-  { label: 'ip_address', value: '10.24.6.118', mono: true },
-  { label: 'user_agent', value: 'Safari/17.4 · iPhone', note: 'noteHeaders' },
   { label: 'passkey_verified', value: 'true', note: 'noteEnclave' },
   {
     label: 'idempotency_key',
@@ -55,8 +53,15 @@ const fields: Field[] = [
   },
 ]
 
-export function RecordPanel() {
+export function RecordPanel({ ip, userAgent }: { ip: string; userAgent: string }) {
   const t = useTranslations('recordPanel')
+  // The visitor's own request headers, so the anti-spoofing pair is real.
+  const rows: Field[] = [
+    ...fields.slice(0, 4),
+    { label: 'ip_address', value: ip, mono: true },
+    { label: 'user_agent', value: userAgent, note: 'noteHeaders' },
+    ...fields.slice(4),
+  ]
   return (
     <figure className="glass shadow-signal relative isolate overflow-hidden rounded-3xl">
       {/* The focal moment: the write path, performed once. Rows land, the sweep
@@ -77,7 +82,7 @@ export function RecordPanel() {
       </figcaption>
 
       <dl className="divide-y divide-[var(--panel-border)]">
-        {fields.map(({ label, value, note, mono, translate }, i) => (
+        {rows.map(({ label, value, note, mono, translate }, i) => (
           <div
             key={label}
             // A record is a list, so a sibling stagger is honest here. Capped at

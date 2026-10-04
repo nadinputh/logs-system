@@ -1,5 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { headers } from 'next/headers'
+import { formatUserAgent } from '@/lib/formatUserAgent'
+import { getClientIp } from '@/lib/server/getClientIp'
 import { getTranslations } from 'next-intl/server'
 import { ParticleField } from '@/components/ParticleField'
 import { RecordPanel } from '@/components/landing/RecordPanel'
@@ -54,6 +57,9 @@ type PairingItem = { Icon: LucideIcon; label: string; detail: string }
 export default async function LandingPage() {
   const t = await getTranslations('landing')
   const tCommon = await getTranslations('common')
+  const h = await headers()
+  const clientIp = getClientIp({ headers: h })
+  const clientUa = formatUserAgent(h.get('user-agent') ?? '')
 
   // Data — every value here is a real system constant (PRODUCT.md: never
   // fabricate proof, so there are no adoption or customer numbers). Built
@@ -209,7 +215,7 @@ export default async function LandingPage() {
               </ul>
             </div>
 
-            <RecordPanel />
+            <RecordPanel ip={clientIp} userAgent={clientUa} />
           </section>
 
           {/* ------------------------------------------------- Operating spec */}
