@@ -22,7 +22,6 @@ import { useLogRealtime } from '@/lib/useLogRealtime'
 import { usePasskeySupport } from '@/lib/usePasskeySupport'
 import { getClientCoordinates } from '@/lib/geolocation'
 
-const SelfieCapture = dynamic(() => import('@/components/selfie/SelfieCapture'), { ssr: false })
 const QRScanner = dynamic(() => import('@/components/scanner/QRScanner'), { ssr: false })
 const VisitorPasskey = dynamic(() => import('@/components/location/VisitorPasskey'), { ssr: false })
 
@@ -46,7 +45,7 @@ interface OpenLog {
   passkeyVerified?: boolean
 }
 
-type Step = 'loading' | 'identity' | 'checkin' | 'selfie' | 'checkedIn' | 'checkedOut' | 'questScan'
+type Step = 'loading' | 'identity' | 'checkin' | 'checkedIn' | 'checkedOut' | 'questScan'
 
 interface CheckInOutClientProps {
   locationId: string
@@ -192,7 +191,6 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
   const [location, setLocation] = useState<LocationData | null>(initialLocation)
   const [openLog, setOpenLog] = useState<OpenLog | null>(null)
   const [activeLogId, setActiveLogId] = useState<string | null>(null)
-  const [photoUrl, setPhotoUrl] = useState<string | undefined>()
   const [loading, setLoading] = useState(false)
   const [questRecorded, setQuestRecorded] = useState(false)
   const [visitorPasskeyRegistered, setVisitorPasskeyRegistered] = useState(false)
@@ -311,7 +309,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
     checkOpenLog(token)
   }
 
-  async function handleCheckIn(photo?: string) {
+  async function handleCheckIn() {
     // The write is irreversible and the ledger cannot delete a duplicate, so
     // re-entry is refused here as well as deduplicated on the server.
     if (loading) return
@@ -342,7 +340,6 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
           kioskToken,
           latitude: coords?.latitude,
           longitude: coords?.longitude,
-          photo,
         }),
       })
       const data = await res.json()
@@ -488,9 +485,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
         ? isReturningVisitor
           ? t('annReadyReturning', { name: firstNameOf(name), location: locName })
           : t('annReady', { location: locName })
-        : step === 'selfie'
-          ? t('annSelfie')
-          : step === 'checkedIn'
+        : step === 'checkedIn'
             ? t('annCheckedIn', { location: locName })
             : step === 'checkedOut'
               ? lastStayDuration && lastStayDuration !== `0${units.m}`
@@ -539,7 +534,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
   return (
     // The hardcoded slate/cyan gradient here was light-only: a visitor whose
     // phone is in dark mode crossed from the dark vault at /scan straight onto a
-    // white page, mid-flow, on the screen that takes their name and photo. The
+    // white page, mid-flow, on the screen that takes their name. The
     // ambient wash is the same ground /scan and /landing stand on and follows
     // the theme. No particle field — DESIGN.md keeps it out of dense views.
     <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
@@ -831,7 +826,8 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
               <Button
                 size="touch"
                 type="button"
-                onClick={() => setStep('selfie')}
+                onClick={handleCheckIn}
+                isLoading={loading}
                 className="w-full"
               >
                 {t('checkIn')}
@@ -876,27 +872,6 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 setVisitorPasskeyRegistered(true)
                 setPasskeySavedThisVisit(true)
               }}
-            />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step: Selfie */}
-        {step === 'selfie' && (
-          <Card>
-            <CardContent className="p-4">
-            <div className="mb-4">
-              <h2 ref={stepHeadingRef} tabIndex={-1} className="font-semibold text-foreground outline-none">
-                {t('selfieTitle')}
-              </h2>
-              <p className="text-sm text-muted mt-0.5">{t('selfieHint')}</p>
-            </div>
-            <SelfieCapture
-              onCapture={(url) => {
-                setPhotoUrl(url)
-                handleCheckIn(url)
-              }}
-              onSkip={() => handleCheckIn()}
             />
             </CardContent>
           </Card>

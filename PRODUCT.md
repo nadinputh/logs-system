@@ -29,7 +29,7 @@ Offered as a **free, open-to-anyone platform**: any organization can create a wo
 Usage scenes:
 - **Console (admin):** desktop-first management of buildings/floors/rooms, QR generation and print pages, dashboard stats (today / live-on-site / all-time), organization-wide log audit, team ownership, invites, and admin user management.
 - **Point of entry:** in-app iOS-safe QR scanner, static room QR, dynamic kiosk QR loop (15s rotating JWT), reverse QR terminal (personal 30s QR scanned by a fixed terminal), and passkey-verified check-in.
-- **Identity moments:** email-verified registration, invite-based onboarding, set-password links for admin-created accounts, and optional Cloudinary selfie capture at check-in.
+- **Identity moments:** email-verified registration, invite-based onboarding, set-password links for admin-created accounts.
 
 ## Capabilities and Constraints
 

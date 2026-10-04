@@ -22,7 +22,6 @@
     "@simplewebauthn/server": "^13.3.0",
     "@tailwindcss/postcss": "^4.3.0",
     "bcryptjs": "^3.0.3",
-    "cloudinary": "^2.10.0",
     "framer-motion": "^11.18.2",
     "html-to-image": "^1.11.13",
     "html5-qrcode": "^2.3.8",

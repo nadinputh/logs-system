@@ -14,11 +14,6 @@ const nextConfig = {
     NEXT_PUBLIC_APP_PORT: appPort,
     NEXT_PUBLIC_APP_URL: appUrl,
   },
-  images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: 'res.cloudinary.com' },
-    ],
-  },
   experimental: {
     devtoolSegmentExplorer: false,
   },

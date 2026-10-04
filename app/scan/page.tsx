@@ -36,25 +36,21 @@ const steps = [
     Icon: ShieldCheck,
     key: 'step3',
     // Verified against components/location/CheckInOut.tsx: identity (name and
-    // contact) -> identity step 2 (purpose, gender) -> checkin -> an optional
-    // selfie. "Confirm and you are logged" skipped all of it; "give your name
-    // and confirm" then understated it. This names the real shape.
+    // contact) -> identity step 2 (purpose, gender) -> checkin. "Confirm and
+    // you are logged" skipped all of it; "give your name and confirm" then
+    // understated it. This names the real shape.
   },
 ]
 
 /**
  * Everything a check-in writes, stated before the camera opens rather than
  * after. Checked line by line against `lib/models/Log.ts`, the `POST /api/logs`
- * handler, `components/location/CheckInOut.tsx` and `lib/cloudinary.ts`:
+ * handler and `components/location/CheckInOut.tsx`:
  *
  * - automatic — server timestamp, the scanned `locationId`, `ipAddress`,
  *   `userAgent`, and a `deviceId` random UUID kept in this browser
  * - typed — `visitorName` required; contact, purpose and gender optional
- * - optional — a photo, which `uploadSelfie()` POSTs to api.cloudinary.com
- *
- * The photo is called out as leaving the device because it does. Saying only
- * "the camera feed never leaves your device" a few words away from "a photo is
- * optional" invited exactly the wrong inference.
+ * - optional — nothing else is collected; no photo or camera access
  *
  * No location claim appears here: `geofenceStatus` exists on the Log schema and
  * is read by the admin viewer, but nothing in the visitor flow ever sends it.

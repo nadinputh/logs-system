@@ -16,7 +16,7 @@ An enterprise-grade, high-throughput, and immutable Check-In/Out logging system.
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | Building / Floor / Room CRUD (admin)                                         | `app/admin/buildings\|floors\|rooms/`                                                     |
 | Static QR code generation + print page                                       | `lib/qr.ts`, `app/admin/qr/[id]/`                                                         |
-| Check-in/out flow: visitor identity, open-log detection, selfie (Cloudinary) | `components/location/CheckInOut.tsx`                                                      |
+| Check-in/out flow: visitor identity, open-log detection | `components/location/CheckInOut.tsx`                                                      |
 | In-app QR scanner (html5-qrcode, iOS-safe)                                   | `components/scanner/QRScanner.tsx`                                                        |
 | Dashboard stats (today/live/total)                                           | `app/dashboard/`                                                                          |
 | Logs pages (staff own, admin all)                                            | `app/logs/`, `app/admin/logs/`                                                            |
@@ -286,8 +286,6 @@ npm run dev
 | `MONGODB_URI`                          | All API routes         | ✅       |
 | `NEXTAUTH_SECRET`                      | NextAuth               | ✅       |
 | `NEXTAUTH_URL`                         | NextAuth, QR URLs      | ✅       |
-| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`    | Selfie upload (client) | Optional |
-| `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Selfie upload (client) | Optional |
 | `CRON_SECRET`                          | `/api/cron/*` guard    | ✅       |
 | `KIOSK_SECRET`                         | Dynamic QR signing     | Sprint 3 |
 | `SESSION_QR_SECRET`                    | Reverse QR signing     | Sprint 3 |

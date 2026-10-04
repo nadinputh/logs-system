@@ -23,6 +23,7 @@ export interface ILog extends Document {
   autoCheckedOut?: boolean;
   passkeyVerified?: boolean;
   passkeyCredentialId?: string;
+  /** Legacy: selfie capture was removed. Old documents may still carry a URL. */
   photo?: string;
   questCardId?: Types.ObjectId;
   createdAt: Date;

@@ -17,13 +17,6 @@ export const CreateLogSchema = z.object({
   // the client.
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  // Only selfies this app uploaded (lib/cloudinary.ts returns a res.cloudinary.com
-  // secure_url); an arbitrary URL would be fetched by every admin who opens the log.
-  photo: z
-    .string()
-    .url()
-    .refine((u) => u.startsWith("https://res.cloudinary.com/"), "Invalid photo URL")
-    .optional(),
   questCardId: z.string().optional(),
 });
 

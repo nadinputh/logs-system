@@ -25,7 +25,7 @@ const SUMMARY = [
   'Kamnotheat is a free check-in/out platform. We never sell your data.',
   'Each check-in saves the time, place, your device, IP address and browser, to prove it was really you.',
   'Check-in records are permanent by design. Mistakes are fixed with a visible correction, not deleted.',
-  'Selfies and notifications happen only where a workspace turns them on or you opt in.',
+  'Push notifications happen only where you opt in.',
 ]
 
 /**
@@ -78,12 +78,12 @@ export default function PrivacyPolicyPage() {
         <div className="mt-6 rounded-xl border border-border bg-muted/30 p-4">
           <div className="flex items-center gap-2.5 text-sm font-semibold">
             <Camera className="size-4 text-[var(--accent)]" strokeWidth={2.2} />
-            Selfie capture
+            Selfies
           </div>
           <p className="!mt-2 text-sm">
-            Where a location is configured to ask for one, a photo is captured at check-in and
-            uploaded directly to our image host (Cloudinary) to confirm who checked in. It is not used
-            for any other purpose, and locations that don't request it never capture one.
+            Check-in no longer captures a photo. Selfies taken before this was removed stay attached
+            to their original record, hosted on our image provider (Cloudinary), and are retained for
+            as long as the record is.
           </p>
         </div>
 
@@ -156,7 +156,7 @@ export default function PrivacyPolicyPage() {
           Staff and Members see their own check-in history. Owners, Admins, Managers, and Auditors can
           see check-in records across the workspace team they belong to, scoped by role. We do not sell your data
           or share it with third parties for advertising. It is shared with the processors this system
-          relies on to function: Cloudinary (if selfie capture is enabled, for image storage) and our
+          relies on to function: Cloudinary (hosts selfies captured before capture was removed) and our
           email delivery provider (to send verification, invite, and password-related mail).
         </p>
       </section>
@@ -167,9 +167,8 @@ export default function PrivacyPolicyPage() {
           Because the ledger is append-only, we can't delete or silently edit a past entry on request —
           but an administrator can enter a correction, which is itself recorded with your name attached
           to the reason, so the record stays honest about what changed and why. To request a correction,
-          contact your workspace administrator or use the details below. Selfie capture and push notifications are
-          only active where an administrator has turned them on for a given location or where you've
-          opted in yourself; passkeys can be removed at any time from Settings → Security.
+          contact your workspace administrator or use the details below. Push notifications are
+          only active where you've opted in yourself; passkeys can be removed at any time from Settings → Security.
         </p>
       </section>
 
