@@ -71,7 +71,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const auth = await requireTeamPermission("team.audit.read", { teamId: id });
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   const parsed = QuerySchema.safeParse({
     limit: req.nextUrl.searchParams.get("limit") ?? undefined,

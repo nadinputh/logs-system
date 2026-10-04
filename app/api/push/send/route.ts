@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   // codebase (e.g. app/api/admin/users). A bare global role==="admin" check
   // let any site admin push to any userId in the system regardless of team.
   const auth = await requireTeamPermission("team.members.manage");
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const { userId, title, message, url } = body;

@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest) {
   if (_csrf) return _csrf;
 
   const { error, session } = await requireAuth();
-  if (error || !session?.user) return error;
+  if (error) return error;
 
   const body = await req.json();
   const parsed = SetActiveTeamSchema.safeParse(body);

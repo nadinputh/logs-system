@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+import { getServerSession, Session } from "next-auth";
 import { Types } from "mongoose";
 import { authOptions } from "../auth";
 import { connectDB } from "../db";
@@ -13,7 +13,11 @@ import {
 
 export type Role = "admin" | "staff";
 
-export async function requireAuth(requiredRole?: Role) {
+type AuthResult =
+  | { error: NextResponse; session: null }
+  | { error: null; session: AuthedSession };
+
+export async function requireAuth(requiredRole?: Role): Promise<AuthResult> {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return {
@@ -28,7 +32,7 @@ export async function requireAuth(requiredRole?: Role) {
       session: null,
     };
   }
-  return { error: null, session };
+  return { error: null, session: session as AuthedSession };
 }
 
 interface TeamAccessOptions {
@@ -40,7 +44,35 @@ interface TeamPermissionOptions {
   teamId?: string;
 }
 
-export async function requireTeamAccess(options: TeamAccessOptions = {}) {
+type AuthedSession = Session & { user: NonNullable<Session["user"]> };
+
+/**
+ * Discriminated on `error`: once a caller has returned on `error`, `teamId`,
+ * `membership` and `session.user` are all present. Without it the union let
+ * `if (auth.error || !auth.teamId) return auth.error` type as `... | null`,
+ * which Next's route-handler check rejects at build.
+ */
+export type TeamAccess =
+  | {
+      error: NextResponse;
+      session: Session | null;
+      teamId: null;
+      membership: null;
+    }
+  | {
+      error: null;
+      session: AuthedSession;
+      teamId: string;
+      membership: NonNullable<Awaited<ReturnType<typeof findActiveMembership>>>;
+    };
+
+function findActiveMembership(teamId: string, userId: string) {
+  return TeamMember.findOne({ teamId, userId, status: "active" }).lean();
+}
+
+export async function requireTeamAccess(
+  options: TeamAccessOptions = {},
+): Promise<TeamAccess> {
   const { error, session } = await requireAuth();
   if (error || !session?.user) {
     return {
@@ -78,11 +110,7 @@ export async function requireTeamAccess(options: TeamAccessOptions = {}) {
     };
   }
 
-  const membership = await TeamMember.findOne({
-    teamId: resolvedTeamId,
-    userId: sessionUser.id,
-    status: "active",
-  }).lean();
+  const membership = await findActiveMembership(resolvedTeamId, sessionUser.id);
 
   if (!membership) {
     return {
@@ -108,7 +136,7 @@ export async function requireTeamAccess(options: TeamAccessOptions = {}) {
 
   return {
     error: null,
-    session,
+    session: session as AuthedSession,
     teamId: resolvedTeamId,
     membership,
   };

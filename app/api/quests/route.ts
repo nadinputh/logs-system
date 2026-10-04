@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const auth = await requireTeamAccess({ minRole: "manager" });
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   await connectDB();
   const quests = await QuestCard.find({ teamId: auth.teamId })
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   if (_csrf) return _csrf;
 
   const auth = await requireTeamAccess({ minRole: "manager" });
-  if (auth.error || !auth.teamId || !auth.session?.user) return auth.error;
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const parsed = CreateQuestCardSchema.safeParse(body);

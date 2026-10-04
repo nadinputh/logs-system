@@ -23,7 +23,7 @@ export async function POST(
   if (_csrf) return _csrf;
   const { id } = await params;
   const auth = await requireTeamPermission("logs.manualCheckout");
-  if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const parsed = ManualCheckoutSchema.safeParse(body);

@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireTeamPermission("locations.read");
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   const { id } = await params;
   await connectDB();

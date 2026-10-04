@@ -29,9 +29,7 @@ export async function POST(
   const auth = await requireTeamPermission("team.ownership.transfer", {
     teamId: id,
   });
-  if (auth.error || !auth.teamId || !auth.session?.user || !auth.membership) {
-    return auth.error;
-  }
+  if (auth.error) return auth.error;
 
   const actorUserId = (auth.session.user as any).id;
   if (!Types.ObjectId.isValid(actorUserId)) {

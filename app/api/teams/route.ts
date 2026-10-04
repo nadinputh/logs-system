@@ -43,7 +43,7 @@ async function buildUniqueSlug(base: string): Promise<string> {
 
 export async function GET() {
   const { error, session } = await requireAuth();
-  if (error || !session?.user) return error;
+  if (error) return error;
 
   await connectDB();
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   if (_csrf) return _csrf;
 
   const { error, session } = await requireAuth();
-  if (error || !session?.user) return error;
+  if (error) return error;
 
   const body = await req.json();
   const parsed = CreateTeamSchema.safeParse(body);

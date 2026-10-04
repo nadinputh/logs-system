@@ -28,7 +28,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const auth = await requireTeamPermission("team.invites.read", { teamId: id });
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   await connectDB();
 
@@ -64,9 +64,7 @@ export async function POST(
   const auth = await requireTeamPermission("team.invites.manage", {
     teamId: id,
   });
-  if (auth.error || !auth.teamId || !auth.membership || !auth.session?.user) {
-    return auth.error;
-  }
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const parsed = CreateInviteSchema.safeParse(body);
@@ -176,7 +174,7 @@ export async function DELETE(
   const auth = await requireTeamPermission("team.invites.manage", {
     teamId: id,
   });
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const parsed = RevokeInviteSchema.safeParse(body);

@@ -25,7 +25,7 @@ export async function POST(
   if (_csrf) return _csrf;
 
   const auth = await requireTeamAccess({ minRole: "manager" });
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   const { token: id } = await params;
   await connectDB();

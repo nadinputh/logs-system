@@ -26,8 +26,8 @@ export async function findOwnedLocationByType(
   const doc = await model
     .findById(locationId)
     .select("teamId checkInMode requireDynamicQr buildingId")
-    .lean<LeanLocation | null>();
-  return doc;
+    .lean();
+  return doc as LeanLocation | null;
 }
 
 export async function findOwnedLocationById(

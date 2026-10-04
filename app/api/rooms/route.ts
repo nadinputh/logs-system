@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const auth = await requireTeamPermission("locations.read");
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   await connectDB();
   const rooms = await Room.find({ teamId: auth.teamId })
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   if (_csrf) return _csrf;
 
   const auth = await requireTeamPermission("locations.write");
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const parsed = CreateRoomSchema.safeParse(body);

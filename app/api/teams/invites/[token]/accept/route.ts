@@ -17,7 +17,7 @@ export async function POST(
   if (_csrf) return _csrf;
   const { token } = await params;
   const { error, session } = await requireAuth();
-  if (error || !session?.user) return error;
+  if (error) return error;
 
   await connectDB();
 

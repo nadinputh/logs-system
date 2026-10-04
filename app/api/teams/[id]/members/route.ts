@@ -31,7 +31,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const auth = await requireTeamPermission("team.members.read", { teamId: id });
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   await connectDB();
 
@@ -69,7 +69,7 @@ export async function PATCH(
   const auth = await requireTeamPermission("team.members.manage", {
     teamId: id,
   });
-  if (auth.error || !auth.teamId || !auth.membership) return auth.error;
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const parsed = UpdateMemberSchema.safeParse(body);

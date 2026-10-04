@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   const auth = await requireTeamPermission("locations.read");
-  if (auth.error || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   await connectDB();
   const buildings = await Building.find({ teamId: auth.teamId })
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (_csrf) return _csrf;
 
   const auth = await requireTeamPermission("locations.write");
-  if (auth.error || !auth.teamId || !auth.session?.user) return auth.error;
+  if (auth.error) return auth.error;
 
   const body = await req.json();
   const parsed = CreateBuildingSchema.safeParse(body);

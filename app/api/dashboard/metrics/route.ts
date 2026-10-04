@@ -46,7 +46,7 @@ function countFromAggregate(result: Array<{ count: number }>) {
 
 export async function GET(_req: NextRequest) {
   const auth = await requireTeamPermission("dashboard.read");
-  if (auth.error || !auth.session?.user || !auth.teamId) return auth.error;
+  if (auth.error) return auth.error;
 
   await connectDB();
 
