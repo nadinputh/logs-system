@@ -70,6 +70,7 @@ export async function POST(
     role: "staff",
     emailVerified: new Date(), // invite token possession == email control
     activeTeamId: invite.teamId,
+    termsAcceptedAt: new Date(),
   });
 
   await TeamMember.create({

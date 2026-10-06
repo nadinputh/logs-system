@@ -50,10 +50,10 @@ const steps = [
  * - automatic — server timestamp, the scanned `locationId`, `ipAddress`,
  *   `userAgent`, and a `deviceId` random UUID kept in this browser
  * - typed — `visitorName` required; contact, purpose and gender optional
- * - optional — nothing else is collected; no photo or camera access
- *
- * No location claim appears here: `geofenceStatus` exists on the Log schema and
- * is read by the admin viewer, but nothing in the visitor flow ever sends it.
+ * - optional — nothing else is collected; no photo is taken (the camera only
+ *   reads the QR, on-device)
+ * - location — the browser may ask for position; the server stores only the
+ *   inside/outside result (`geofenceStatus`), never the coordinates
  */
 async function CaptureDisclosure() {
   const t = await getTranslations('scanHome')

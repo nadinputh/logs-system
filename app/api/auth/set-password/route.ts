@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);
   await User.updateOne(
     { _id: doc.userId },
-    { passwordHash, emailVerified: new Date() },
+    { passwordHash, emailVerified: new Date(), termsAcceptedAt: new Date() },
   );
 
   return NextResponse.json({ ok: true, email: doc.email });

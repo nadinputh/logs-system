@@ -8,6 +8,7 @@ import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LegalConsent } from '@/components/legal/LegalConsent'
 
 /** Mirrors the server's RegisterSchema so the hint never overstates the rule. */
 const MIN_PASSWORD = 8
@@ -240,6 +241,8 @@ export function RegisterForm() {
         <div aria-live="polite" className="empty:hidden">
           {error && <FormNotice tone="danger" title={error} />}
         </div>
+
+        <LegalConsent action="register" />
 
         <Button type="submit" size="touch" variant="brand" isLoading={loading} loadingBehavior="busy" className="w-full">
           {loading ? (

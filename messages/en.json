@@ -30,7 +30,13 @@
     "themeToDark": "Switch to dark mode",
     "selectOption": "Select option",
     "edit": "Edit",
-    "qrCode": "QR code"
+    "qrCode": "QR code",
+    "consent": "By {action}, you agree to the <terms>Terms of Use</terms> and have read the <privacy>Privacy Policy</privacy>.",
+    "consentAction": {
+      "register": "creating an account",
+      "setPassword": "setting your password",
+      "invite": "creating your account"
+    }
   },
   "legal": {
     "lastUpdated": "Last updated {date}",
@@ -331,7 +337,7 @@
     "fromYouTitle": "From you",
     "fromYouBody": "Your name — the only required field.",
     "optionalTitle": "Only if you choose",
-    "optionalBody": "Contact details and purpose.",
+    "optionalBody": "Contact details, gender and purpose. Your browser may also ask for your location; only whether you are inside the boundary is kept, never the coordinates.",
     "headingBefore": "Scan to ",
     "headingAccent": "check in",
     "lead": "If your phone's camera app didn't open the QR at your location, scan it here instead. Your entry is written once and never edited.",

@@ -7,6 +7,8 @@ export interface IUser extends Document {
   role: "admin" | "staff";
   activeTeamId?: Types.ObjectId;
   emailVerified?: Date | null;
+  /** When the user accepted the Terms/Privacy at account creation. Absent on accounts that predate it. */
+  termsAcceptedAt?: Date;
   /**
    * Monotonic counter of session invalidations for this user. Bumped by
    * password reset, and by the "sign out other devices" control. Every JWT
@@ -34,6 +36,7 @@ const UserSchema = new Schema<IUser>(
     role: { type: String, enum: ["admin", "staff"], default: "staff" },
     activeTeamId: { type: Schema.Types.ObjectId, ref: "Team" },
     emailVerified: { type: Date, default: null }, // null until email is verified; login is blocked while null
+    termsAcceptedAt: { type: Date },
     sessionsVersion: { type: Number, default: 0 },
   },
   { timestamps: true },

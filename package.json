@@ -10,6 +10,7 @@
     "seed": "npx tsx scripts/seed.ts",
     "backfill:team:dry": "npx tsx scripts/backfill-team-ownership.ts --dry-run",
     "backfill:team": "npx tsx scripts/backfill-team-ownership.ts",
+    "purge:selfies": "npx tsx scripts/purge-legacy-selfies.ts",
     "backfill:email-verified": "npx tsx scripts/backfill-email-verified.ts",
     "test": "vitest run",
     "test:watch": "vitest",

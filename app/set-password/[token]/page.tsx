@@ -11,6 +11,7 @@ import { FormNotice } from '@/components/auth/FormNotice'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LegalConsent } from '@/components/legal/LegalConsent'
 
 export default function SetPasswordPage() {
   const t = useTranslations('setPassword')
@@ -159,6 +160,7 @@ export default function SetPasswordPage() {
             <Label htmlFor="confirm">{t('confirm')}</Label>
             <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} autoComplete="new-password" placeholder={t('confirmPlaceholder')} />
           </div>
+          <LegalConsent action="setPassword" />
           <Button
             size="touch"
             variant="brand"

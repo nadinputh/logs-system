@@ -139,6 +139,7 @@ export async function POST(req: NextRequest) {
     passwordHash,
     role: "staff",
     emailVerified: null,
+    termsAcceptedAt: new Date(),
   });
 
   const slug = await uniqueSlug(teamName);

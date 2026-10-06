@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { Camera, Fingerprint } from 'lucide-react'
+import Link from 'next/link'
+import { Fingerprint } from 'lucide-react'
 import { LegalLayout, Placeholder } from '@/components/legal/LegalLayout'
 
 export const metadata: Metadata = {
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
   description: 'What Kamnotheat records at check-in and check-out, why, and for how long.',
 }
 
-const LAST_UPDATED = 'October 2, 2026'
+const LAST_UPDATED = 'October 6, 2026'
 
 const TOC = [
   { id: 'overview', label: 'Overview & scope' },
@@ -40,7 +41,12 @@ export default function PrivacyPolicyPage() {
       <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted">
         This policy covers people who sign in to a Kamnotheat workspace. If you're a
         one-time visitor who just scanned a QR code to check in, see the short notice shown at the
-        point of check-in instead — you don't need to read this document.
+        point of check-in instead — you don't need to read this document. The rules for using the
+        platform are in the{' '}
+        <Link href="/terms" className="font-medium text-accent hover:underline">
+          Terms of Use
+        </Link>
+        .
       </p>
 
       <section id="overview">
@@ -72,22 +78,19 @@ export default function PrivacyPolicyPage() {
           server (never by your device — client clocks are never trusted), the location, a persistent
           device identifier stored in your browser, your IP address, your browser's user-agent string,
           and — where a location has a mapped boundary — whether your reported position fell inside it.
+          We do not take photos or record your camera; the camera is used only to read QR codes, on your device.
           None of this is optional per-event; it's how every entry in the ledger is written.
+        </p>
+        <p>
+          If you check in as a visitor, you also type your name (required) and may add a phone
+          number or other contact detail, your gender, and the purpose of your visit; these are
+          stored on the entry. The position check uses your browser's location permission, which you
+          can refuse — check-in still works, and the position is then simply not evaluated. Your
+          precise coordinates are checked against the boundary on our server and are not stored; only
+          the inside/outside result is.
         </p>
 
         <div className="mt-6 rounded-xl border border-border bg-muted/30 p-4">
-          <div className="flex items-center gap-2.5 text-sm font-semibold">
-            <Camera className="size-4 text-[var(--accent)]" strokeWidth={2.2} />
-            Selfies
-          </div>
-          <p className="!mt-2 text-sm">
-            Check-in no longer captures a photo. Selfies taken before this was removed stay attached
-            to their original record, hosted on our image provider (Cloudinary), and are retained for
-            as long as the record is.
-          </p>
-        </div>
-
-        <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
           <div className="flex items-center gap-2.5 text-sm font-semibold">
             <Fingerprint className="size-4 text-[var(--accent)]" strokeWidth={2.2} />
             Passkeys (WebAuthn / FIDO2)
@@ -155,9 +158,8 @@ export default function PrivacyPolicyPage() {
         <p>
           Staff and Members see their own check-in history. Owners, Admins, Managers, and Auditors can
           see check-in records across the workspace team they belong to, scoped by role. We do not sell your data
-          or share it with third parties for advertising. It is shared with the processors this system
-          relies on to function: Cloudinary (hosts selfies captured before capture was removed) and our
-          email delivery provider (to send verification, invite, and password-related mail).
+          or share it with third parties for advertising. It is shared with the processor this system
+          relies on to function: our email delivery provider (to send verification, invite, and password-related mail).
         </p>
       </section>
 
