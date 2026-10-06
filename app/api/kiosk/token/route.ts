@@ -26,5 +26,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
   const token = await signKioskToken(locationId);
-  return NextResponse.json({ token });
+  return NextResponse.json({ token, name: location.name });
 }

@@ -12,8 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
-import DynamicQrToggle from '@/components/admin/DynamicQrToggle'
+import AccessSummary from '@/components/admin/AccessSummary'
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce } from '@/lib/clientFetch'
 import { useTranslations } from 'next-intl'
@@ -275,7 +274,6 @@ function RoomsContent() {
               <TableHead isRowHeader>{t('room')}</TableHead>
               {!floorFilter && <TableHead className="hidden sm:table-cell">{t('floor')}</TableHead>}
               <TableHead className="hidden md:table-cell">{t('type')}</TableHead>
-              <TableHead className="hidden lg:table-cell">{t('checkIn')}</TableHead>
               <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
@@ -292,7 +290,6 @@ function RoomsContent() {
                   </TableCell>
                   {!floorFilter && <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-44" /></TableCell>}
                   <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
-                  <TableCell className="hidden lg:table-cell"><Skeleton className="h-8 w-36 rounded-full" /></TableCell>
                   <TableCell className="text-right"><Skeleton className="ml-auto h-8 w-28" /></TableCell>
                 </TableRow>
               ))}
@@ -320,7 +317,6 @@ function RoomsContent() {
               <TableHead isRowHeader>{t('room')}</TableHead>
               {!floorFilter && <TableHead className="hidden sm:table-cell">{t('floor')}</TableHead>}
               <TableHead className="hidden md:table-cell">{t('type')}</TableHead>
-              <TableHead className="hidden lg:table-cell">{t('checkIn')}</TableHead>
               <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
@@ -334,6 +330,7 @@ function RoomsContent() {
                         </div>
                         <div>
                           <p className="font-semibold text-sm text-foreground">{r.name}</p>
+                          <AccessSummary checkInMode={r.checkInMode} requireDynamicQr={r.requireDynamicQr} />
                           {/* Already stated once in the page's own subtitle
                               when this list is floor-filtered — repeating it
                               on every single row added noise, not context. */}
@@ -355,12 +352,6 @@ function RoomsContent() {
                         <span className="text-sm text-muted/50">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CheckInModeToggle locationId={r._id} locationType="room" value={r.checkInMode ?? 'click'} />
-                        <DynamicQrToggle locationId={r._id} locationType="room" value={!!r.requireDynamicQr} />
-                      </div>
-                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -377,7 +368,7 @@ function RoomsContent() {
                           className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                         >
                           <QrCode className="w-3.5 h-3.5" aria-hidden />
-                          QR
+                          {tCommon('access')}
                         </Link>
                       </div>
                     </TableCell>

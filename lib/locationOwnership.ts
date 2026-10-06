@@ -7,6 +7,7 @@ export type LocationType = "building" | "floor" | "room";
 type LeanLocation = {
   _id: any;
   teamId: any;
+  name?: string;
   checkInMode?: "click" | "passkey";
   requireDynamicQr?: boolean;
   buildingId?: any;
@@ -35,13 +36,13 @@ export async function findOwnedLocationById(
 ): Promise<(LeanLocation & { locationType: LocationType }) | null> {
   const [room, floor, building] = await Promise.all([
     Room.findById(locationId)
-      .select("teamId checkInMode")
+      .select("teamId name checkInMode")
       .lean<LeanLocation | null>(),
     Floor.findById(locationId)
-      .select("teamId checkInMode")
+      .select("teamId name checkInMode")
       .lean<LeanLocation | null>(),
     Building.findById(locationId)
-      .select("teamId checkInMode")
+      .select("teamId name checkInMode")
       .lean<LeanLocation | null>(),
   ]);
 

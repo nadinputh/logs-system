@@ -1,11 +1,10 @@
-import QRCodeDisplay from '@/components/admin/QRCodeDisplay'
+import LocationQrPanel from '@/components/admin/LocationQrPanel'
 import Link from 'next/link'
-import { Card, CardContent } from '@/components/ui/card'
 import { connectDB } from '@/lib/db'
 import { Building } from '@/lib/models/Building'
 import { Floor } from '@/lib/models/Floor'
 import { Room } from '@/lib/models/Room'
-import { ArrowLeft, MapPin, QrCode } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 
 export const runtime = 'nodejs'
@@ -74,38 +73,17 @@ export default async function AdminQRPage({ params }: { params: Promise<{ id: st
           <ArrowLeft className="size-3.5" />
           {backLabel}
         </Link>
-        <Card className="overflow-hidden bg-white" data-qr-export-card="true">
-          <CardContent className="p-5 sm:p-6">
-            <div className="mx-auto w-full max-w-[17.625rem]">
-              <div className="mb-5 flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-neutral-900 text-white shadow-sm">
-                  <QrCode className="size-5" aria-hidden />
-                </div>
-                <div className="min-w-0">
-                  {/* Fixed neutral, not text-foreground/text-muted: this card
-                      is data-qr-export-card (hardcoded bg-white for a legible
-                      printed sheet regardless of app theme), so its own text
-                      must be equally theme-invariant rather than flipping to
-                      near-white in dark mode. */}
-                  <p className="text-base font-semibold text-neutral-900">{t('locationQrCode')}</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-neutral-500">
-                    <MapPin className="size-3.5" />
-                    {t('scanToCheckInOut')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex justify-center">
-                <QRCodeDisplay
-                  url={qrUrl}
-                  label={location.name}
-                  sublabel={sublabel}
-                  exportTitle={t('locationQrCode')}
-                  exportDescription={t('scanToCheckInOut')}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <LocationQrPanel
+          locationId={id}
+          locationType={location.locationType}
+          initialLiveOnly={!!location.requireDynamicQr}
+          initialCheckInMode={location.checkInMode ?? 'click'}
+          qrUrl={qrUrl}
+          label={location.name}
+          sublabel={sublabel}
+          title={t('locationQrCode')}
+          subtitle={t('scanToCheckInOut')}
+        />
       </div>
     </div>
   )

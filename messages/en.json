@@ -36,7 +36,8 @@
       "register": "creating an account",
       "setPassword": "setting your password",
       "invite": "creating your account"
-    }
+    },
+    "access": "Access"
   },
   "legal": {
     "lastUpdated": "Last updated {date}",
@@ -319,8 +320,8 @@
     "expiredDetail": "Kiosk codes refresh every few seconds so they cannot be photographed and reused. Scan the one on screen now. Nothing has been recorded.",
     "mismatchTitle": "That code is for a different place",
     "mismatchDetail": "The code you scanned was issued for another location, so it cannot check you in here. Nothing has been recorded.",
-    "liveOnlyTitle": "Scan the live code on the kiosk",
-    "liveOnlyDetail": "This place only accepts check-in from the code shown on its kiosk screen, not a printed or saved one. Nothing has been recorded."
+    "liveOnlyTitle": "This place uses a live code",
+    "liveOnlyDetail": "A printed or saved code cannot check you in here. Scan the code on the screen at the entrance instead. Nothing has been recorded."
   },
   "scanHome": {
     "metaTitle": "Scan to check in — Kamnotheat",
@@ -757,7 +758,6 @@
     "buildingsLoadingTable": "Buildings loading table",
     "buildingsTable": "Buildings table",
     "building": "Building",
-    "checkIn": "Check-in",
     "actions": "Actions",
     "noBuildingsYet": "No buildings yet",
     "clickAddBuildingToGet": "Click \"Add Building\" to get started",
@@ -793,7 +793,6 @@
     "floorsLoadingTable": "Floors loading table",
     "floorsTable": "Floors table",
     "floor": "Floor",
-    "checkIn": "Check-in",
     "actions": "Actions",
     "noFloorsYet": "No floors yet",
     "addAFloorToBegin": "Add a floor to begin organising rooms",
@@ -833,7 +832,6 @@
     "roomsTable": "Rooms table",
     "room": "Room",
     "type": "Type",
-    "checkIn": "Check-in",
     "actions": "Actions",
     "noRoomsYet": "No rooms yet",
     "addARoomToEnable": "Add a room to enable QR-based check-ins",
@@ -852,12 +850,11 @@
     "visitorsMustUseFaceId": "Visitors must use Face ID / Touch ID",
     "click": "Click",
     "passkey": "Passkey",
-    "openLiveQr": "Open live QR",
-    "liveKioskQrRequired": "Live kiosk QR required",
-    "staticQrAllowed": "Static QR allowed",
+    "liveKioskQrRequired": "Live screen only: printed codes are now refused",
+    "staticQrAllowed": "Printed or live: both codes are accepted",
     "failedToUpdateQrRequirement": "Failed to update QR requirement",
-    "onlyAcceptCheckInFrom": "Only accept check-in from the live kiosk QR, not a printed one",
-    "liveQrOnly": "Live QR only"
+    "printedOrLive": "Printed or live",
+    "liveScreenOnly": "Live screen only"
   },
   "adminReissue": {
     "failedToReissueCard": "Failed to reissue card",
@@ -878,7 +875,12 @@
     "unableToGenerateQrCode": "Unable to generate QR code. Check KIOSK_SECRET env var.",
     "scanToCheckIn": "Scan to Check In",
     "pointYourCameraAtThe": "Point your camera at the code below",
-    "refreshesIn": "Refreshes in {seconds}s"
+    "refreshesIn": "Refreshes in {seconds}s",
+    "fullscreen": "Full screen",
+    "unavailableTitle": "Kiosk unavailable",
+    "retry": "Try again",
+    "signIn": "Sign in",
+    "exitFullscreen": "Exit full screen"
   },
   "adminQuests": {
     "allStepsNeedALocation": "All steps need a location",
@@ -947,7 +949,20 @@
     "backToBuildings": "Back to buildings",
     "locationQrCode": "Location QR Code",
     "scanToCheckInOut": "Scan to check in / out",
-    "floorLine": "Floor {number} · {building}"
+    "floorLine": "Floor {number} · {building}",
+    "modeLabel": "Which QR codes are accepted",
+    "modeLiveOnlyHelp": "Only the live code on a kiosk screen is accepted. Printed codes are refused.",
+    "liveTitle": "Live kiosk code",
+    "liveBody": "Show this on a screen at the entrance. The code changes every few seconds, so it cannot be photographed and reused.",
+    "openKiosk": "Open live kiosk",
+    "staticDisabled": "Printing is off while Live only is on.",
+    "identityLabel": "How visitors identify",
+    "modePrintedHelp": "Visitors can scan the printed code or the live code on a kiosk screen.",
+    "confirmTitle": "Printed codes will stop working",
+    "confirmBody": "Any sign already posted at this location will turn visitors away. Make sure a screen is ready to show the live code first.",
+    "confirmSwitch": "Switch to live screen only",
+    "confirmCancel": "Cancel",
+    "identityHelp": "Click lets visitors check in with a tap. Passkey makes them confirm with Face ID or Touch ID."
   },
   "questPublic": {
     "questNotFound": "Quest not found",

@@ -47,7 +47,7 @@ export default function CheckInModeToggle({ locationId, locationType, value, onC
     <div
       role="group"
       aria-label={t('checkInMode')}
-      className="inline-flex items-center rounded-lg border border-border/60 bg-muted/30 p-0.5 text-xs"
+      className="flex w-full gap-1 rounded-xl bg-muted/40 p-1"
     >
       <Button
         type="button"
@@ -56,12 +56,12 @@ export default function CheckInModeToggle({ locationId, locationType, value, onC
         onClick={() => update('click')}
         disabled={saving}
         aria-pressed={mode === 'click'}
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
-          mode === 'click' ? 'bg-surface shadow-sm text-foreground font-medium' : 'text-muted hover:text-foreground'
+        className={`h-auto flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          mode === 'click' ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted hover:text-foreground'
         }`}
         title={t('visitorsCanCheckInWith')}
       >
-        <MousePointerClick className="w-3 h-3" />
+        <MousePointerClick className="size-4" />
         {t('click')}
       </Button>
       <Button
@@ -71,12 +71,12 @@ export default function CheckInModeToggle({ locationId, locationType, value, onC
         onClick={() => update('passkey')}
         disabled={saving}
         aria-pressed={mode === 'passkey'}
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md transition-colors ${
-          mode === 'passkey' ? 'bg-surface shadow-sm text-foreground font-medium' : 'text-muted hover:text-foreground'
+        className={`h-auto flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          mode === 'passkey' ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted hover:text-foreground'
         }`}
         title={t('visitorsMustUseFaceId')}
       >
-        <Fingerprint className="w-3 h-3" />
+        <Fingerprint className="size-4" />
         {t('passkey')}
       </Button>
     </div>

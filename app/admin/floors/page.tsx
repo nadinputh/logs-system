@@ -12,8 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
-import DynamicQrToggle from '@/components/admin/DynamicQrToggle'
+import AccessSummary from '@/components/admin/AccessSummary'
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce } from '@/lib/clientFetch'
 import { useTranslations } from 'next-intl'
@@ -239,7 +238,6 @@ function FloorsContent() {
             <TableHeader>
               <TableHead isRowHeader>{t('floor')}</TableHead>
               <TableHead className="hidden sm:table-cell">{t('building')}</TableHead>
-              <TableHead className="hidden md:table-cell">{t('checkIn')}</TableHead>
               <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
@@ -255,7 +253,6 @@ function FloorsContent() {
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-40" /></TableCell>
-                  <TableCell className="hidden md:table-cell"><Skeleton className="h-8 w-36 rounded-full" /></TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Skeleton className="h-8 w-14" />
@@ -287,7 +284,6 @@ function FloorsContent() {
             <TableHeader>
               <TableHead isRowHeader>{t('floor')}</TableHead>
               <TableHead className="hidden sm:table-cell">{t('building')}</TableHead>
-              <TableHead className="hidden md:table-cell">{t('checkIn')}</TableHead>
               <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
@@ -300,18 +296,13 @@ function FloorsContent() {
                       </div>
                       <div>
                         <p className="font-semibold text-sm text-foreground">{f.name}</p>
+                          <AccessSummary checkInMode={f.checkInMode} requireDynamicQr={f.requireDynamicQr} />
                         <p className="text-xs text-muted mt-0.5 sm:hidden">{getBuildingName(f.buildingId)}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <p className="text-sm text-muted">{getBuildingName(f.buildingId)}</p>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <CheckInModeToggle locationId={f._id} locationType="floor" value={f.checkInMode ?? 'click'} />
-                        <DynamicQrToggle locationId={f._id} locationType="floor" value={!!f.requireDynamicQr} />
-                      </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -329,7 +320,7 @@ function FloorsContent() {
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         <QrCode className="w-3.5 h-3.5" aria-hidden />
-                        QR
+                        {tCommon('access')}
                       </Link>
                       <Link
                         href={`/admin/rooms?floorId=${f._id}`}

@@ -11,8 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import CheckInModeToggle from '@/components/admin/CheckInModeToggle'
-import DynamicQrToggle from '@/components/admin/DynamicQrToggle'
+import AccessSummary from '@/components/admin/AccessSummary'
 import { toast } from '@/components/ui/sonner'
 import { fetchJsonOnce } from '@/lib/clientFetch'
 import type { LatLng } from '@/components/admin/GeofenceMapPicker'
@@ -266,7 +265,6 @@ export default function AdminBuildingsPage() {
             <TableHeader>
               <TableHead isRowHeader>{t('building')}</TableHead>
               <TableHead className="hidden sm:table-cell">{t('address')}</TableHead>
-              <TableHead className="hidden md:table-cell">{t('checkIn')}</TableHead>
               <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
@@ -282,7 +280,6 @@ export default function AdminBuildingsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-44" /></TableCell>
-                  <TableCell className="hidden md:table-cell"><Skeleton className="h-8 w-36 rounded-full" /></TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Skeleton className="h-8 w-14" />
@@ -314,7 +311,6 @@ export default function AdminBuildingsPage() {
             <TableHeader>
               <TableHead isRowHeader>{t('building')}</TableHead>
               <TableHead className="hidden sm:table-cell">{t('address')}</TableHead>
-              <TableHead className="hidden md:table-cell">{t('checkIn')}</TableHead>
               <TableHead className="text-right">{t('actions')}</TableHead>
             </TableHeader>
             <TableBody>
@@ -327,6 +323,7 @@ export default function AdminBuildingsPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-sm text-foreground">{b.name}</p>
+                          <AccessSummary checkInMode={b.checkInMode} requireDynamicQr={b.requireDynamicQr} />
                         {b.description && <p className="text-xs text-muted mt-0.5 truncate max-w-[200px]">{b.description}</p>}
                         <p className="text-xs text-muted mt-0.5 sm:hidden">{b.address}</p>
                       </div>
@@ -334,12 +331,6 @@ export default function AdminBuildingsPage() {
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <p className="text-sm text-muted">{b.address}</p>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <CheckInModeToggle locationId={b._id} locationType="building" value={b.checkInMode ?? 'click'} />
-                        <DynamicQrToggle locationId={b._id} locationType="building" value={!!b.requireDynamicQr} />
-                      </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -357,7 +348,7 @@ export default function AdminBuildingsPage() {
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         <QrCode className="w-3.5 h-3.5" aria-hidden />
-                        {t('qr')}
+                        {tCommon('access')}
                       </Link>
                       <Link
                         href={`/admin/floors?buildingId=${b._id}`}
