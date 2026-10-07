@@ -52,17 +52,30 @@ export async function POST(
 
   const userId = (session.user as any).id;
 
-  await TeamMember.findOneAndUpdate(
-    { teamId: invite.teamId, userId },
-    {
+  // An invite grants membership; it is not a way back in. A suspended member
+  // stays suspended (an admin lifts that, not a pending link), and an existing
+  // active member keeps their role instead of having it overwritten.
+  const existing = await TeamMember.findOne({
+    teamId: invite.teamId,
+    userId,
+  })
+    .select("status role")
+    .lean<any>();
+  if (existing?.status === "suspended") {
+    return NextResponse.json(
+      { error: "Your membership of this team is suspended." },
+      { status: 403 },
+    );
+  }
+  if (!existing) {
+    await TeamMember.create({
       teamId: invite.teamId,
       userId,
       role: invite.role,
       status: "active",
       joinedAt: new Date(),
-    },
-    { upsert: true, setDefaultsOnInsert: true },
-  );
+    });
+  }
 
   invite.status = "accepted";
   await invite.save();
@@ -75,6 +88,6 @@ export async function POST(
   return NextResponse.json({
     ok: true,
     teamId: invite.teamId.toString(),
-    role: invite.role,
+    role: existing?.role ?? invite.role,
   });
 }
