@@ -12,6 +12,8 @@
  * from zero without pretending to be infrastructure. A real deployment should
  * put this at the edge — this is the floor, not the ceiling.
  */
+import { getClientIp } from "@/lib/server/getClientIp";
+
 type Bucket = { count: number; resetAt: number };
 
 declare global {
@@ -50,7 +52,5 @@ export function rateLimit(
 
 /** Best-effort client identity for limiting. Falls back to a shared bucket. */
 export function clientKey(req: Request, scope: string): string {
-  const fwd = req.headers.get("x-forwarded-for") ?? "";
-  const ip = fwd.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
-  return `${scope}:${ip}`;
+  return `${scope}:${getClientIp(req)}`;
 }

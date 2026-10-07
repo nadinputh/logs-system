@@ -299,6 +299,7 @@ npm run dev
 | `SMTP_USER`                            | SMTP auth                                 | Prod ✅ |
 | `SMTP_PASS`                            | SMTP auth                                 | Prod ✅ |
 | `EMAIL_FROM`                           | From header (falls back to `SMTP_USER`)   | Optional |
+| `TRUSTED_PROXY_HOPS`                   | How many proxies sit in front of the app; the client IP is read that many entries from the END of `X-Forwarded-For` (default 1: Vercel / one nginx). Set 2 behind CDN + load balancer | Optional |
 
 **Email delivery.** `lib/email/send.ts` sends verification, set-password and invite mail.
 `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are required **together** — `smtpConfigured()` tests

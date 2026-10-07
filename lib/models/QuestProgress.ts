@@ -44,7 +44,6 @@ const QuestProgressSchema = new Schema<IQuestProgress>(
 );
 
 QuestProgressSchema.index({ teamId: 1, questCardId: 1 }, { unique: true });
-QuestProgressSchema.index({ questCardId: 1 }, { unique: true });
 QuestProgressSchema.index({ sessionToken: 1 });
 QuestProgressSchema.index({ userId: 1 });
 

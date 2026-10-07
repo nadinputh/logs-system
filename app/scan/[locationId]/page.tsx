@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { getTranslations } from 'next-intl/server'
+import { pickClientIp } from '@/lib/server/getClientIp'
 import CheckInOutClient from '@/components/location/CheckInOut'
 import { ScanNotice } from '@/components/location/ScanNotice'
 import { headers } from 'next/headers'
@@ -71,7 +72,7 @@ export default async function ScanLocationPage({
       // visitor has time to complete the form. Minted only for the device that
       // first presented this QR, so a forwarded URL earns no presence proof.
       const h = await headers()
-      const fingerprint = `${h.get('x-forwarded-for')?.split(',')[0].trim() ?? h.get('x-real-ip') ?? 'unknown'}|${h.get('user-agent') ?? ''}`
+      const fingerprint = `${pickClientIp(h.get('x-forwarded-for'), h.get('x-real-ip'))}|${h.get('user-agent') ?? ''}`
       if (verified.jti && (await claimScan(verified.jti, fingerprint))) {
         presenceToken = await signKioskToken(locationId, '5m')
       }

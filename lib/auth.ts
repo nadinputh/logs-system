@@ -7,6 +7,7 @@ import { User } from "./models/User";
 import { PreAuthToken } from "./models/PreAuthToken";
 import { SessionInventory } from "./models/SessionInventory";
 import { rateLimitShared } from "./rateLimitShared";
+import { pickClientIp } from "./server/getClientIp";
 import { SESSION_MAX_AGE_DAYS } from "@/lib/sessionPolicy";
 
 /**
@@ -164,6 +165,12 @@ export async function bumpSessionsVersion(userId: string): Promise<number> {
 
 // Valid cost-12 hash of a throwaway string. Compared against when the email is
 // unknown so a miss costs the same bcrypt time as a wrong password.
+// NextAuth hands authorize() a plain header object (values may be arrays).
+function requestIp(headers: Record<string, unknown> | undefined): string {
+  const one = (v: unknown) => (Array.isArray(v) ? v.join(",") : (v as string | undefined));
+  return pickClientIp(one(headers?.["x-forwarded-for"]), one(headers?.["x-real-ip"]));
+}
+
 const DECOY_HASH = "$2b$12$jUDa.BPZDYMykzDihTS6..XabjltcDrqtU9C35QzSUoA7yHMiB.8K";
 
 export const authOptions: NextAuthOptions = {
@@ -202,15 +209,16 @@ export const authOptions: NextAuthOptions = {
          * (targeted). Both throw `TOO_MANY_ATTEMPTS`, which the LoginForm
          * turns into a message the user can act on.
          */
-        const fwd = req?.headers?.["x-forwarded-for"] ?? "";
-        const ip =
-          (Array.isArray(fwd) ? fwd[0] : String(fwd)).split(",")[0]?.trim() ||
-          (req?.headers?.["x-real-ip"] as string | undefined) ||
-          "unknown";
+        const ip = requestIp(req?.headers);
         const email = credentials.email.toLowerCase().trim();
         const perIp = await rateLimitShared(`login:ip:${ip}`, 10, 15 * 60 * 1000);
-        const perEmail = await rateLimitShared(`login:email:${email}`, 5, 15 * 60 * 1000);
-        if (!perIp.ok || !perEmail.ok) {
+        // Tight bucket per (email, IP): the guesser's own attempts exhaust it,
+        // but a stranger hammering an address from elsewhere cannot spend the
+        // account owner's allowance. A loose per-email ceiling still caps
+        // distributed guessing.
+        const perEmailIp = await rateLimitShared(`login:ei:${email}:${ip}`, 5, 15 * 60 * 1000);
+        const perEmail = await rateLimitShared(`login:email:${email}`, 50, 15 * 60 * 1000);
+        if (!perIp.ok || !perEmailIp.ok || !perEmail.ok) {
           throw new Error("TOO_MANY_ATTEMPTS");
         }
 
@@ -294,11 +302,7 @@ export const authOptions: NextAuthOptions = {
         const user = await User.findById(tokenDoc.userId);
         if (!user) return null;
 
-        const fwd = req?.headers?.["x-forwarded-for"] ?? "";
-        const ip =
-          (Array.isArray(fwd) ? fwd[0] : String(fwd)).split(",")[0]?.trim() ||
-          (req?.headers?.["x-real-ip"] as string | undefined) ||
-          "unknown";
+        const ip = requestIp(req?.headers);
         const uaHeader =
           (req?.headers?.["user-agent"] as string | undefined) ?? "unknown";
 

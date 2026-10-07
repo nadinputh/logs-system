@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
+import { assertSameOrigin } from "@/lib/csrf";
 import { findOwnedLocationById } from "@/lib/locationOwnership";
 import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
 
@@ -25,9 +26,16 @@ function buildLogEvent(log: any) {
   };
 }
 
-export async function GET(req: NextRequest) {
-  const locationId = req.nextUrl.searchParams.get("locationId");
-  const sessionToken = req.nextUrl.searchParams.get("sessionToken");
+// POST, not GET: sessionToken is the visitor's bearer credential and must not
+// ride in a query string. The client reads the stream with fetch (see
+// lib/useLogRealtime.ts), since EventSource cannot send a body.
+export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
+  const body = await req.json().catch(() => null);
+  const locationId = typeof body?.locationId === "string" ? body.locationId : null;
+  const sessionToken = typeof body?.sessionToken === "string" ? body.sessionToken : null;
 
   if (!locationId || !sessionToken) {
     return NextResponse.json(

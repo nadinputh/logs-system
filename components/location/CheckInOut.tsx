@@ -265,9 +265,8 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
       }
     },
     Boolean(sessionToken),
-    sessionToken
-      ? `/api/realtime/guest-log?locationId=${encodeURIComponent(locationId)}&sessionToken=${encodeURIComponent(sessionToken)}`
-      : '/api/realtime/guest-log',
+    '/api/realtime/guest-log',
+    { locationId, sessionToken },
   )
 
   async function checkOpenLog(token: string) {
