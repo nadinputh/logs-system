@@ -14,7 +14,10 @@ import { SESSION_MAX_AGE_DAYS } from "@/lib/sessionPolicy";
  *
  * The jwt callback checks it on every request. A raw DB read there would be a
  * query per request; a 60-second cache buys "compromised session dies within a
- * minute" while keeping the steady-state cost near zero.
+ * minute" while keeping the steady-state cost near zero. The cache is only
+ * trusted while fresh: a cold or expired entry blocks on the database, so
+ * the 60s is the worst case for a revocation made on ANOTHER instance, never
+ * a free pass for a revoked token.
  */
 type SvEntry = { value: number; expiresAt: number };
 declare global {
@@ -23,33 +26,37 @@ declare global {
 }
 const SV_CACHE_TTL_MS = 60_000;
 
-function readSessionVersionCached(userId: string): number | null {
-  const now = Date.now();
+async function readSessionVersionCached(
+  userId: string,
+): Promise<number | null> {
   const cache = (global._svCache ??= new Map());
   const hit = cache.get(userId);
-  if (hit && hit.expiresAt > now) return hit.value;
+  if (hit && hit.expiresAt > Date.now()) return hit.value;
 
-  // Kick off a refresh but do NOT await here — the jwt callback stays sync-fast
-  // in the steady state, and a cold cache accepts the current token once
-  // before invalidating. That's the acceptable failure mode: at most one
-  // stale-token request per userId per TTL window per process.
+  // Cold or expired: wait for the database. Returning the stale value (or
+  // accepting once) while refreshing in the background let a revoked token
+  // through on every cold serverless instance and every TTL boundary. A fresh
+  // hit above is the only fast path. A database error yields null (accept),
+  // so a Mongo blip does not sign everyone out.
   const pending = (global._svCachePending ??= new Map());
-  if (!pending.has(userId)) {
-    pending.set(
-      userId,
-      User.findById(userId)
-        .select("sessionsVersion")
-        .lean<{ sessionsVersion?: number } | null>()
-        .then((row) => {
-          const value = row?.sessionsVersion ?? 0;
-          cache.set(userId, { value, expiresAt: Date.now() + SV_CACHE_TTL_MS });
-          return value;
-        })
-        .catch(() => null)
-        .finally(() => pending.delete(userId)),
-    );
+  let p = pending.get(userId);
+  if (!p) {
+    p = connectDB()
+      .then(() =>
+        User.findById(userId)
+          .select("sessionsVersion")
+          .lean<{ sessionsVersion?: number } | null>(),
+      )
+      .then((row) => {
+        const value = row?.sessionsVersion ?? 0;
+        cache.set(userId, { value, expiresAt: Date.now() + SV_CACHE_TTL_MS });
+        return value as number | null;
+      })
+      .catch(() => null)
+      .finally(() => pending.delete(userId));
+    pending.set(userId, p);
   }
-  return hit?.value ?? null;
+  return p;
 }
 
 /**
@@ -58,9 +65,8 @@ function readSessionVersionCached(userId: string): number | null {
  * request. Same 60s window as sessionsVersion — a revoked session dies within
  * a minute across every process.
  *
- * `null` cached means "we asked, it wasn't there". `true` means "confirmed
- * present at cache time". Cold-cache reads accept the token once while the
- * refresh completes; that's the same trade sessionsVersion makes.
+ * A cached entry is trusted only while fresh; a cold or expired one blocks on
+ * the database (see readSessionVersionCached).
  */
 type JtiEntry = { present: boolean; expiresAt: number };
 declare global {
@@ -71,26 +77,28 @@ declare global {
 const JTI_CACHE_TTL_MS = 60_000;
 const JTI_TOUCH_MIN_INTERVAL_MS = 5 * 60_000;
 
-function isJtiPresentCached(sid: string): boolean | null {
-  const now = Date.now();
+async function isJtiPresentCached(sid: string): Promise<boolean> {
   const cache = (global._jtiCache ??= new Map());
   const hit = cache.get(sid);
-  if (hit && hit.expiresAt > now) return hit.present;
+  if (hit && hit.expiresAt > Date.now()) return hit.present;
+
+  // Same rule as the version check: never answer from a stale or empty cache.
+  // A database error reads as "absent" (revoke), as before.
   const pending = (global._jtiCachePending ??= new Map());
-  if (!pending.has(sid)) {
-    pending.set(
-      sid,
-      SessionInventory.exists({ jti: sid })
-        .then((doc) => {
-          const present = !!doc;
-          cache.set(sid, { present, expiresAt: Date.now() + JTI_CACHE_TTL_MS });
-          return present;
-        })
-        .catch(() => false)
-        .finally(() => pending.delete(sid)),
-    );
+  let p = pending.get(sid);
+  if (!p) {
+    p = connectDB()
+      .then(() => SessionInventory.exists({ jti: sid }))
+      .then((doc) => {
+        const present = !!doc;
+        cache.set(sid, { present, expiresAt: Date.now() + JTI_CACHE_TTL_MS });
+        return present;
+      })
+      .catch(() => false)
+      .finally(() => pending.delete(sid));
+    pending.set(sid, p);
   }
-  return hit?.present ?? null;
+  return p;
 }
 
 function invalidateJtiCache(sid: string) {
@@ -354,7 +362,7 @@ export const authOptions: NextAuthOptions = {
        * design has to make.
        */
       if (!user && token?.id) {
-        const cachedSv = readSessionVersionCached(token.id as string);
+        const cachedSv = await readSessionVersionCached(token.id as string);
         if (cachedSv !== null && cachedSv !== (token as any).sv) {
           // Stale — force sign-out on next server touch.
           return {} as any;
@@ -362,8 +370,8 @@ export const authOptions: NextAuthOptions = {
 
         const sid = (token as any).sid as string | undefined;
         if (sid) {
-          const present = isJtiPresentCached(sid);
-          if (present === false) {
+          const present = await isJtiPresentCached(sid);
+          if (!present) {
             // Row was revoked — end this session.
             return {} as any;
           }
@@ -376,6 +384,12 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      // A revoked token reaches here as `{}`. next-auth has already seeded
+      // session.user from the cookie's name/email, so returning it as-is
+      // would look signed in (and pass every `session?.user` guard) with no
+      // id. An empty object makes getServerSession return null and the
+      // client see "signed out".
+      if (!token?.id) return {} as typeof session;
       if (token && session.user) {
         (session.user as any).id = token.id as string;
         (session.user as any).role = token.role as string;
