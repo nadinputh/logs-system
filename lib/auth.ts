@@ -154,6 +154,10 @@ export async function bumpSessionsVersion(userId: string): Promise<number> {
   return value;
 }
 
+// Valid cost-12 hash of a throwaway string. Compared against when the email is
+// unknown so a miss costs the same bcrypt time as a wrong password.
+const DECOY_HASH = "$2b$12$jUDa.BPZDYMykzDihTS6..XabjltcDrqtU9C35QzSUoA7yHMiB.8K";
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
@@ -204,7 +208,10 @@ export const authOptions: NextAuthOptions = {
 
         await connectDB();
         const user = await User.findOne({ email });
-        if (!user) return null;
+        if (!user) {
+          await bcrypt.compare(credentials.password, DECOY_HASH);
+          return null;
+        }
         // Snapshot request context now while we still have it — the jwt
         // callback runs later without a request object.
         const uaHeader = (req?.headers?.["user-agent"] as string | undefined) ?? "unknown";

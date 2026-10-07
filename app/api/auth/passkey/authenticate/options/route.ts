@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
@@ -34,21 +35,38 @@ export async function POST(req: NextRequest) {
   await connectDB();
 
   const user = await User.findOne({ email: email.toLowerCase() }).lean();
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const credentials = user
+    ? await PasskeyCredential.find({ userId: (user as any)._id }).lean()
+    : [];
+
+  const rpID = new URL(
+    process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`,
+  ).hostname;
+
+  // Same shape for every address. An unknown email or an account with no
+  // passkey gets a stable, HMAC-derived decoy id/credential, so neither the
+  // status code nor the body says whether the account exists. The decoy can
+  // never verify: no challenge is stored for it and no credential matches.
+  if (!user || credentials.length === 0) {
+    const decoy = createHmac("sha256", process.env.NEXTAUTH_SECRET ?? "")
+      .update(email.toLowerCase())
+      .digest();
+    const options = await generateAuthenticationOptions({
+      rpID,
+      allowCredentials: [
+        { id: decoy.toString("base64url"), transports: ["internal"] },
+      ],
+      userVerification: "preferred",
+    });
+    return NextResponse.json({
+      ...options,
+      userId: decoy.subarray(0, 12).toString("hex"),
+    });
   }
 
   const userId = (user as any)._id.toString();
-  const credentials = await PasskeyCredential.find({ userId }).lean();
-  if (credentials.length === 0) {
-    return NextResponse.json(
-      { error: "No passkeys registered for this account" },
-      { status: 400 },
-    );
-  }
-
   const options = await generateAuthenticationOptions({
-    rpID: new URL(process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`).hostname,
+    rpID,
     allowCredentials: credentials.map((c: any) => ({
       id: c.credentialId as string,
       transports: c.transports,

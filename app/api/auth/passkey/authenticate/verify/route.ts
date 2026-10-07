@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
 import { WebAuthnChallenge } from "@/lib/models/WebAuthnChallenge";
@@ -35,27 +36,26 @@ export async function POST(req: NextRequest) {
 
   await connectDB();
 
+  // Not an ObjectId would throw a CastError (a 500) that real ids never do.
+  if (!Types.ObjectId.isValid(userId)) {
+    return NextResponse.json({ error: "Passkey sign-in failed" }, { status: 400 });
+  }
+
   const challengeDoc = await WebAuthnChallenge.findOne({
     userId,
     type: "authentication",
   });
-  if (!challengeDoc) {
-    return NextResponse.json(
-      { error: "No pending authentication challenge" },
-      { status: 400 },
-    );
-  }
+  // One response for "no challenge" (unknown/decoy user), "no such credential"
+  // and a failed assertion, so the endpoint is not an account oracle.
+  const failed = () =>
+    NextResponse.json({ error: "Passkey sign-in failed" }, { status: 400 });
+  if (!challengeDoc) return failed();
 
   const cred = await PasskeyCredential.findOne({
     userId,
     credentialId: response.id,
   });
-  if (!cred) {
-    return NextResponse.json(
-      { error: "Credential not found" },
-      { status: 404 },
-    );
-  }
+  if (!cred) return failed();
 
   const origin = process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`;
   const rpID = new URL(origin).hostname;
@@ -74,13 +74,11 @@ export async function POST(req: NextRequest) {
         transports: cred.transports as any,
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+  } catch {
+    return failed();
   }
 
-  if (!verification.verified) {
-    return NextResponse.json({ error: "Verification failed" }, { status: 400 });
-  }
+  if (!verification.verified) return failed();
 
   await PasskeyCredential.updateOne(
     { _id: cred._id },
