@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
+import { TeamMember } from "@/lib/models/TeamMember";
 import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential";
 import { PasskeyCheckInChallenge } from "@/lib/models/PasskeyCheckInChallenge";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
@@ -119,9 +120,22 @@ export async function POST(req: NextRequest) {
   }
 
   // Step 5: Resolve credential — try staff first, then visitor
-  const staffCred = await PasskeyCredential.findOne({
+  const anyStaffCred = await PasskeyCredential.findOne({
     credentialId: response.id,
   });
+  // Staff passkeys are looked up globally, so being a passkey holder says
+  // nothing about this team. Without a membership check, a member of team A
+  // could write attributed logs into team B's locations. A non-member is
+  // treated as unregistered here (the client then offers guest registration).
+  const staffCred =
+    anyStaffCred &&
+    (await TeamMember.exists({
+      teamId,
+      userId: anyStaffCred.userId,
+      status: "active",
+    }))
+      ? anyStaffCred
+      : null;
   const visitorCred = staffCred
     ? null
     : await VisitorPasskeyCredential.findOne({

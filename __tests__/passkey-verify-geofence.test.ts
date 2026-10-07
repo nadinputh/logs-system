@@ -31,6 +31,7 @@ describe("POST /api/logs/passkey/verify — geofence wiring on check-in", () => 
   async function setupMocks(options?: {
     location?: unknown;
     geofenceStatus?: boolean | undefined;
+    isMember?: boolean;
   }) {
     const hasLocationOverride = !!options && Object.prototype.hasOwnProperty.call(options, "location");
     const location = hasLocationOverride
@@ -63,6 +64,9 @@ describe("POST /api/logs/passkey/verify — geofence wiring on check-in", () => 
         findOne: vi.fn().mockResolvedValue(staffCred),
         updateOne: vi.fn().mockResolvedValue(undefined),
       },
+    }));
+    vi.doMock("@/lib/models/TeamMember", () => ({
+      TeamMember: { exists: vi.fn().mockResolvedValue(options?.isMember === false ? null : { _id: "m1" }) },
     }));
     vi.doMock("@/lib/models/VisitorPasskeyCredential", () => ({
       VisitorPasskeyCredential: { findOne: vi.fn().mockResolvedValue(null), updateOne: vi.fn() },
@@ -162,5 +166,24 @@ describe("POST /api/logs/passkey/verify — geofence wiring on check-in", () => 
     );
 
     expect(computeGeofenceStatus).toHaveBeenCalledWith(BUILDING_ID, undefined, undefined);
+  });
+
+  it("treats a staff passkey from outside the team as unregistered and writes nothing", async () => {
+    const { POST, logCreate } = await setupMocks({ isMember: false });
+
+    const res = await POST(
+      makeReq({
+        response: { id: "cred-id-1", response: { clientDataJSON: clientDataJSON("test-challenge") } },
+        locationId: BUILDING_ID,
+        locationType: "building",
+        action: "in",
+        sessionToken: "550e8400-e29b-41d4-a716-446655440000",
+        idempotencyKey: "idem-1",
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    expect((await res.json()).code).toBe("PASSKEY_NOT_REGISTERED");
+    expect(logCreate).not.toHaveBeenCalled();
   });
 });
