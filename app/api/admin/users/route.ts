@@ -108,7 +108,10 @@ export async function POST(req: NextRequest) {
         role: parsed.data.role,
       },
       emailDelivered,
-      setPasswordUrl,
+      // Withheld once the recipient has it by mail: the link is a bearer
+      // credential, and an admin holding it could set the password and sign in
+      // as the new user. Returned only as the failed-send recovery.
+      setPasswordUrl: emailDelivered ? undefined : setPasswordUrl,
     },
     { status: 201 },
   );

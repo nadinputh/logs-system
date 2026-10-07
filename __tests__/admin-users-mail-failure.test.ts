@@ -110,6 +110,8 @@ describe('POST /api/admin/users — mail is best-effort, never load-bearing', ()
     const body = await res!.json()
 
     expect(body.emailDelivered).toBe(true)
+    // The link is a bearer credential; once mailed, the admin must not hold it.
+    expect(body.setPasswordUrl).toBeUndefined()
     // The actor and expiry are the facts the message was discarding.
     expect(sendSetPasswordEmail).toHaveBeenCalledWith(
       'jane@acme.test',

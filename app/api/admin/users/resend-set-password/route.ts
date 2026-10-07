@@ -89,5 +89,10 @@ export async function POST(req: NextRequest) {
     console.error("[admin/users] set-password resend failed:", err);
   }
 
-  return NextResponse.json({ emailDelivered, setPasswordUrl, expiresAt });
+  // Bearer credential: only handed to the admin when the mail did not go out.
+  return NextResponse.json({
+    emailDelivered,
+    setPasswordUrl: emailDelivered ? undefined : setPasswordUrl,
+    expiresAt,
+  });
 }

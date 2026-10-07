@@ -157,7 +157,8 @@ export async function POST(
         token: plainToken,
       },
       emailDelivered,
-      inviteUrl: inviteLink(plainToken),
+      // Bearer credential: only handed to the admin when the mail did not go out.
+      inviteUrl: emailDelivered ? undefined : inviteLink(plainToken),
     },
     { status: 201 },
   );
