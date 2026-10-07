@@ -5,7 +5,8 @@ import { authOptions, forgetJtiCache } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
 import { connectDB } from "@/lib/db";
 import { SessionInventory } from "@/lib/models/SessionInventory";
-import { rateLimit, clientKey } from "@/lib/rateLimit";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function POST(
   const csrf = assertSameOrigin(req);
   if (csrf) return csrf;
 
-  const verdict = rateLimit(clientKey(req, "session-revoke"), 30, 60_000);
+  const verdict = await rateLimitShared(clientKey(req, "session-revoke"), 30, 60_000);
   if (!verdict.ok) {
     return NextResponse.json(
       { error: "Too many revocations. Try again in a moment." },

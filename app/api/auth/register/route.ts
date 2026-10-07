@@ -7,7 +7,8 @@ import { Team } from "@/lib/models/Team";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { issueVerificationToken, verifyEmailLink } from "@/lib/verification";
 import { sendVerificationEmail } from "@/lib/email/send";
-import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
 
   // Each call mints a user AND a team, so an unthrottled endpoint is a way to
   // fill the database from the open internet.
-  const limited = rateLimit(clientKey(req, "register"), 5, 15 * 60 * 1000);
+  const limited = await rateLimitShared(clientKey(req, "register"), 5, 15 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -124,10 +125,10 @@ export async function POST(req: NextRequest) {
   const passwordHash = await bcrypt.hash(password, 12);
 
   if (existing) {
-    // Unverified account exists — refresh credentials and resend, stay neutral.
-    existing.name = name;
-    existing.passwordHash = passwordHash;
-    await existing.save();
+    // Unverified account exists — resend only, stay neutral. Never overwrite
+    // the credentials: whoever registers an address first would otherwise be
+    // able to replace the password of a signup still waiting on its email link
+    // (pre-hijack), or plant one the real owner then verifies.
     const { token } = await issueVerificationToken(existing._id, email, "email_verify");
     const delivered = await trySendVerification(email, verifyEmailLink(token));
     return neutral(delivered);

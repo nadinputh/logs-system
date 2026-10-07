@@ -47,7 +47,9 @@ export function LoginForm() {
   const tCommon = useTranslations('common')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const nextUrl = searchParams.get('next') || '/dashboard'
+  const nextParam = searchParams.get('next') ?? ''
+  // Same-origin paths only: `//evil.com` and `/\evil.com` are protocol-relative.
+  const nextUrl = /^\/(?![/\\])/.test(nextParam) ? nextParam : '/dashboard'
   const reasonParam = searchParams.get('reason')
   const reason: RedirectReason | null = isRedirectReason(reasonParam) ? reasonParam : null
   const [email, setEmail] = useState('')

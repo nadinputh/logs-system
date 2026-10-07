@@ -35,6 +35,7 @@ describe('GET /api/auth/reset-password — validates without consuming', () => {
     vi.doMock('@/lib/models/User', () => ({ User: {} }))
     vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
 
     const { GET } = await import('@/app/api/auth/reset-password/route')
     expect((await GET(get())).status).toBe(400)
@@ -51,6 +52,7 @@ describe('GET /api/auth/reset-password — validates without consuming', () => {
     vi.doMock('@/lib/models/User', () => ({ User: {} }))
     vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
 
     const { GET } = await import('@/app/api/auth/reset-password/route')
     const res = await GET(get('deadbeef'))
@@ -80,6 +82,7 @@ describe('GET /api/auth/reset-password — validates without consuming', () => {
     vi.doMock('@/lib/models/User', () => ({ User: {} }))
     vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
 
     const { GET } = await import('@/app/api/auth/reset-password/route')
     const res = await GET(get('good'))
@@ -123,6 +126,7 @@ describe('POST /api/auth/reset-password — consumes atomically and bumps sessio
     vi.doMock('@/lib/models/User', () => ({ User: { updateOne } }))
     vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
     vi.doMock('@/lib/auth', () => ({ bumpSessionsVersion }))
 
     const { POST } = await import('@/app/api/auth/reset-password/route')

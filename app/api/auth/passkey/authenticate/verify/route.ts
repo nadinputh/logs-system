@@ -6,7 +6,8 @@ import { PreAuthToken } from "@/lib/models/PreAuthToken";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { v4 as uuidv4 } from "uuid";
 import { assertSameOrigin } from "@/lib/csrf";
-import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
-  const limited = rateLimit(clientKey(req, "passkey-auth"), 10, 5 * 60 * 1000);
+  const limited = await rateLimitShared(clientKey(req, "passkey-auth"), 10, 5 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },

@@ -5,7 +5,8 @@ import { WebAuthnChallenge } from "@/lib/models/WebAuthnChallenge";
 import { User } from "@/lib/models/User";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
-import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   // Unauthenticated and keyed by an email the caller supplies — an
   // unthrottled 404-vs-200 response is an account-enumeration oracle.
-  const limited = rateLimit(clientKey(req, "passkey-auth"), 10, 5 * 60 * 1000);
+  const limited = await rateLimitShared(clientKey(req, "passkey-auth"), 10, 5 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },

@@ -7,7 +7,8 @@ import { VerificationToken } from "@/lib/models/VerificationToken";
 import { hashToken } from "@/lib/verification";
 import { bumpSessionsVersion } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
-import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
 
   // Defense in depth against token guessing — the token itself is the real
   // barrier, this just raises the cost of casual brute force above zero.
-  const limited = rateLimit(clientKey(req, "reset-password"), 10, 15 * 60 * 1000);
+  const limited = await rateLimitShared(clientKey(req, "reset-password"), 10, 15 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },

@@ -6,7 +6,7 @@ import { connectDB } from "./db";
 import { User } from "./models/User";
 import { PreAuthToken } from "./models/PreAuthToken";
 import { SessionInventory } from "./models/SessionInventory";
-import { rateLimit } from "./rateLimit";
+import { rateLimitShared } from "./rateLimitShared";
 import { SESSION_MAX_AGE_DAYS } from "@/lib/sessionPolicy";
 
 /**
@@ -196,8 +196,8 @@ export const authOptions: NextAuthOptions = {
           (req?.headers?.["x-real-ip"] as string | undefined) ||
           "unknown";
         const email = credentials.email.toLowerCase().trim();
-        const perIp = rateLimit(`login:ip:${ip}`, 10, 15 * 60 * 1000);
-        const perEmail = rateLimit(`login:email:${email}`, 5, 15 * 60 * 1000);
+        const perIp = await rateLimitShared(`login:ip:${ip}`, 10, 15 * 60 * 1000);
+        const perEmail = await rateLimitShared(`login:email:${email}`, 5, 15 * 60 * 1000);
         if (!perIp.ok || !perEmail.ok) {
           throw new Error("TOO_MANY_ATTEMPTS");
         }

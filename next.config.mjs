@@ -26,6 +26,20 @@ const nextConfig = {
   // trade every public font CDN (Google Fonts included) already makes.
   async headers() {
     return [
+      // ponytail: frame-ancestors only. A script-src CSP needs per-request
+      // nonces for Next's inline scripts; add via middleware when wanted.
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+          // Camera is the in-app QR scanner; geolocation is the geofence check.
+          { key: 'Permissions-Policy', value: 'camera=(self), geolocation=(self), microphone=()' },
+        ],
+      },
       {
         source: '/fonts/:path*',
         headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],

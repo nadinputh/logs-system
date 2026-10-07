@@ -47,10 +47,8 @@ describe('POST /api/auth/resend-verification — reissues the token type that op
       sendSetPasswordEmail,
       smtpConfigured: () => true,
     }))
-    vi.doMock('@/lib/rateLimit', () => ({
-      rateLimit: () => ({ ok: true, retryAfter: 0 }),
-      clientKey: () => 'k',
-    }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true, retryAfter: 0 }) }))
+    vi.doMock('@/lib/rateLimit', () => ({ clientKey: () => 'k' }))
 
     const { POST } = await import('@/app/api/auth/resend-verification/route')
     return { POST, issueVerificationToken, sendVerificationEmail, sendSetPasswordEmail }

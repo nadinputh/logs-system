@@ -159,7 +159,8 @@ describe('POST /api/auth/register — reports whether the mail actually went out
       verifyEmailLink: (t: string) => `https://kamnotheat.example/verify/${t}`,
     }))
     vi.doMock('@/lib/email/send', () => ({ sendVerificationEmail: vi.fn().mockImplementation(sendImpl) }))
-    vi.doMock('@/lib/rateLimit', () => ({ rateLimit: () => ({ ok: true, retryAfter: 0 }), clientKey: () => 'k' }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true, retryAfter: 0 }) }))
+    vi.doMock('@/lib/rateLimit', () => ({ clientKey: () => 'k' }))
 
     const { POST } = await import('@/app/api/auth/register/route')
     return { POST }

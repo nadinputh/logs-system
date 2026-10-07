@@ -12,7 +12,8 @@ import {
   sendVerificationEmail,
   smtpConfigured,
 } from "@/lib/email/send";
-import { clientKey, rateLimit } from "@/lib/rateLimit";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   // This endpoint sends mail to any address supplied, and answers neutrally in
   // every case — so without a limit it is both an email-bombing tool and a
   // silent one.
-  const limited = rateLimit(clientKey(req, "resend"), 5, 15 * 60 * 1000);
+  const limited = await rateLimitShared(clientKey(req, "resend"), 5, 15 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },

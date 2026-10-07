@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions, bumpSessionsVersion } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
-import { rateLimit, clientKey } from "@/lib/rateLimit";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const csrf = assertSameOrigin(req);
   if (csrf) return csrf;
-  const verdict = rateLimit(clientKey(req, "signout-others"), 5, 60_000);
+  const verdict = await rateLimitShared(clientKey(req, "signout-others"), 5, 60_000);
   if (!verdict.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again in a moment." },

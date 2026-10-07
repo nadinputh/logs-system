@@ -47,10 +47,8 @@ describe('POST /api/auth/forgot-password — reveals nothing about the address',
       sendPasswordResetEmail,
       smtpConfigured: () => true,
     }))
-    vi.doMock('@/lib/rateLimit', () => ({
-      rateLimit: () => ({ ok: true, retryAfter: 0 }),
-      clientKey: () => 'k',
-    }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true, retryAfter: 0 }) }))
+    vi.doMock('@/lib/rateLimit', () => ({ clientKey: () => 'k' }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
 
     const { POST } = await import('@/app/api/auth/forgot-password/route')
@@ -134,10 +132,8 @@ describe('POST /api/auth/forgot-password — rate limits', () => {
       sendPasswordResetEmail: vi.fn(),
       smtpConfigured: () => true,
     }))
-    vi.doMock('@/lib/rateLimit', () => ({
-      rateLimit: () => ({ ok: false, retryAfter: 300 }),
-      clientKey: () => 'k',
-    }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: false, retryAfter: 300 }) }))
+    vi.doMock('@/lib/rateLimit', () => ({ clientKey: () => 'k' }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
 
     const { POST } = await import('@/app/api/auth/forgot-password/route')
