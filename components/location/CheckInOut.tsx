@@ -168,6 +168,13 @@ function firstNameOf(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || fullName
 }
 
+const postJson = (url: string, body: unknown) =>
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
 export default function CheckInOutClient({ locationId, initialLocation, kioskToken }: CheckInOutClientProps) {
   const t = useTranslations('checkin')
   const locale = useLocale()
@@ -266,10 +273,14 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
   async function checkOpenLog(token: string) {
     try {
       const [logRes, pkRes] = await Promise.all([
-        fetch(`/api/logs/open?locationId=${locationId}&sessionToken=${token}`),
-        fetch(
-          `/api/logs/passkey/visitor/exists?sessionToken=${encodeURIComponent(token)}&locationId=${encodeURIComponent(locationId)}&locationType=${encodeURIComponent(location?.locationType ?? '')}`,
-        ),
+        // POST so the session token travels in the body, not in a URL that
+        // lands in access logs, history and Referer.
+        postJson('/api/logs/open', { locationId, sessionToken: token }),
+        postJson('/api/logs/passkey/visitor/exists', {
+          sessionToken: token,
+          locationId,
+          locationType: location?.locationType ?? '',
+        }),
       ])
       const data = await logRes.json()
       const pkData = await pkRes.json()
@@ -402,6 +413,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
         locationId,
         locationType: location!.locationType,
         sessionToken,
+        kioskToken,
       }),
     })
     const data = await res.json().catch(() => ({}))

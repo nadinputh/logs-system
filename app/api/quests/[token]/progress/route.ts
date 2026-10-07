@@ -7,6 +7,9 @@ import { QuestProgress } from "@/lib/models/QuestProgress";
 import { QuestProgressSchema } from "@/lib/validations/quest";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { assertSameOrigin } from "@/lib/csrf";
+import { kioskGate } from "@/lib/kioskGate";
+import { clientKey } from "@/lib/rateLimit";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
@@ -17,8 +20,17 @@ export async function POST(
 ) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+  // Unauthenticated: the card token is the only credential. Bound the rate so
+  // a leaked token cannot be driven in a loop.
+  const limited = await rateLimitShared(clientKey(req, "quest-progress"), 60, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfter) } },
+    );
+  }
   const { token } = await params;
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = QuestProgressSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -27,7 +39,7 @@ export async function POST(
     );
   }
 
-  const { locationId, locationType, sessionToken } = parsed.data;
+  const { locationId, locationType, sessionToken, kioskToken } = parsed.data;
   const session = await getServerSession(authOptions);
   await connectDB();
 
@@ -48,6 +60,13 @@ export async function POST(
       { status: 403 },
     );
   }
+
+  // A step is a visit. A location that demands the live kiosk QR must get the
+  // same proof of presence here as it does for check-in; otherwise a quest
+  // step can be completed from anywhere with just the card token and the
+  // (public) location id.
+  const gate = await kioskGate(location, locationId, kioskToken, sessionToken);
+  if (gate) return gate;
 
   let progress = await QuestProgress.findOne({
     teamId: card.teamId,

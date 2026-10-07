@@ -20,6 +20,8 @@ export const QuestProgressSchema = z.object({
   locationId: z.string().min(1),
   locationType: z.enum(['building', 'floor', 'room']),
   sessionToken: z.string().uuid(),
+  // Presence proof from the live kiosk QR; required when the location demands it.
+  kioskToken: z.string().optional(),
 })
 
 export type CreateQuestCardInput = z.infer<typeof CreateQuestCardSchema>

@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential";
+import { assertSameOrigin } from "@/lib/csrf";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
-  const sessionToken = req.nextUrl.searchParams.get("sessionToken");
-  const locationId = req.nextUrl.searchParams.get("locationId");
-  const locationType = req.nextUrl.searchParams.get("locationType");
-  if (!sessionToken || !locationId || !locationType) {
+// POST, not GET: sessionToken is the visitor's bearer credential and must not
+// ride in a query string.
+export async function POST(req: NextRequest) {
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
+
+  const body = await req.json().catch(() => null);
+  const { sessionToken, locationId, locationType } = body ?? {};
+  if (
+    typeof sessionToken !== "string" ||
+    typeof locationId !== "string" ||
+    !["building", "floor", "room"].includes(locationType)
+  ) {
     return NextResponse.json({ exists: false });
   }
   await connectDB();
