@@ -11,24 +11,21 @@ import {
   TeamPermission,
 } from "../teamPermissions";
 
-export type Role = "admin" | "staff";
-
 type AuthResult =
   | { error: NextResponse; session: null }
   | { error: null; session: AuthedSession };
 
-export async function requireAuth(requiredRole?: Role): Promise<AuthResult> {
+/**
+ * Authentication only. There is deliberately no system-role gate here:
+ * `session.user.role` is snapshotted into the JWT at sign-in and can be stale
+ * for the token's whole life, so nothing may authorize on it. Authorization is
+ * the team role, read from the database per request (requireTeamAccess).
+ */
+export async function requireAuth(): Promise<AuthResult> {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return {
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-      session: null,
-    };
-  }
-  const userRole = (session.user as any).role as Role;
-  if (requiredRole === "admin" && userRole !== "admin") {
-    return {
-      error: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
       session: null,
     };
   }

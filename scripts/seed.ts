@@ -36,11 +36,16 @@ import { Team } from "../lib/models/Team";
 import { TeamMember } from "../lib/models/TeamMember";
 
 async function seed() {
+  // This creates a well-known admin account. Never against production.
+  if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_PRODUCTION !== "1") {
+    throw new Error("Refusing to seed with NODE_ENV=production (set SEED_ALLOW_PRODUCTION=1 to override).");
+  }
   await connectDB();
 
   let admin = await User.findOne({ email: "admin@example.com" });
   if (!admin) {
-    const passwordHash = await bcrypt.hash("admin123", 12);
+    const seedPassword = process.env.SEED_ADMIN_PASSWORD || "admin123";
+    const passwordHash = await bcrypt.hash(seedPassword, 12);
     admin = await User.create({
       name: "Admin",
       email: "admin@example.com",
@@ -48,7 +53,11 @@ async function seed() {
       role: "admin",
       emailVerified: new Date(),
     });
-    console.log("Admin user created: admin@example.com / admin123");
+    console.log(
+      process.env.SEED_ADMIN_PASSWORD
+        ? "Admin user created: admin@example.com (password from SEED_ADMIN_PASSWORD)"
+        : "Admin user created: admin@example.com / admin123 (dev default; set SEED_ADMIN_PASSWORD to change)",
+    );
   } else {
     // Ensure the seeded admin can sign in under the email-verification guard.
     if (!admin.emailVerified) {
