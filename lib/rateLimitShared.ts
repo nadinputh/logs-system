@@ -21,7 +21,7 @@ export async function rateLimitShared(
   };
   try {
     await connectDB();
-    const opts = { upsert: true, new: true } as const;
+    const opts = { upsert: true, returnDocument: "after" } as const;
     const doc = await RateBucket.findOneAndUpdate(filter, update, opts)
       .lean<{ count: number }>()
       // Two first hits can both try to insert; the loser's retry just increments.

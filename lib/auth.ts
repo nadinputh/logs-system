@@ -139,7 +139,7 @@ export async function bumpSessionsVersion(userId: string): Promise<number> {
   const doc = await User.findByIdAndUpdate(
     userId,
     { $inc: { sessionsVersion: 1 } },
-    { new: true, projection: { sessionsVersion: 1 } },
+    { returnDocument: "after", projection: { sessionsVersion: 1 } },
   ).lean<{ sessionsVersion?: number } | null>();
   const value = doc?.sessionsVersion ?? 0;
   (global._svCache ??= new Map()).set(userId, {
