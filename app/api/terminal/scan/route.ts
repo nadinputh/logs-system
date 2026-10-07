@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { User } from "@/lib/models/User";
+import { TeamMember } from "@/lib/models/TeamMember";
 import { verifySessionQrToken } from "@/lib/jwt";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { requireTeamPermission } from "@/lib/middleware/auth";
@@ -17,7 +18,13 @@ export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
-  const body = await req.json();
+  // Authenticate first, against the operator's active team (the same rule as
+  // /api/kiosk/token): nothing below may reveal whether a location or token is
+  // valid to a caller who is not a terminal operator.
+  const auth = await requireTeamPermission("terminal.scan");
+  if (auth.error) return auth.error;
+
+  const body = await req.json().catch(() => ({}));
   const { token, locationId, locationType } = body;
 
   if (!token || !locationId || !locationType) {
@@ -56,13 +63,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
   const teamId = location.teamId.toString();
-
-  const auth = await requireTeamPermission("terminal.scan", { teamId });
-  if (auth.error) return auth.error;
+  if (teamId !== auth.teamId) {
+    return NextResponse.json({ error: "Location not found" }, { status: 404 });
+  }
 
   const user = await User.findById(userId).lean();
   if (!user)
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  // A personal QR proves who the person is, not that they belong to this team.
+  const member = await TeamMember.exists({ teamId, userId, status: "active" });
+  if (!member) {
+    return NextResponse.json(
+      { error: "User is not a member of this team" },
+      { status: 403 },
+    );
+  }
 
   const release = await acquireCheckInLock(teamId, locationId, userId);
   if (!release) {
