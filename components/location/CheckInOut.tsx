@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { LogoTile } from '@/components/Logo'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { CircleCheck, Lock, MapPin, Star } from 'lucide-react'
 import { ScanNotice } from '@/components/location/ScanNotice'
 import { VisitorNotice } from '@/components/legal/VisitorNotice'
@@ -574,6 +575,7 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
               <span className="block text-xs text-muted">{tCommon('tagline')}</span>
             </span>
           </Link>
+          <LanguageSwitcher className="ml-auto" />
           </div>
         </nav>
       </header>

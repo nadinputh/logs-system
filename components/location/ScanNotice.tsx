@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { LogoTile } from '@/components/Logo'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { CalendarX, CircleAlert, MapPinOff, ScanLine, UserRound } from 'lucide-react'
 
 /**
@@ -54,6 +55,7 @@ export function ScanNotice({
                 <span className="block text-xs text-muted">{tCommon('tagline')}</span>
               </span>
             </Link>
+            <LanguageSwitcher className="ml-auto" />
             </div>
           </nav>
         </header>

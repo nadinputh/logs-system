@@ -371,6 +371,22 @@
     animation: panel-swap 0.4s var(--ease-out-expo) both;
   }
 
+  /* The theme toggle's glyph arriving. An animation, not a transition: the
+     theme provider disables transitions for a tick on every change. */
+  .animate-icon-swap {
+    animation: icon-swap 0.3s var(--ease-out-expo) both;
+  }
+  @keyframes icon-swap {
+    from {
+      opacity: 0;
+      transform: rotate(-90deg) scale(0.5);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
   /* Press feedback. 120ms in, faster out — exits are quicker than entrances. */
   .press {
     transition:
@@ -394,7 +410,8 @@
     .animate-record-row,
     .animate-seal-lock,
     .animate-notice,
-    .animate-panel-swap {
+    .animate-panel-swap,
+    .animate-icon-swap {
       animation-name: fade-only;
       animation-duration: 0.2s;
       animation-delay: 0s;
@@ -502,4 +519,10 @@ summary:focus-visible,
    layer, so this is the only place this override can actually win. */
 :lang(km) {
   font-family: var(--font-khmer), var(--font-sans), ui-sans-serif, sans-serif;
+}
+
+/* The rule above is unlayered, so it also beats `.font-mono`. Hashes, ids and
+   timestamps are Latin and must stay monospaced in every language. */
+:lang(km) :is(.font-mono, code, kbd, samp, pre) {
+  font-family: var(--font-mono), ui-monospace, monospace;
 }

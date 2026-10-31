@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server'
 import QRScanner from '@/components/scanner/QRScanner'
 import { ParticleField } from '@/components/ParticleField'
 import { LogoTile } from '@/components/Logo'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { Camera, ScanLine, ShieldCheck } from 'lucide-react'
 
 /**
@@ -103,7 +104,9 @@ export default async function ScanPage() {
           {tCommon('skipToContent')}
         </a>
 
-        {/* No ThemeToggle, no Sign in. Both served staff on the one surface whose
+        {/* No ThemeToggle, no Sign in — but the language switcher stays: a visitor
+            with no account is the one person who cannot fix a wrong language
+            anywhere else. The other two served staff on the one surface whose
             user is a stranger here for twenty seconds — and "Sign in" was the
             highest-contrast control on the page at load, on a page whose visitor
             has no account. Dark mode still follows the OS through next-themes;
@@ -124,6 +127,7 @@ export default async function ScanPage() {
                 <span className="block text-xs text-muted">{tCommon('tagline')}</span>
               </span>
             </Link>
+            <LanguageSwitcher className="ml-auto" />
             </div>
           </nav>
         </header>

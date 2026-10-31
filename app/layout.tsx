@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import { Noto_Sans_Khmer } from 'next/font/google'
 import { NextIntlClientProvider } from 'next-intl'
-import { getLocale, getMessages } from 'next-intl/server'
+import { getLocale, getMessages, getTranslations } from 'next-intl/server'
 import { headers } from 'next/headers'
 import './globals.css'
 import { Providers } from './providers'
@@ -19,7 +19,7 @@ const publicSans = localFont({
 // missing subscript consonant shaping). next/font still generates this at
 // build time regardless of locale (the loader call itself can't be
 // conditional), but applying `.variable` to <html> only under the km locale
-// (below) means English-only sessions never get the preload link or the
+// (on <body>, below) means English-only sessions never get the preload link or the
 // font-face request — the audit's P2 finding on shipping four unused weights.
 const notoSansKhmer = Noto_Sans_Khmer({
   subsets: ['khmer'],
@@ -36,16 +36,24 @@ const geistMono = localFont({
   display: 'swap',
 })
 
-export const metadata: Metadata = {
-  title: 'Kamnotheat',
-  description: 'Secure check-in logging — passkeys, QR, and an immutable audit ledger',
-  manifest: '/manifest.json',
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('meta')
+  return {
+    title: 'Kamnotheat',
+    description: t('description'),
+    manifest: '/manifest.json',
+  }
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0891b2',
+  // Follows the OS scheme; the browser reads this before any script runs, so it
+  // cannot track the in-app toggle.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#0891b2' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f0f1e' },
+  ],
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -56,10 +64,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang={locale}
-      className={`${publicSans.variable} ${locale === 'km' ? notoSansKhmer.variable : ''} ${geistMono.variable}`}
+      className={`${publicSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="font-sans antialiased bg-background text-foreground">
+      {/* The locale-dependent font class lives on <body>, never <html>: next-themes
+          adds `dark` to <html> from outside React, so a className that changes with
+          the locale makes React rewrite the attribute on the post-switch render and
+          wipes `dark` until the next reload. */}
+      <body className={`font-sans antialiased bg-background text-foreground ${locale === 'km' ? notoSansKhmer.variable : ''}`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers nonce={nonce}>
             {children}

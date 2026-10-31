@@ -94,7 +94,7 @@ function isRouteActive(pathname: string, href: string) {
 
 function navigationClass(active: boolean) {
   return [
-    'group inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-accent/30 [&_svg]:text-current',
+    'group inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-accent [&_svg]:text-current',
     active
       ? 'bg-accent/10 text-accent ring-1 ring-accent/15'
       : 'text-muted hover:bg-accent/10 hover:text-accent hover:ring-1 hover:ring-accent/10 data-[hovered]:bg-accent/10 data-[hovered]:text-accent data-[hovered]:ring-1 data-[hovered]:ring-accent/10',
@@ -544,7 +544,7 @@ export default function NavBar() {
           <ThemeToggle />
           <div {...accountDropdown.triggerProps}>
             <Dropdown isOpen={accountDropdown.isOpen} onOpenChange={accountDropdown.onOpenChange}>
-              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-11 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label={t('openAccountMenu')}>
+              <Dropdown.Trigger {...accountDropdown.triggerButtonProps} className="hidden h-11 items-center gap-2 rounded-full border border-border/80 bg-overlay/80 py-1 pl-1 pr-3 text-sm font-medium text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent sm:inline-flex [&_svg]:text-current" aria-label={t('openAccountMenu')}>
                 <Avatar color="accent" size="sm" variant="soft" className="shadow-sm shadow-accent/20">
                   <Avatar.Fallback>{initials}</Avatar.Fallback>
                 </Avatar>
@@ -637,7 +637,7 @@ export default function NavBar() {
 
           <div {...menuDropdown.triggerProps}>
             <Dropdown isOpen={menuDropdown.isOpen} onOpenChange={menuDropdown.onOpenChange}>
-              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-11 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30 data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label={t('openNavMenu')}>
+              <Dropdown.Trigger {...menuDropdown.triggerButtonProps} className="flex size-11 items-center justify-center rounded-full border border-border/80 bg-overlay/80 text-muted shadow-sm shadow-black/5 outline-none transition-all hover:bg-accent/10 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent data-[hovered]:bg-accent/10 data-[hovered]:text-accent xl:hidden [&_svg]:text-current" aria-label={t('openNavMenu')}>
                 <Menu className="size-5" strokeWidth={2.4} />
               </Dropdown.Trigger>
               {menuDropdown.isOpen && (
