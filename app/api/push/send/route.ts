@@ -5,8 +5,20 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import webpush from "web-push";
 import { assertSameOrigin } from "@/lib/csrf";
 import { requireTeamPermission } from "@/lib/middleware/auth";
+import { z } from "zod";
+import { Types } from "mongoose";
 
 export const runtime = "nodejs";
+
+// userId feeds Mongo filters on both collections: an object here ({"$ne":null})
+// would match every subscriber on the platform, not one member of this team.
+// `url` is opened on notification click, so it must stay inside the app.
+const SendSchema = z.object({
+  userId: z.string().refine((v) => Types.ObjectId.isValid(v)),
+  title: z.string().min(1).max(100),
+  message: z.string().min(1).max(300),
+  url: z.string().regex(/^\/(?![/\\])/).max(500).optional(),
+});
 
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
@@ -18,15 +30,14 @@ export async function POST(req: NextRequest) {
   const auth = await requireTeamPermission("team.members.manage");
   if (auth.error) return auth.error;
 
-  const body = await req.json();
-  const { userId, title, message, url } = body;
-
-  if (!userId || !title || !message) {
+  const parsed = SendSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
     return NextResponse.json(
       { error: "userId, title, message required" },
       { status: 400 },
     );
   }
+  const { userId, title, message, url } = parsed.data;
 
   await connectDB();
 

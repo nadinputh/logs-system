@@ -5,6 +5,8 @@ import CheckInOutClient from '@/components/location/CheckInOut'
 import { ScanNotice } from '@/components/location/ScanNotice'
 import { headers } from 'next/headers'
 import { signKioskToken, verifyKioskToken } from '@/lib/jwt'
+import { createHash } from 'node:crypto'
+import { claim } from '@/lib/claim'
 import { claimScan } from '@/lib/kioskGate'
 import { connectDB } from '@/lib/db'
 import { Building } from '@/lib/models/Building'
@@ -14,6 +16,9 @@ import { Room } from '@/lib/models/Room'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+// The page is public (anyone with the QR); never send teamId, geofence, etc.
+const PUBLIC_FIELDS = 'name number description checkInMode requireDynamicQr'
+
 function toPlain(doc: any) {
   return JSON.parse(JSON.stringify(doc))
 }
@@ -22,15 +27,19 @@ async function getLocation(locationId: string) {
   try {
     await connectDB()
     const room = await Room.findById(locationId)
-      .populate('floorId')
-      .populate('buildingId')
+      .select(PUBLIC_FIELDS)
+      .populate('floorId', 'number name')
+      .populate('buildingId', 'name address')
       .lean<any>()
     if (room) return { ...toPlain(room), locationType: 'room' }
 
-    const floor = await Floor.findById(locationId).populate('buildingId').lean<any>()
+    const floor = await Floor.findById(locationId)
+      .select(PUBLIC_FIELDS + ' number')
+      .populate('buildingId', 'name address')
+      .lean<any>()
     if (floor) return { ...toPlain(floor), locationType: 'floor' }
 
-    const building = await Building.findById(locationId).lean<any>()
+    const building = await Building.findById(locationId).select(PUBLIC_FIELDS + ' address').lean<any>()
     if (building) return { ...toPlain(building), locationType: 'building' }
 
     return null
@@ -73,8 +82,18 @@ export default async function ScanLocationPage({
       // first presented this QR, so a forwarded URL earns no presence proof.
       const h = await headers()
       const fingerprint = `${pickClientIp(h.get('x-forwarded-for'), h.get('x-real-ip'))}|${h.get('user-agent') ?? ''}`
-      if (verified.jti && (await claimScan(verified.jti, fingerprint))) {
-        presenceToken = await signKioskToken(locationId, '5m')
+      if (
+        verified.typ === 'qr' &&
+        verified.jti &&
+        (await claimScan(verified.jti, fingerprint)) &&
+        // One presence token per device per QR: otherwise reloading within the
+        // QR's 15s hands one scan to as many scripted sessions as the visitor likes.
+        (await claim(
+          `kioskmint:${verified.jti}:${createHash('sha256').update(fingerprint).digest('hex').slice(0, 16)}`,
+          fingerprint,
+        )) === null
+      ) {
+        presenceToken = await signKioskToken(locationId, '5m', 'presence')
       }
     } catch {
       presenceToken = undefined

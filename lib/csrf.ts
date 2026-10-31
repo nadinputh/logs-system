@@ -19,6 +19,17 @@ import { NextResponse } from "next/server";
  *   `sameSite=lax` in the first place.
  */
 export function assertSameOrigin(req: Request): NextResponse | null {
+  // Fetch Metadata: a browser sets this itself and page script cannot forge or
+  // strip it, so it still protects the cases the Origin/Referer fallback below
+  // lets through (a request with neither header, e.g. a cross-site navigation
+  // to a GET with side effects, or a Referrer-Policy: no-referrer page).
+  if (req.headers.get("sec-fetch-site") === "cross-site") {
+    return NextResponse.json(
+      { error: "Cross-origin request rejected" },
+      { status: 403 },
+    );
+  }
+
   const header = req.headers.get("origin") ?? req.headers.get("referer");
   if (!header) return null;
 

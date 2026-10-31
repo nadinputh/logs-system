@@ -13,11 +13,18 @@ export async function connectDB(): Promise<typeof mongoose> {
 
   if (!global._mongoose!.promise) {
     const uri = process.env.MONGODB_URI!
-    global._mongoose!.promise = mongoose.connect(uri, {
-      bufferCommands: false,
-      minPoolSize: 1,
-      serverSelectionTimeoutMS: 5000,
-    })
+    global._mongoose!.promise = mongoose
+      .connect(uri, {
+        bufferCommands: false,
+        minPoolSize: 1,
+        serverSelectionTimeoutMS: 5000,
+      })
+      .catch((err) => {
+        // Do not cache the rejection: one blip during an instance's first connect
+        // would otherwise fail every later call until the process restarts.
+        global._mongoose!.promise = null
+        throw err
+      })
   }
 
   global._mongoose!.conn = await global._mongoose!.promise

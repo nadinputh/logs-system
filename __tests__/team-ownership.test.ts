@@ -103,6 +103,9 @@ describe("POST /api/teams/[id]/ownership", () => {
         updateOne: userUpdateOne,
       },
     }));
+    vi.doMock("@/lib/models/TeamInvite", () => ({
+      TeamInvite: { updateMany: vi.fn().mockReturnValue(Promise.resolve({})) },
+    }));
     vi.doMock("@/lib/teamAudit", () => ({ recordTeamAuditEvent }));
 
     const { POST } = await import("@/app/api/teams/[id]/ownership/route");
@@ -165,6 +168,36 @@ describe("POST /api/teams/[id]/ownership", () => {
     expect(body.error).toMatch(/current owner/i);
   });
 
+  it("409s and writes nothing else when the compare-and-set on the owner loses a race", async () => {
+    const { POST, teamUpdateOne, teamMemberUpdateOne, recordTeamAuditEvent } =
+      await setupMocks();
+    teamUpdateOne.mockResolvedValue({ matchedCount: 0 });
+
+    const res = await POST(
+      makeReq({ targetUserId: TARGET_USER_ID }),
+      { params: Promise.resolve({ id: TEAM_ID }) },
+    );
+
+    expect(res.status).toBe(409);
+    expect(teamMemberUpdateOne).not.toHaveBeenCalled();
+    expect(recordTeamAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("rolls the owner swap back if a later step fails", async () => {
+    const { POST, teamUpdateOne, teamMemberUpdateOne } = await setupMocks();
+    teamMemberUpdateOne.mockRejectedValueOnce(new Error("mongo down"));
+
+    await expect(
+      POST(makeReq({ targetUserId: TARGET_USER_ID }), {
+        params: Promise.resolve({ id: TEAM_ID }),
+      }),
+    ).rejects.toThrow("mongo down");
+    expect(teamUpdateOne).toHaveBeenCalledWith(
+      { _id: TEAM_ID },
+      { ownerUserId: ACTOR_USER_ID },
+    );
+  });
+
   it("transfers ownership and demotes prior owner on success", async () => {
     const {
       POST,
@@ -190,7 +223,7 @@ describe("POST /api/teams/[id]/ownership", () => {
 
     expect(teamMemberFindOne).toHaveBeenCalledTimes(2);
     expect(teamUpdateOne).toHaveBeenCalledWith(
-      { _id: TEAM_ID },
+      { _id: TEAM_ID, ownerUserId: ACTOR_USER_ID },
       { ownerUserId: TARGET_USER_ID },
     );
     expect(teamMemberUpdateOne).toHaveBeenCalledWith(

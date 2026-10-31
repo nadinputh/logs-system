@@ -7,6 +7,7 @@ import { User } from "@/lib/models/User";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { recordTeamAuditEvent } from "@/lib/teamAudit";
 import { assertSameOrigin } from "@/lib/csrf";
+import { TeamInvite } from "@/lib/models/TeamInvite";
 
 export const runtime = "nodejs";
 
@@ -71,7 +72,7 @@ export async function PATCH(
   });
   if (auth.error) return auth.error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = UpdateMemberSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -148,8 +149,18 @@ export async function PATCH(
     );
   }
 
+  // An invite carries the inviter's authority at the time it was written. When
+  // they are removed, suspended or demoted, what they already sent must not
+  // outlive that: revoke their still-pending invites.
+  const revokePendingInvites = () =>
+    TeamInvite.updateMany(
+      { teamId: auth.teamId, invitedByUserId: userId, status: "pending" },
+      { status: "revoked" },
+    ).catch((err) => console.error("[members] invite revoke failed:", err));
+
   if (remove) {
     await TeamMember.deleteOne({ _id: target._id });
+    await revokePendingInvites();
 
     /**
      * Reconcile the removed user's cached active-team pointer.
@@ -193,6 +204,13 @@ export async function PATCH(
   )
     .populate("userId", "name email role activeTeamId passwordHash")
     .lean<any>();
+
+  if (
+    updated.status === "suspended" ||
+    (role && TEAM_ROLE_WEIGHT[role as TeamRole] < TEAM_ROLE_WEIGHT[previousRole as TeamRole])
+  ) {
+    await revokePendingInvites();
+  }
 
   const auditWrites: Array<Promise<unknown>> = [];
 

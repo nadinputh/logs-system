@@ -7,6 +7,9 @@ import { getClientIp } from "@/lib/server/getClientIp";
 import { checkIdempotency, saveIdempotency } from "@/lib/idempotency";
 import { assertSameOrigin } from "@/lib/csrf";
 import { checkoutFields, publicLog } from "@/lib/checkoutLog";
+import { CheckoutSchema } from "@/lib/validations/log";
+import { limitByIp } from "@/lib/rateLimitGuard";
+import { Types } from "mongoose";
 
 export const runtime = "nodejs";
 
@@ -17,16 +20,19 @@ export async function PATCH(
 ) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+  const limited = await limitByIp(req, "logs-out", 60);
+  if (limited) return limited;
   const { id } = await params;
-  const body = await req.json().catch(() => null);
-  const sessionToken = body?.sessionToken;
-
-  if (!sessionToken) {
+  // sessionToken is the visitor's credential and goes straight into a Mongo
+  // filter: it must be a UUID string, never an object like {"$ne":null}.
+  const parsed = CheckoutSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success || !Types.ObjectId.isValid(id)) {
     return NextResponse.json(
       { error: "sessionToken required" },
       { status: 400 },
     );
   }
+  const { sessionToken } = parsed.data;
 
   // Check-out is a write, so it carries the same replay guard as check-in.
   // The `existing` lookup below is correct in sequence but not atomic: two taps
@@ -82,7 +88,7 @@ export async function PATCH(
   const checkoutLog = await Log.create({
     ...checkoutFields(checkinLog),
     ipAddress: getClientIp(req),
-    userAgent: req.headers.get("user-agent") ?? undefined,
+    userAgent: (req.headers.get("user-agent") ?? undefined)?.slice(0, 256),
     timestamp: new Date(),
   });
 

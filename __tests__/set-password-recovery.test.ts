@@ -32,6 +32,10 @@ describe('POST /api/auth/resend-verification — reissues the token type that op
     })
     const sendVerificationEmail = vi.fn().mockResolvedValue(true)
     const sendSetPasswordEmail = vi.fn().mockResolvedValue(true)
+    const reissueAsSetPassword = vi.fn().mockResolvedValue({
+      token: 'tok2',
+      expiresAt: new Date('2026-09-03T09:00:00Z'),
+    })
 
     vi.doMock('@/lib/db', () => ({ connectDB: vi.fn().mockResolvedValue(undefined) }))
     vi.doMock('@/lib/models/User', () => ({
@@ -39,6 +43,9 @@ describe('POST /api/auth/resend-verification — reissues the token type that op
     }))
     vi.doMock('@/lib/verification', () => ({
       issueVerificationToken,
+      recentlyIssued: async () => false,
+      reissueAsSetPassword,
+      discardIfUndelivered: async () => {},
       verifyEmailLink: (t: string) => `https://kamnotheat.example/verify/${t}`,
       setPasswordLink: (t: string) => `https://kamnotheat.example/set-password/${t}`,
     }))
@@ -51,7 +58,7 @@ describe('POST /api/auth/resend-verification — reissues the token type that op
     vi.doMock('@/lib/rateLimit', () => ({ clientKey: () => 'k' }))
 
     const { POST } = await import('@/app/api/auth/resend-verification/route')
-    return { POST, issueVerificationToken, sendVerificationEmail, sendSetPasswordEmail }
+    return { POST, issueVerificationToken, reissueAsSetPassword, sendVerificationEmail, sendSetPasswordEmail }
   }
 
   it('sends a set-password link when the account has no password', async () => {
@@ -66,15 +73,18 @@ describe('POST /api/auth/resend-verification — reissues the token type that op
     expect(sendVerificationEmail).not.toHaveBeenCalled()
   })
 
-  it('still sends a verification link when the account has a password', async () => {
-    const { POST, issueVerificationToken, sendSetPasswordEmail, sendVerificationEmail } =
+  it('drops the stored password and sends a set-password link for an unverified account that has one', async () => {
+    // That password may be a pre-registering attacker's: only the inbox owner
+    // may choose the one that survives.
+    const { POST, issueVerificationToken, reissueAsSetPassword, sendSetPasswordEmail, sendVerificationEmail } =
       await setup({ _id: USER_ID, emailVerified: null, passwordHash: 'hash' })
 
     await POST(makeReq('jane@acme.test'))
 
-    expect(issueVerificationToken).toHaveBeenCalledWith(USER_ID, 'jane@acme.test', 'email_verify')
-    expect(sendVerificationEmail).toHaveBeenCalledOnce()
-    expect(sendSetPasswordEmail).not.toHaveBeenCalled()
+    expect(reissueAsSetPassword).toHaveBeenCalledWith(USER_ID, 'jane@acme.test')
+    expect(issueVerificationToken).not.toHaveBeenCalledWith(USER_ID, 'jane@acme.test', 'email_verify')
+    expect(sendSetPasswordEmail).toHaveBeenCalledOnce()
+    expect(sendVerificationEmail).not.toHaveBeenCalled()
   })
 
   it('covers a verified account that somehow still has no password', async () => {
@@ -141,5 +151,91 @@ describe('issueVerificationToken — the TTL matches who is waiting for the link
 
     expect(mod.SET_PASSWORD_TTL_MS).toBe(7 * 24 * 60 * 60 * 1000)
     expect(expiresAt.getTime() - before).toBeGreaterThan(6 * 24 * 60 * 60 * 1000)
+  })
+})
+
+describe('reissueAsSetPassword — an anonymous caller cannot keep killing the owner\'s link', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it('does nothing when a set-password link was issued in the last two minutes', async () => {
+    const updateOne = vi.fn()
+    const deleteMany = vi.fn()
+    vi.doMock('@/lib/models/User', () => ({ User: { updateOne } }))
+    vi.doMock('@/lib/models/VerificationToken', () => ({
+      VerificationToken: { exists: vi.fn().mockResolvedValue({ _id: 'recent' }), deleteMany, create: vi.fn() },
+    }))
+    const { reissueAsSetPassword } = await import('@/lib/verification')
+    expect(await reissueAsSetPassword('u1', 'a@acme.test')).toBeNull()
+    expect(updateOne).not.toHaveBeenCalled()
+    expect(deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('reissues when the previous link is older', async () => {
+    const updateOne = vi.fn()
+    vi.doMock('@/lib/models/User', () => ({ User: { updateOne } }))
+    vi.doMock('@/lib/models/VerificationToken', () => ({
+      VerificationToken: { exists: vi.fn().mockResolvedValue(null), deleteMany: vi.fn(), create: vi.fn() },
+    }))
+    const { reissueAsSetPassword } = await import('@/lib/verification')
+    const out = await reissueAsSetPassword('u1', 'a@acme.test')
+    expect(out?.token).toBeTruthy()
+    expect(updateOne).toHaveBeenCalledOnce()
+  })
+})
+
+describe('discardIfUndelivered — a link whose mail never left does not block the retry', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it('deletes the unspent link when the send failed, keeps it when it went out', async () => {
+    const deleteMany = vi.fn()
+    vi.doMock('@/lib/models/User', () => ({ User: { updateOne: vi.fn() } }))
+    vi.doMock('@/lib/models/VerificationToken', () => ({
+      VerificationToken: { exists: vi.fn(), deleteMany, create: vi.fn() },
+    }))
+    const { discardIfUndelivered } = await import('@/lib/verification')
+    await discardIfUndelivered('u1', 'password_reset', true)
+    expect(deleteMany).not.toHaveBeenCalled()
+    await discardIfUndelivered('u1', 'password_reset', false)
+    expect(deleteMany).toHaveBeenCalledWith({ userId: 'u1', type: 'password_reset', consumedAt: null })
+  })
+})
+
+describe('trackedSend — a link whose mail did not go out is dropped, whether the send returned false or threw', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  async function run(send: () => Promise<boolean | void>) {
+    const discard = vi.fn()
+    vi.doMock('@/lib/verification', () => ({ discardIfUndelivered: discard }))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { trackedSend } = await import('@/lib/server/trackedSend')
+    const delivered = await trackedSend('u1', 'password_reset', send)
+    err.mockRestore()
+    return { delivered, discard }
+  }
+
+  it('keeps the link when the mail was sent', async () => {
+    const { delivered, discard } = await run(async () => true)
+    expect(delivered).toBe(true)
+    expect(discard).toHaveBeenCalledWith('u1', 'password_reset', true)
+  })
+
+  it('drops it when the send returned false', async () => {
+    const { delivered, discard } = await run(async () => false)
+    expect(delivered).toBe(false)
+    expect(discard).toHaveBeenCalledWith('u1', 'password_reset', false)
+  })
+
+  it('drops it, without throwing, when the send threw', async () => {
+    const { delivered, discard } = await run(async () => {
+      throw new Error('smtp down')
+    })
+    expect(delivered).toBe(false)
+    expect(discard).toHaveBeenCalledWith('u1', 'password_reset', false)
   })
 })

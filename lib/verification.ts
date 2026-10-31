@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { Types } from "mongoose";
+import { User } from "./models/User";
 import {
   VerificationToken,
   VerificationTokenType,
@@ -74,6 +75,60 @@ export async function issueVerificationToken(
     expiresAt,
   });
   return { token, expiresAt };
+}
+
+/**
+ * An address can be registered by anyone, so while it is unverified NO password
+ * stored for it can be trusted: whoever registered first may be an attacker who
+ * knows it, and a later sign-up by the real owner would otherwise verify the
+ * attacker's account. Called when a second request arrives for an unverified
+ * account (re-register, resend): drop the stored password and any pending
+ * verify link, and issue a set-password token instead, so only the person who
+ * controls the inbox can choose one.
+ *
+ * Returns null when a set-password link was issued in the last two minutes: that
+ * link is still in the owner's inbox and still valid, and replacing it on every
+ * request would let any anonymous caller keep invalidating it.
+ */
+/**
+ * True when an unspent link of this type was issued in the last two minutes.
+ * Issuing deletes the user's previous links of that type, so an anonymous caller
+ * could otherwise keep killing the owner's live link; while a fresh one is still
+ * in their inbox, unauthenticated requests do nothing.
+ */
+export async function recentlyIssued(
+  userId: Types.ObjectId | string,
+  type: VerificationTokenType,
+): Promise<boolean> {
+  return !!(await VerificationToken.exists({
+    userId,
+    type,
+    consumedAt: null,
+    createdAt: { $gt: new Date(Date.now() - 2 * 60_000) },
+  }));
+}
+
+/**
+ * The two-minute guard assumes the link reached the owner's inbox. When the send
+ * did not go out, drop the link so an immediate retry is not suppressed by a
+ * message that never existed.
+ */
+export async function discardIfUndelivered(
+  userId: Types.ObjectId | string,
+  type: VerificationTokenType,
+  delivered: boolean,
+): Promise<void> {
+  if (!delivered) await VerificationToken.deleteMany({ userId, type, consumedAt: null });
+}
+
+export async function reissueAsSetPassword(
+  userId: Types.ObjectId | string,
+  email: string,
+) {
+  if (await recentlyIssued(userId, "set_password")) return null;
+  await User.updateOne({ _id: userId }, { $unset: { passwordHash: 1 } });
+  await VerificationToken.deleteMany({ userId, type: "email_verify" });
+  return issueVerificationToken(userId, email, "set_password");
 }
 
 /**

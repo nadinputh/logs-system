@@ -33,6 +33,7 @@ describe('GET /api/auth/reset-password — validates without consuming', () => {
     vi.doMock('@/lib/db', () => ({ connectDB: vi.fn() }))
     vi.doMock('@/lib/models/VerificationToken', () => ({ VerificationToken: {} }))
     vi.doMock('@/lib/models/User', () => ({ User: {} }))
+    vi.doMock('@/lib/models/PasskeyCredential', () => ({ PasskeyCredential: { deleteMany: vi.fn() } }))
     vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
     vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
@@ -50,6 +51,7 @@ describe('GET /api/auth/reset-password — validates without consuming', () => {
       VerificationToken: { findOne },
     }))
     vi.doMock('@/lib/models/User', () => ({ User: {} }))
+    vi.doMock('@/lib/models/PasskeyCredential', () => ({ PasskeyCredential: { deleteMany: vi.fn() } }))
     vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
     vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
@@ -80,6 +82,7 @@ describe('GET /api/auth/reset-password — validates without consuming', () => {
       },
     }))
     vi.doMock('@/lib/models/User', () => ({ User: {} }))
+    vi.doMock('@/lib/models/PasskeyCredential', () => ({ PasskeyCredential: { deleteMany: vi.fn() } }))
     vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
     vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
@@ -168,5 +171,39 @@ describe('POST /api/auth/reset-password — consumes atomically and bumps sessio
     // The whole point of this repair: a reset ends every existing session for
     // the user, not only the one that submitted the form — via the helper.
     expect(bumpSessionsVersion).toHaveBeenCalledWith(USER_ID)
+  })
+})
+
+describe('POST /api/auth/reset-password — recovery removes passkeys', () => {
+  beforeEach(() => vi.resetModules())
+
+  it('deletes the user\'s passkeys so one planted from a stolen session cannot outlive the reset', async () => {
+    const deleteMany = vi.fn()
+    const bump = vi.fn()
+    vi.doMock('@/lib/db', () => ({ connectDB: vi.fn() }))
+    vi.doMock('@/lib/models/VerificationToken', () => ({
+      VerificationToken: {
+        findOne: async () => ({ _id: 't1', userId: 'u1', email: 'a@acme.test' }),
+        findOneAndUpdate: async () => ({ _id: 't1' }),
+      },
+    }))
+    vi.doMock('@/lib/models/User', () => ({ User: { updateOne: vi.fn() } }))
+    vi.doMock('@/lib/models/PasskeyCredential', () => ({ PasskeyCredential: { deleteMany } }))
+    vi.doMock('@/lib/verification', () => ({ hashToken: (t: string) => 'h:' + t }))
+    vi.doMock('@/lib/auth', () => ({ bumpSessionsVersion: bump }))
+    vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
+    vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true }) }))
+    vi.doMock('@/lib/rateLimit', () => ({ clientKey: () => 'k' }))
+    const { POST } = await import('@/app/api/auth/reset-password/route')
+    const res = await POST(
+      new NextRequest('http://localhost/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: 'tok', password: 'correct-horse-battery' }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(bump).toHaveBeenCalledWith('u1')
+    expect(deleteMany).toHaveBeenCalledWith({ userId: 'u1' })
   })
 })

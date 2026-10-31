@@ -13,6 +13,12 @@ import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
+// progress.sessionToken / userId / teamId identify the first holder, and the
+// token is a bearer credential for the check-in APIs: never echo them back.
+function publicProgress(p: any) {
+  return { completedSteps: p.completedSteps, completedAt: p.completedAt };
+}
+
 export async function POST(
   req: NextRequest,
   {
@@ -68,53 +74,34 @@ export async function POST(
   const gate = await kioskGate(location, locationId, kioskToken, sessionToken);
   if (gate) return gate;
 
-  let progress = await QuestProgress.findOne({
+  const progress: any = await QuestProgress.findOne({
     teamId: card.teamId,
     questCardId: card._id,
   });
-  if (!progress) {
-    progress = new QuestProgress({
-      teamId: card.teamId,
-      questCardId: card._id,
-      sessionToken,
-      userId: session?.user ? (session.user as any).id : undefined,
-      completedSteps: [],
-    });
-  } else if (!progress.teamId) {
-    progress.teamId = card.teamId;
-  }
+  const done: any[] = progress?.completedSteps ?? [];
 
-  const alreadyDone = progress.completedSteps.some(
-    (s) => s.locationId.toString() === locationId,
-  );
-  if (alreadyDone) {
+  if (done.some((s) => s.locationId.toString() === locationId)) {
     return NextResponse.json(
-      { message: "Already recorded", progress },
+      { message: "Already recorded", progress: publicProgress(progress) },
       { status: 200 },
     );
   }
 
+  let step: any;
   if (card.type === "location_chain") {
-    const nextStep = card.steps.find(
-      (s) => !progress!.completedSteps.some((cs) => cs.stepOrder === s.order),
-    );
+    step = card.steps.find((s) => !done.some((cs) => cs.stepOrder === s.order));
     if (
-      !nextStep ||
-      nextStep.locationId.toString() !== locationId ||
-      nextStep.locationType !== locationType
+      !step ||
+      step.locationId.toString() !== locationId ||
+      step.locationType !== locationType
     ) {
       return NextResponse.json(
         { error: "Not the next location in sequence" },
         { status: 400 },
       );
     }
-    progress.completedSteps.push({
-      stepOrder: nextStep.order,
-      locationId: nextStep.locationId,
-      timestamp: new Date(),
-    });
   } else {
-    const step = card.steps.find(
+    step = card.steps.find(
       (s) =>
         s.locationId.toString() === locationId &&
         s.locationType === locationType,
@@ -124,17 +111,57 @@ export async function POST(
         { error: "Location not in this quest" },
         { status: 400 },
       );
-    progress.completedSteps.push({
-      stepOrder: step.order,
-      locationId: step.locationId,
-      timestamp: new Date(),
-    });
   }
 
-  if (progress.completedSteps.length >= card.steps.length) {
-    progress.completedAt = new Date();
+  // One atomic write per step. The earlier read-modify-write let two concurrent
+  // requests both push the same step and reach "complete" without visiting every
+  // location; here the filter refuses a step that is already recorded, and the
+  // unique questCardId turns a lost insert race into a duplicate-key error.
+  let updated: any;
+  const writeStep = () =>
+    QuestProgress.findOneAndUpdate(
+      { questCardId: card._id, "completedSteps.stepOrder": { $ne: step.order } },
+      {
+        $push: {
+          completedSteps: {
+            stepOrder: step.order,
+            locationId: step.locationId,
+            timestamp: new Date(),
+          },
+        },
+        $setOnInsert: {
+          teamId: card.teamId,
+          sessionToken,
+          ...(session?.user ? { userId: (session.user as any).id } : {}),
+        },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+  try {
+    updated = await writeStep();
+  } catch (err: any) {
+    if (err?.code !== 11000) throw err;
+    // The document now exists (another first visit won the insert). Retry once
+    // as a plain push; if it fails again the step really is already recorded.
+    try {
+      updated = await writeStep();
+    } catch (err2: any) {
+      if (err2?.code !== 11000) throw err2;
+      return NextResponse.json({ message: "Already recorded" }, { status: 200 });
+    }
   }
 
-  await progress.save();
-  return NextResponse.json({ progress, completed: !!progress.completedAt });
+  if (updated.completedSteps.length >= card.steps.length && !updated.completedAt) {
+    updated =
+      (await QuestProgress.findOneAndUpdate(
+        { _id: updated._id, completedAt: { $exists: false } },
+        { completedAt: new Date() },
+        { returnDocument: "after" },
+      )) ?? updated;
+  }
+
+  return NextResponse.json({
+    progress: publicProgress(updated),
+    completed: !!updated.completedAt,
+  });
 }

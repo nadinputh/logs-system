@@ -9,12 +9,15 @@ import { bumpSessionsVersion } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
 import { clientKey } from "@/lib/rateLimit";
 import { rateLimitShared } from "@/lib/rateLimitShared";
+import { PasswordSchema } from "@/lib/validations/password";
+import { limitByIp } from "@/lib/rateLimitGuard";
+import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(8).max(200),
+  token: z.string().min(1).max(128),
+  password: PasswordSchema,
 });
 
 /**
@@ -26,6 +29,8 @@ const Schema = z.object({
  * holder of the link already knows.
  */
 export async function GET(req: NextRequest) {
+  const limited = await limitByIp(req, "token-probe", 60);
+  if (limited) return limited;
   const token = req.nextUrl.searchParams.get("token");
   if (!token) {
     return NextResponse.json({ valid: false }, { status: 400 });
@@ -122,6 +127,11 @@ export async function POST(req: NextRequest) {
    * matters.
    */
   await bumpSessionsVersion(String(doc.userId));
+  // A reset means the account may have been compromised. A passkey outlives the
+  // password and sessions it was added under, and mints new sessions on its own,
+  // so one planted from a stolen session would survive the recovery. Remove them;
+  // the owner re-registers their own after signing in.
+  await PasskeyCredential.deleteMany({ userId: doc.userId });
 
   return NextResponse.json({ ok: true, email: doc.email });
 }

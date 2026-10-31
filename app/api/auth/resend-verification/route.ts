@@ -4,21 +4,22 @@ import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import {
   issueVerificationToken,
+  recentlyIssued,
+  reissueAsSetPassword,
   setPasswordLink,
-  verifyEmailLink,
 } from "@/lib/verification";
-import {
-  sendSetPasswordEmail,
-  sendVerificationEmail,
-  smtpConfigured,
-} from "@/lib/email/send";
+import { sendSetPasswordEmail, smtpConfigured } from "@/lib/email/send";
+import { deferred, requestLocale } from "@/lib/server/deferred";
 import { clientKey } from "@/lib/rateLimit";
 import { rateLimitShared } from "@/lib/rateLimitShared";
 import { assertSameOrigin } from "@/lib/csrf";
+import { mailAllowed } from "@/lib/rateLimitGuard";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
+import { trackedSend } from "@/lib/server/trackedSend";
 
 export const runtime = "nodejs";
 
-const Schema = z.object({ email: z.string().email() });
+const Schema = z.object({ email: z.string().email().max(254) });
 
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
@@ -50,12 +51,18 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return neutral;
 
   const email = parsed.data.email.toLowerCase().trim();
-  await connectDB();
-
-  const user = await User.findOne({ email });
-  if (user && (!user.emailVerified || !user.passwordHash)) {
+  // Deferred so the response time is the same whether or not the address has an
+  // account: the lookup, token write and SMTP send all happen afterwards.
+  const ip = ipBucket(getClientIp(req));
+  const locale = await requestLocale();
+  await deferred(async () => {
+    await connectDB();
+    const user = await User.findOne({ email });
+    if (!user || (user.emailVerified && user.passwordHash)) return;
+    if (!(await mailAllowed(email, "resend", ip))) return;
     try {
       if (!user.passwordHash) {
+        if (await recentlyIssued(user._id, "set_password")) return;
         /**
          * An admin-provisioned account has no password, so an email_verify token
          * is the wrong instrument: following it marked the address verified and
@@ -68,20 +75,28 @@ export async function POST(req: NextRequest) {
           email,
           "set_password",
         );
-        await sendSetPasswordEmail(email, setPasswordLink(token), { expiresAt });
-      } else {
-        const { token } = await issueVerificationToken(
-          user._id,
-          email,
-          "email_verify",
+        await trackedSend(user._id, "set_password", () =>
+          sendSetPasswordEmail(email, setPasswordLink(token), { expiresAt, locale }),
         );
-        await sendVerificationEmail(email, verifyEmailLink(token));
+      } else {
+        // Unverified with a stored password: that password may belong to
+        // whoever registered the address first, not its owner (see
+        // reissueAsSetPassword). Only a verified account with a password never
+        // reaches this branch.
+        const issued = await reissueAsSetPassword(user._id, email);
+        if (!issued) return;
+        await trackedSend(user._id, "set_password", () =>
+          sendSetPasswordEmail(email, setPasswordLink(issued.token), {
+            expiresAt: issued.expiresAt,
+            locale,
+          }),
+        );
       }
     } catch (err) {
       // Still answer neutrally: revealing a send failure would leak that the
       // address maps to an unverified account.
       console.error("[resend-verification] send failed:", err);
     }
-  }
+  });
   return neutral;
 }

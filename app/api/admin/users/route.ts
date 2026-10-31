@@ -8,12 +8,15 @@ import { requireTeamPermission } from "@/lib/middleware/auth";
 import { issueVerificationToken, setPasswordLink } from "@/lib/verification";
 import { sendSetPasswordEmail } from "@/lib/email/send";
 import { assertSameOrigin } from "@/lib/csrf";
+import { actorMailLimit, mailAllowed } from "@/lib/rateLimitGuard";
+import { linkIfUndelivered } from "@/lib/server/exposeLink";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
   name: z.string().min(1).max(100),
-  email: z.string().email(),
+  email: z.string().email().max(254),
   role: z.enum(["admin", "manager", "member", "auditor"]).default("member"),
 });
 
@@ -43,7 +46,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const capped = await actorMailLimit((auth.session?.user as any)?.id ?? auth.teamId, ipBucket(getClientIp(req)));
+  if (capped) return capped;
+
   const email = parsed.data.email.toLowerCase().trim();
+  if (!(await mailAllowed(email, "provision", (auth.session?.user as any)?.id ?? "-"))) {
+    return NextResponse.json(
+      { error: "Too many messages to this address. Try again later." },
+      { status: 429 },
+    );
+  }
   await connectDB();
 
   if (await User.findOne({ email }).select("_id").lean()) {
@@ -111,7 +123,7 @@ export async function POST(req: NextRequest) {
       // Withheld once the recipient has it by mail: the link is a bearer
       // credential, and an admin holding it could set the password and sign in
       // as the new user. Returned only as the failed-send recovery.
-      setPasswordUrl: emailDelivered ? undefined : setPasswordUrl,
+      setPasswordUrl: linkIfUndelivered(emailDelivered, setPasswordUrl),
     },
     { status: 201 },
   );

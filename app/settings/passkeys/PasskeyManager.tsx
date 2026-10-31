@@ -40,7 +40,7 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
     setLoading(true)
     try {
       const optRes = await fetch('/api/auth/passkey/register/options')
-      if (!optRes.ok) throw new Error(await optRes.text())
+      if (!optRes.ok) throw new Error(apiError(await optRes.json().catch(() => null), t('registrationFailed')))
       const options = await optRes.json()
 
       const response = await startRegistration({ optionsJSON: options })
@@ -72,12 +72,12 @@ export default function PasskeyManager({ initialPasskeys }: PasskeyManagerProps)
     setDeletingPasskeyId(passkeyToDelete._id)
     try {
       const res = await fetch(`/api/auth/passkey/${passkeyToDelete._id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error(t('deleteFailed'))
+      if (!res.ok) throw new Error(apiError(await res.json().catch(() => null), t('deleteFailed')))
       setPasskeys((prev) => prev.filter((p) => p._id !== passkeyToDelete._id))
       setPasskeyToDelete(null)
       toast.success(t('passkeyRemoved'))
-    } catch {
-      toast.error(t('failedToRemovePasskey'))
+    } catch (err: any) {
+      toast.error(err?.message || t('failedToRemovePasskey'))
     } finally {
       setDeletingPasskeyId(null)
     }
@@ -183,14 +183,14 @@ export function PasskeyLoginButton({ email }: { email: string }) {
         const data = await optRes.json()
         throw new Error(apiError(data, t('noPasskeysForThisAccount')))
       }
-      const { userId, ...options } = await optRes.json()
+      const { ceremonyId, ...options } = await optRes.json()
 
       const response = await startAuthentication({ optionsJSON: options })
 
       const verRes = await fetch('/api/auth/passkey/authenticate/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response, userId }),
+        body: JSON.stringify({ response, ceremonyId }),
       })
       if (!verRes.ok) {
         const data = await verRes.json()

@@ -49,7 +49,7 @@ export function LoginForm() {
   const searchParams = useSearchParams()
   const nextParam = searchParams.get('next') ?? ''
   // Same-origin paths only: `//evil.com` and `/\evil.com` are protocol-relative.
-  const nextUrl = /^\/(?![/\\])/.test(nextParam) ? nextParam : '/dashboard'
+  const nextUrl = /^\/(?![/\\])[^\x00-\x1f]*$/.test(nextParam) ? nextParam : '/dashboard'
   const reasonParam = searchParams.get('reason')
   const reason: RedirectReason | null = isRedirectReason(reasonParam) ? reasonParam : null
   const [email, setEmail] = useState('')
@@ -107,14 +107,14 @@ export function LoginForm() {
         const data = await optRes.json().catch(() => ({}))
         throw new Error(data.error ?? t('errorNoPasskeyRegistered'))
       }
-      const { userId, ...options } = await optRes.json()
+      const { ceremonyId, ...options } = await optRes.json()
 
       const response = await startAuthentication({ optionsJSON: options })
 
       const verRes = await fetch('/api/auth/passkey/authenticate/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response, userId }),
+        body: JSON.stringify({ response, ceremonyId }),
       })
       if (!verRes.ok) {
         const data = await verRes.json().catch(() => ({}))
@@ -162,8 +162,9 @@ export function LoginForm() {
         // how to spread the attack.
         setError(t('errorTooManyAttempts'))
       } else if (result.error.includes('PASSWORD_NOT_SET')) {
-        // The account was created by an administrator and has never had a
-        // password. Resend issues a set-password link for exactly this case.
+        // Legacy: the server no longer names this case (a passwordless account
+        // looks like any failed login; "Forgot password" is its recovery). Kept
+        // so an older server build mid-deploy still renders the resend prompt.
         setNeedsPassword(true)
       } else if (result.error.includes('EMAIL_NOT_VERIFIED')) {
         setNeedsVerify(true)

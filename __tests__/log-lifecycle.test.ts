@@ -26,13 +26,13 @@ async function patchRoute(opts: { checkin: any; mode?: string; cached?: any; exi
   const { PATCH } = await import("@/app/api/logs/[id]/route");
   const call = () =>
     PATCH(
-      new NextRequest("http://localhost/api/logs/in2", { method: "PATCH", headers: hdr, body: JSON.stringify({ sessionToken: SESSION }) }),
-      { params: Promise.resolve({ id: "in2" }) },
+      new NextRequest("http://localhost/api/logs/aaaaaaaaaaaaaaaaaaaaaaa2", { method: "PATCH", headers: hdr, body: JSON.stringify({ sessionToken: SESSION }) }),
+      { params: Promise.resolve({ id: "aaaaaaaaaaaaaaaaaaaaaaa2" }) },
     );
   return { call, create };
 }
 
-const checkin = (extra = {}) => ({ _id: "in2", teamId: "t", locationId: "l", locationType: "room", sessionToken: SESSION, ...extra });
+const checkin = (extra = {}) => ({ _id: "aaaaaaaaaaaaaaaaaaaaaaa2", teamId: "t", locationId: "l", locationType: "room", sessionToken: SESSION, ...extra });
 
 describe("check-out", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -40,7 +40,7 @@ describe("check-out", () => {
   it("does not replay another visit's cached check-out on the same day", async () => {
     const { call, create } = await patchRoute({
       checkin: checkin(),
-      cached: { statusCode: 201, body: { _id: "out1", relatedLogId: "in1" } },
+      cached: { statusCode: 201, body: { _id: "out1", relatedLogId: "aaaaaaaaaaaaaaaaaaaaaaa1" } },
     });
     const res = await call();
     expect(create).toHaveBeenCalledOnce();
@@ -50,7 +50,7 @@ describe("check-out", () => {
   it("replays the cached check-out of this same check-in", async () => {
     const { call, create } = await patchRoute({
       checkin: checkin(),
-      cached: { statusCode: 201, body: { _id: "out1", relatedLogId: "in2" } },
+      cached: { statusCode: 201, body: { _id: "out1", relatedLogId: "aaaaaaaaaaaaaaaaaaaaaaa2" } },
     });
     expect((await call()).status).toBe(201);
     expect(create).not.toHaveBeenCalled();
@@ -110,7 +110,7 @@ describe("check-in", () => {
   it("writes a new visit when the cached check-in already has a check-out", async () => {
     vi.resetModules();
     mockCheckInDeps();
-    const create = vi.fn(async (d: any) => ({ ...d, _id: "in2", toObject() { return { ...d, _id: "in2" }; } }));
+    const create = vi.fn(async (d: any) => ({ ...d, _id: "aaaaaaaaaaaaaaaaaaaaaaa2", toObject() { return { ...d, _id: "aaaaaaaaaaaaaaaaaaaaaaa2" }; } }));
     vi.doMock("@/lib/db", () => ({ connectDB: vi.fn() }));
     vi.doMock("@/lib/csrf", () => ({ assertSameOrigin: () => null }));
     vi.doMock("@/lib/realtime/logEvents", () => ({ publishLogCreated: vi.fn() }));
@@ -121,7 +121,7 @@ describe("check-in", () => {
       requireTeamAccess: async () => ({}),
     }));
     vi.doMock("@/lib/idempotency", () => ({
-      checkIdempotency: async () => ({ statusCode: 201, body: { _id: "in1" } }),
+      checkIdempotency: async () => ({ statusCode: 201, body: { _id: "aaaaaaaaaaaaaaaaaaaaaaa1" } }),
       saveIdempotency: vi.fn(),
     }));
     vi.doMock("@/lib/locationOwnership", () => ({

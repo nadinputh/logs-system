@@ -325,24 +325,38 @@ hand-off, `false` when nothing was sent. All five call sites surface it:
 - `POST /api/admin/users`, `POST /api/admin/users/resend-set-password` and
   `POST /api/teams/[id]/invites` return `emailDelivered` alongside the link
   (`setPasswordUrl` / `inviteUrl`); the UI shows a persistent copy-link notice.
-- `POST /api/auth/register` returns `delivered`, and the confirmation card says the workspace
-  is ready but mail failed rather than "a verification link is on its way". It deliberately
-  does **not** offer "try a different address" in that branch — the failure is server-side, so
-  retrying only orphans a second account.
+- `POST /api/auth/register` returns `delivered`, which is server state (is SMTP configured), not
+  the result of this address's send: the work runs after the response so timing cannot reveal
+  whether the address was registered. A runtime send failure is logged; the user's recovery is
+  Resend / Forgot password. It deliberately does **not** offer "try a different address" — the
+  failure is server-side, so retrying only orphans a second account.
 - `POST /api/auth/resend-verification` stays neutral about the *address* but returns
   `mailConfigured`, which is server state and identical for every input.
 
 Reporting a send failure leaks nothing: the neutrality these endpoints maintain is about
 whether an address maps to an account, and a transport failure is independent of the address.
 
+**A mailed link is never returned to whoever asked for it, in production.** An invite or
+set-password link is a bearer credential: if the inviter held it they could claim the address
+themselves, so `lib/server/exposeLink.ts` returns `inviteUrl` / `setPasswordUrl` only outside
+production (dev has no SMTP, so the flow stays testable). In production a failed send is reported
+as `emailDelivered: false` and the admin uses Resend.
+
+**Sign-up stores no password.** `POST /api/auth/register` creates the account without a
+`passwordHash` and mails a set-password link, so the inbox owner chooses the password; a second
+sign-up or resend for an unverified address drops any stored hash (`reissueAsSetPassword`). Its
+work runs after the response (`lib/server/deferred.ts`) and the reply is identical for every
+address, as are `forgot-password` and `resend-verification`; `delivered` means "mail is
+configured", not "this address was mailed".
+
 **Production with no SMTP warns at load** (`lib/email/send.ts`), because the console fallback
 deliberately prints nothing there — without the startup line the first signal is a complaint.
 
-**A passwordless account is a named condition, not a wrong password.** `lib/auth.ts` throws
-`PASSWORD_NOT_SET` before the `EMAIL_NOT_VERIFIED` check; returning `null` collapsed it into
-the generic credential failure, so an admin-provisioned user was told their email and password
-"do not match an account" and the resend control never rendered. `LoginForm` offers
-"Email me a link" on that branch. `GET /api/auth/set-password?token=` validates a link without
+**A passwordless account looks like any other failed login.** `lib/auth.ts` returns `null` (after
+a decoy bcrypt, so cost matches) for an account with no password, instead of naming the condition:
+naming it told anyone which addresses are provisioned accounts. The recovery is "Forgot password",
+which mails such an account a set-password link (`forgot-password` handles passwordless and
+unverified accounts that way). `GET /api/auth/set-password?token=` validates a link without
 consuming it, so `/set-password/[token]` shows an expired state up front instead of accepting
 a password and a confirmation first.
 

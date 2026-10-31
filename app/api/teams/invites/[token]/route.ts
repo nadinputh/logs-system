@@ -3,15 +3,18 @@ import { connectDB } from "@/lib/db";
 import { TeamInvite } from "@/lib/models/TeamInvite";
 import { hashToken } from "@/lib/verification";
 import { User } from "@/lib/models/User";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 
 // Public: returns just enough for the invite landing page to render and branch
 // between "create account" and "sign in to accept".
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
+  const limited = await limitByIp(req, "invite-lookup", 30);
+  if (limited) return limited;
   const { token } = await params;
   await connectDB();
 

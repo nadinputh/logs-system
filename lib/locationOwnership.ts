@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { Building } from "@/lib/models/Building";
 import { Floor } from "@/lib/models/Floor";
 import { Room } from "@/lib/models/Room";
@@ -23,6 +24,8 @@ export async function findOwnedLocationByType(
   locationType: LocationType,
   locationId: string,
 ): Promise<LeanLocation | null> {
+  // A malformed id is "no such location", not a CastError (a 500).
+  if (!Types.ObjectId.isValid(locationId)) return null;
   const model = getLocationModel(locationType) as any;
   const doc = await model
     .findById(locationId)
@@ -34,6 +37,7 @@ export async function findOwnedLocationByType(
 export async function findOwnedLocationById(
   locationId: string,
 ): Promise<(LeanLocation & { locationType: LocationType }) | null> {
+  if (!Types.ObjectId.isValid(locationId)) return null;
   const [room, floor, building] = await Promise.all([
     Room.findById(locationId)
       .select("teamId name checkInMode")

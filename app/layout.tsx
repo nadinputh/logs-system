@@ -3,6 +3,7 @@ import localFont from 'next/font/local'
 import { Noto_Sans_Khmer } from 'next/font/google'
 import { NextIntlClientProvider } from 'next-intl'
 import { getLocale, getMessages } from 'next-intl/server'
+import { headers } from 'next/headers'
 import './globals.css'
 import { Providers } from './providers'
 import { Toaster } from '@/components/ui/sonner'
@@ -50,6 +51,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale()
   const messages = await getMessages()
+  const nonce = (await headers()).get('x-nonce') ?? undefined
 
   return (
     <html
@@ -59,7 +61,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body className="font-sans antialiased bg-background text-foreground">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <Providers>
+          <Providers nonce={nonce}>
             {children}
             <Toaster />
           </Providers>

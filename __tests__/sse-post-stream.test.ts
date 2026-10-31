@@ -60,3 +60,26 @@ describe('guest-log route', () => {
     expect(res.status).toBe(400)
   })
 })
+
+describe('createSseStream cleanup', () => {
+  it('runs the cleanup exactly once even when cancel and abort both fire', async () => {
+    const { createSseStream } = await import('@/lib/realtime/sse')
+    const ctrl = new AbortController()
+    const cleanup = vi.fn()
+    const res = createSseStream(ctrl, () => cleanup)
+    // Disconnect: the runtime cancels the body AND fires the abort signal.
+    await res.body!.cancel()
+    ctrl.abort()
+    expect(cleanup).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes itself after maxMs', async () => {
+    vi.useFakeTimers()
+    const { createSseStream } = await import('@/lib/realtime/sse')
+    const cleanup = vi.fn()
+    createSseStream(new AbortController(), () => cleanup, { maxMs: 1000 })
+    await vi.advanceTimersByTimeAsync(1001)
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+})

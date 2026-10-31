@@ -6,6 +6,8 @@ import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
 import { WebAuthnChallenge } from "@/lib/models/WebAuthnChallenge";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
+import { requireRecentSignIn } from "@/lib/server/recentSignIn";
+import { RegistrationResponseSchema, safeTransports } from "@/lib/validations/webauthn";
 
 export const runtime = "nodejs";
 
@@ -19,9 +21,19 @@ export async function POST(req: NextRequest) {
   }
 
   await connectDB();
+  const stale = await requireRecentSignIn((session.user as any).sid);
+  if (stale) return stale;
   const userId = (session.user as any).id;
 
-  const challengeDoc = await WebAuthnChallenge.findOne({
+  // Shape and size checked before anything is consumed or persisted.
+  const body = await req.json().catch(() => null);
+  const parsedResponse = RegistrationResponseSchema.safeParse(body?.response);
+  if (!parsedResponse.success) {
+    return NextResponse.json({ error: "Verification failed" }, { status: 400 });
+  }
+
+  // Consumed atomically (two parallel submissions cannot both verify).
+  const challengeDoc = await WebAuthnChallenge.findOneAndDelete({
     userId,
     type: "registration",
   });
@@ -32,20 +44,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json();
   const origin = process.env.NEXTAUTH_URL ?? `http://localhost:${process.env.PORT ?? "4000"}`;
   const rpID = new URL(origin).hostname;
 
   let verification;
   try {
     verification = await verifyRegistrationResponse({
-      response: body.response,
+      response: parsedResponse.data as any,
       expectedChallenge: challengeDoc.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+  } catch {
+    return NextResponse.json({ error: "Verification failed" }, { status: 400 });
   }
 
   if (!verification.verified || !verification.registrationInfo) {
@@ -55,6 +66,12 @@ export async function POST(req: NextRequest) {
   const { credential, credentialDeviceType, credentialBackedUp } =
     verification.registrationInfo;
 
+  // Bounded per user: sign-up is open, so an account could otherwise stack up
+  // credential rows without limit.
+  if ((await PasskeyCredential.countDocuments({ userId })) >= 20) {
+    return NextResponse.json({ error: "Too many passkeys on this account" }, { status: 429 });
+  }
+
   await PasskeyCredential.create({
     userId,
     credentialId: credential.id, // already Base64URLString
@@ -62,11 +79,9 @@ export async function POST(req: NextRequest) {
     counter: credential.counter,
     deviceType: credentialDeviceType,
     backedUp: credentialBackedUp,
-    transports: credential.transports ?? [],
+    transports: safeTransports(credential.transports),
     lastUsedAt: new Date(),
   });
-
-  await WebAuthnChallenge.deleteOne({ _id: challengeDoc._id });
 
   return NextResponse.json({ verified: true });
 }

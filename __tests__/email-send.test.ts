@@ -252,3 +252,18 @@ describe('the copy states what the code actually does', () => {
     }
   })
 })
+
+describe('SMTP transport security', () => {
+  afterEach(() => {
+    delete process.env.SMTP_SECURE
+  })
+
+  it('requires STARTTLS when the connection is not implicit TLS, and not otherwise', async () => {
+    const { smtpOptions } = await import('@/lib/email/send')
+    const base = { host: 'smtp.test', user: 'u', pass: 'p' }
+    expect(smtpOptions({ ...base, port: 587 })).toMatchObject({ secure: false, requireTLS: true })
+    expect(smtpOptions({ ...base, port: 465 })).toMatchObject({ secure: true, requireTLS: false })
+    process.env.SMTP_SECURE = 'true'
+    expect(smtpOptions({ ...base, port: 2525 })).toMatchObject({ secure: true, requireTLS: false })
+  })
+})

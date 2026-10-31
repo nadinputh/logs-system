@@ -26,3 +26,33 @@ describe('pickClientIp', () => {
     expect(pickClientIp('', null)).toBe('unknown')
   })
 })
+
+describe('ipBucket — limiter keys cannot be dodged by rotating within an IPv6 /64', () => {
+  it('collapses addresses in one /64 to one bucket, leaves IPv4 alone', async () => {
+    const { ipBucket } = await import('@/lib/server/getClientIp')
+    expect(ipBucket('2001:db8:aaaa:bbbb:1:2:3:4')).toBe(ipBucket('2001:db8:aaaa:bbbb:ffff:eeee:dddd:cccc'))
+    expect(ipBucket('2001:db8:aaaa:bbbb::1')).toBe(ipBucket('2001:db8:aaaa:bbbb:9::2'))
+    expect(ipBucket('2001:db8:aaaa:bbbb::1')).not.toBe(ipBucket('2001:db8:aaaa:cccc::1'))
+    expect(ipBucket('203.0.113.7')).toBe('203.0.113.7')
+    expect(ipBucket('::ffff:203.0.113.7')).toBe('203.0.113.7')
+    expect(ipBucket('unknown')).toBe('unknown')
+  })
+})
+
+describe('ipBucket — IPv4-mapped IPv6 in any spelling buckets as the IPv4 address', () => {
+  it('does not collapse long-form mapped addresses into one shared bucket', async () => {
+    const { ipBucket } = await import('@/lib/server/getClientIp')
+    expect(ipBucket('0:0:0:0:0:ffff:203.0.113.7')).toBe('203.0.113.7')
+    expect(ipBucket('::ffff:203.0.113.7')).toBe('203.0.113.7')
+    expect(ipBucket('0:0:0:0:0:ffff:203.0.113.8')).not.toBe(ipBucket('0:0:0:0:0:ffff:203.0.113.7'))
+  })
+})
+
+describe('ipBucket — a source port appended by the proxy does not split the bucket', () => {
+  it('strips :port from IPv4 and [IPv6]:port', async () => {
+    const { ipBucket } = await import('@/lib/server/getClientIp')
+    expect(ipBucket('203.0.113.7:51234')).toBe('203.0.113.7')
+    expect(ipBucket('203.0.113.7:51234')).toBe(ipBucket('203.0.113.7:9'))
+    expect(ipBucket('[2001:db8:aaaa:bbbb::1]:443')).toBe(ipBucket('2001:db8:aaaa:bbbb::9'))
+  })
+})

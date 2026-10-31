@@ -115,11 +115,13 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
             <p className="text-sm font-semibold text-foreground">
               {t('notDelivered', { email: undelivered.email })}
             </p>
-            <p className="text-xs text-muted">
-              {t('sendThemThisLinkYourself')}
-            </p>
+            {undelivered.url && (
+              <p className="text-xs text-muted">
+                {t('sendThemThisLinkYourself')}
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-2">
-              <button
+              {undelivered.url && (<button
                 type="button"
                 onClick={() => {
                   void navigator.clipboard?.writeText(undelivered.url)
@@ -128,7 +130,7 @@ export function AddUserDirect({ canManage, isOwner }: { canManage: boolean; isOw
                 className="max-w-[320px] truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground"
               >
                 {undelivered.url}
-              </button>
+              </button>)}
               <Button size="sm" variant="outline" onPress={() => setUndelivered(null)}>
                 {t('dismiss')}
               </Button>

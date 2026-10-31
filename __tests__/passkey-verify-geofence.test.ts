@@ -73,7 +73,7 @@ describe("POST /api/logs/passkey/verify — geofence wiring on check-in", () => 
     }));
     vi.doMock("@/lib/models/PasskeyCheckInChallenge", () => ({
       PasskeyCheckInChallenge: {
-        findOne: vi.fn().mockResolvedValue({
+        findOneAndDelete: vi.fn().mockResolvedValue({
           _id: "challenge-1",
           challenge: "test-challenge",
           teamId: TEAM_ID,

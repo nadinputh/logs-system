@@ -5,6 +5,7 @@ import { AuditLog } from "@/lib/models/AuditLog";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { z } from "zod";
 import { assertSameOrigin } from "@/lib/csrf";
+import { Types } from "mongoose";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ const CorrectionSchema = z.object({
     "timestamp",
     "action",
   ]),
-  newValue: z.string().min(1),
+  newValue: z.string().min(1).max(500),
   reasonForChange: z.string().min(1).max(500),
 });
 
@@ -28,10 +29,13 @@ export async function POST(
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
   const { id } = await params;
+  if (!Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const auth = await requireTeamPermission("logs.correct");
   if (auth.error) return auth.error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = CorrectionSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -65,8 +69,6 @@ export async function POST(
     reasonForChange,
     timestamp: new Date(),
   });
-
-  console.log("[audit] correction written", auditEntry._id.toString());
 
   return NextResponse.json(auditEntry, { status: 201 });
 }

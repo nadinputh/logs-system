@@ -6,16 +6,18 @@ import { VisitorPasskeyChallenge } from "@/lib/models/VisitorPasskeyChallenge";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
+import { limitByIp } from "@/lib/rateLimitGuard";
+import { RegistrationResponseSchema, safeTransports } from "@/lib/validations/webauthn";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
-  response: z.any(),
-  locationId: z.string().min(1),
+  response: RegistrationResponseSchema,
+  locationId: z.string().min(1).max(64),
   locationType: z.enum(["building", "floor", "room"]),
   sessionToken: z.string().uuid(),
-  visitorName: z.string().optional(),
-  visitorEmail: z.string().email().optional(),
+  visitorName: z.string().max(100).optional(),
+  visitorEmail: z.string().email().max(254).optional(),
   visitorPhone: z.string().max(30).optional(),
   visitorGender: z
     .enum(["male", "female", "non_binary", "prefer_not_to_say"])
@@ -27,7 +29,10 @@ export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
-  const body = await req.json();
+  const limited = await limitByIp(req, "passkey-visitor-reg", 20);
+  if (limited) return limited;
+
+  const body = await req.json().catch(() => null);
   const parsed = Schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -76,13 +81,14 @@ export async function POST(req: NextRequest) {
   let verification;
   try {
     verification = await verifyRegistrationResponse({
-      response,
+      // Shape- and size-checked by RegistrationResponseSchema; the library validates the rest.
+      response: response as any,
       expectedChallenge: challengeDoc.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+  } catch {
+    return NextResponse.json({ error: "Verification failed" }, { status: 400 });
   }
 
   if (!verification.verified || !verification.registrationInfo) {
@@ -91,13 +97,26 @@ export async function POST(req: NextRequest) {
 
   const { credential } = verification.registrationInfo;
 
+  // Consume the challenge first: the delete is the atomic gate, so parallel
+  // verifies of one challenge cannot all pass the cap check below.
+  const consumed: any = await VisitorPasskeyChallenge.deleteOne({ _id: challengeDoc._id });
+  if (consumed?.deletedCount === 0) {
+    return NextResponse.json({ error: "No pending registration challenge" }, { status: 400 });
+  }
+
+  // Unauthenticated writes: a software authenticator could otherwise mint
+  // credential rows without bound against a public location id.
+  if ((await VisitorPasskeyCredential.countDocuments({ teamId, sessionToken })) >= 5) {
+    return NextResponse.json({ error: "Too many passkeys for this visitor" }, { status: 429 });
+  }
+
   await VisitorPasskeyCredential.create({
     teamId,
     sessionToken,
     credentialId: credential.id,
     publicKey: Buffer.from(credential.publicKey).toString("base64url"),
     counter: credential.counter,
-    transports: credential.transports ?? [],
+    transports: safeTransports(credential.transports),
     visitorName: visitorName ?? undefined,
     visitorEmail: visitorEmail ?? undefined,
     visitorPhone: visitorPhone ?? undefined,
@@ -105,8 +124,6 @@ export async function POST(req: NextRequest) {
     visitPurpose: visitPurpose ?? undefined,
     lastUsedAt: new Date(),
   });
-
-  await VisitorPasskeyChallenge.deleteOne({ _id: challengeDoc._id });
 
   return NextResponse.json({ verified: true });
 }

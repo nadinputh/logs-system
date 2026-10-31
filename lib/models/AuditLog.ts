@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
+import { appendOnly } from "./appendOnly";
 
 export interface IAuditLog extends Document {
   teamId: Types.ObjectId;
@@ -30,6 +31,8 @@ AuditLogSchema.index({ teamId: 1, timestamp: -1 });
 AuditLogSchema.index({ logId: 1 });
 AuditLogSchema.index({ modifiedByUserId: 1 });
 AuditLogSchema.index({ timestamp: -1 });
+
+appendOnly(AuditLogSchema, "AuditLog");
 
 if (
   mongoose.models.AuditLog &&

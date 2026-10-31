@@ -7,6 +7,8 @@ import { requireTeamPermission } from "@/lib/middleware/auth";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { getClientIp } from "@/lib/server/getClientIp";
 import { assertSameOrigin } from "@/lib/csrf";
+import { Types } from "mongoose";
+import { staffLog } from "@/lib/checkoutLog";
 
 export const runtime = "nodejs";
 
@@ -22,10 +24,13 @@ export async function POST(
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
   const { id } = await params;
+  if (!Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const auth = await requireTeamPermission("logs.manualCheckout");
   if (auth.error) return auth.error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = ManualCheckoutSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -54,7 +59,7 @@ export async function POST(
     action: "out",
   });
   if (existing) {
-    return NextResponse.json({ already: true, log: existing }, { status: 200 });
+    return NextResponse.json({ already: true, log: staffLog(existing) }, { status: 200 });
   }
 
   const checkoutLog = await Log.create({
@@ -70,7 +75,7 @@ export async function POST(
     visitPurpose: checkinLog.visitPurpose,
     deviceId: checkinLog.deviceId,
     ipAddress: getClientIp(req),
-    userAgent: req.headers.get("user-agent") ?? undefined,
+    userAgent: (req.headers.get("user-agent") ?? undefined)?.slice(0, 256),
     action: "out",
     relatedLogId: checkinLog._id,
     timestamp: new Date(),
@@ -89,5 +94,5 @@ export async function POST(
 
   publishLogCreated(checkoutLog);
 
-  return NextResponse.json({ log: checkoutLog }, { status: 201 });
+  return NextResponse.json({ log: staffLog(checkoutLog) }, { status: 201 });
 }

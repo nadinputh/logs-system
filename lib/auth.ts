@@ -1,13 +1,14 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { connectDB } from "./db";
 import { User } from "./models/User";
 import { PreAuthToken } from "./models/PreAuthToken";
 import { SessionInventory } from "./models/SessionInventory";
-import { rateLimitShared } from "./rateLimitShared";
-import { pickClientIp } from "./server/getClientIp";
+import { hashToken } from "./verification";
+import { rateLimitRefund, rateLimitShared } from "./rateLimitShared";
+import { ipBucket, pickClientIp } from "./server/getClientIp";
 import { SESSION_MAX_AGE_DAYS } from "@/lib/sessionPolicy";
 
 /**
@@ -195,7 +196,14 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, req) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (
+          typeof credentials?.email !== "string" ||
+          typeof credentials?.password !== "string" ||
+          !credentials.email ||
+          !credentials.password
+        ) {
+          return null;
+        }
 
         /**
          * The NextAuth credentials callback is the one auth surface no other
@@ -209,18 +217,31 @@ export const authOptions: NextAuthOptions = {
          * (targeted). Both throw `TOO_MANY_ATTEMPTS`, which the LoginForm
          * turns into a message the user can act on.
          */
+        // The email goes into limiter keys that are written on every attempt, so
+        // an unbounded one is an unbounded write. No real address is longer.
+        if (credentials.email.length > 254 || credentials.password.length > 1024) return null;
         const ip = requestIp(req?.headers);
         const email = credentials.email.toLowerCase().trim();
-        const perIp = await rateLimitShared(`login:ip:${ip}`, 10, 15 * 60 * 1000);
+        // Hashed in limiter keys: addresses should not sit in the RateBucket
+        // collection in the clear.
+        const emailKey = createHash("sha256").update(email).digest("hex").slice(0, 32);
+        // Charged atomically up front (a concurrent burst cannot all slip past a
+        // read-then-write check) and refunded on success below, so the per-IP
+        // budget counts failures only: successful sign-ins from one NAT or /64
+        // do not lock the others out.
+        const ipKey = `login:ip:${ipBucket(ip)}`;
+        const perIp = await rateLimitShared(ipKey, 10, 15 * 60 * 1000);
+        // Stop at the first refusal so a throttled source cannot also drain the
+        // per-email ceiling (that would lock the owner out from one address).
+        if (!perIp.ok) throw new Error("TOO_MANY_ATTEMPTS");
         // Tight bucket per (email, IP): the guesser's own attempts exhaust it,
         // but a stranger hammering an address from elsewhere cannot spend the
         // account owner's allowance. A loose per-email ceiling still caps
         // distributed guessing.
-        const perEmailIp = await rateLimitShared(`login:ei:${email}:${ip}`, 5, 15 * 60 * 1000);
-        const perEmail = await rateLimitShared(`login:email:${email}`, 50, 15 * 60 * 1000);
-        if (!perIp.ok || !perEmailIp.ok || !perEmail.ok) {
-          throw new Error("TOO_MANY_ATTEMPTS");
-        }
+        const perEmailIp = await rateLimitShared(`login:ei:${emailKey}:${ipBucket(ip)}`, 5, 15 * 60 * 1000);
+        if (!perEmailIp.ok) throw new Error("TOO_MANY_ATTEMPTS");
+        const perEmail = await rateLimitShared(`login:email:${emailKey}`, 50, 15 * 60 * 1000);
+        if (!perEmail.ok) throw new Error("TOO_MANY_ATTEMPTS");
 
         await connectDB();
         const user = await User.findOne({ email });
@@ -232,22 +253,27 @@ export const authOptions: NextAuthOptions = {
         // callback runs later without a request object.
         const uaHeader = (req?.headers?.["user-agent"] as string | undefined) ?? "unknown";
         const originIp = ip;
-        /**
-         * An admin-provisioned account exists but has no password yet. Returning
-         * null here collapsed it into the generic credential failure, so the user
-         * was told their email and password "do not match an account" — for an
-         * account that provably exists — and the resend control that would have
-         * rescued them never rendered. Name the condition so the UI can offer the
-         * one recovery that works for it.
-         */
-        if (!user.passwordHash) throw new Error("PASSWORD_NOT_SET");
+        // An admin-provisioned account has no password yet.
+        if (!user.passwordHash) {
+          // Indistinguishable from a wrong password (same cost, same answer):
+          // naming it told anyone which addresses are provisioned accounts that
+          // never set one. Recovery is "Forgot password", which sends such an
+          // account a set-password link.
+          await bcrypt.compare(credentials.password, DECOY_HASH);
+          return null;
+        }
         const valid = await bcrypt.compare(
           credentials.password,
           user.passwordHash,
         );
-        if (!valid) return null;
+        if (!valid) {
+          return null;
+        }
         // Block sign-in until the email has been verified (set-password / verify link).
         if (!user.emailVerified) throw new Error("EMAIL_NOT_VERIFIED");
+        // The password was right: this attempt is not a guess, so it does not
+        // count against the shared per-IP failure budget.
+        await rateLimitRefund(ipKey, 15 * 60 * 1000, perIp.window);
 
         // Mint a session id now so both the JWT and the inventory row share
         // the same opaque handle. We store it on `sid` because NextAuth's own
@@ -295,12 +321,12 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.preAuthToken) return null;
         await connectDB();
         const tokenDoc = await PreAuthToken.findOneAndDelete({
-          token: credentials.preAuthToken,
+          token: hashToken(String(credentials.preAuthToken)),
           expiresAt: { $gt: new Date() },
         });
         if (!tokenDoc) return null;
         const user = await User.findById(tokenDoc.userId);
-        if (!user) return null;
+        if (!user || !user.emailVerified) return null;
 
         const ip = requestIp(req?.headers);
         const uaHeader =
@@ -341,9 +367,19 @@ export const authOptions: NextAuthOptions = {
         (token as any).sid = (user as any).sid ?? null;
       }
 
-      if (trigger === "update") {
-        token.activeTeamId =
-          (session as any)?.activeTeamId ?? token.activeTeamId ?? null;
+      if (trigger === "update" && token.id) {
+        // The client asks for a refresh after switching teams; what it names is
+        // not trusted. The switch endpoint already verified membership and wrote
+        // User.activeTeamId, so read it back from there.
+        try {
+          await connectDB();
+          const row = await User.findById(token.id as string)
+            .select("activeTeamId")
+            .lean<{ activeTeamId?: { toString(): string } | null } | null>();
+          token.activeTeamId = row?.activeTeamId?.toString() ?? null;
+        } catch {
+          // Keep the current value; the DB is re-read per request anyway.
+        }
       }
 
       /**

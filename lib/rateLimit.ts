@@ -12,7 +12,7 @@
  * from zero without pretending to be infrastructure. A real deployment should
  * put this at the edge — this is the floor, not the ceiling.
  */
-import { getClientIp } from "@/lib/server/getClientIp";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
 
 type Bucket = { count: number; resetAt: number };
 
@@ -23,7 +23,11 @@ declare global {
 const buckets = (): Map<string, Bucket> =>
   (global._rateBuckets ??= new Map<string, Bucket>());
 
-export type RateVerdict = { ok: true } | { ok: false; retryAfter: number };
+// `window` (shared limiter only) is the window index that was charged, so a later
+// refund can target the same bucket even if the clock has since crossed a boundary.
+export type RateVerdict =
+  | { ok: true; window?: number }
+  | { ok: false; retryAfter: number; window?: number };
 
 export function rateLimit(
   key: string,
@@ -52,5 +56,5 @@ export function rateLimit(
 
 /** Best-effort client identity for limiting. Falls back to a shared bucket. */
 export function clientKey(req: Request, scope: string): string {
-  return `${scope}:${getClientIp(req)}`;
+  return `${scope}:${ipBucket(getClientIp(req))}`;
 }

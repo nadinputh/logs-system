@@ -4,15 +4,18 @@ import { User } from "@/lib/models/User";
 import { VerificationToken } from "@/lib/models/VerificationToken";
 import { hashToken } from "@/lib/verification";
 import { assertSameOrigin } from "@/lib/csrf";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+  const limited = await limitByIp(req, "verify-email", 20, 15 * 60_000);
+  if (limited) return limited;
 
   const { token } = await req.json().catch(() => ({}));
-  if (!token) {
+  if (typeof token !== "string" || !token) {
     return NextResponse.json({ error: "Token required" }, { status: 400 });
   }
 

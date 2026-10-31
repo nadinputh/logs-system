@@ -134,7 +134,7 @@ describe('POST /api/auth/register — reports whether the mail actually went out
     vi.clearAllMocks()
   })
 
-  async function setup(sendImpl: () => Promise<boolean>) {
+  async function setup(sendImpl: () => Promise<boolean>, smtp = true) {
     const chainNull = () => {
       const q: any = { select: vi.fn(), lean: vi.fn() }
       q.select.mockReturnValue(q)
@@ -159,8 +159,16 @@ describe('POST /api/auth/register — reports whether the mail actually went out
     vi.doMock('@/lib/verification', () => ({
       issueVerificationToken: vi.fn().mockResolvedValue({ token: 'tok', expiresAt: new Date() }),
       verifyEmailLink: (t: string) => `https://kamnotheat.example/verify/${t}`,
+      setPasswordLink: (t: string) => `https://kamnotheat.example/set-password/${t}`,
+      reissueAsSetPassword: vi.fn().mockResolvedValue({ token: 'tok', expiresAt: new Date() }),
+      discardIfUndelivered: async () => {},
     }))
-    vi.doMock('@/lib/email/send', () => ({ sendVerificationEmail: vi.fn().mockImplementation(sendImpl) }))
+    // Sign-up now mails a set-password link (the inbox owner picks the password).
+    vi.doMock('@/lib/email/send', () => ({
+      sendVerificationEmail: vi.fn().mockImplementation(sendImpl),
+      sendSetPasswordEmail: vi.fn().mockImplementation(sendImpl),
+      smtpConfigured: () => smtp,
+    }))
     vi.doMock('@/lib/rateLimitShared', () => ({ rateLimitShared: async () => ({ ok: true, retryAfter: 0 }) }))
     vi.doMock('@/lib/rateLimit', () => ({ clientKey: () => 'k' }))
 
@@ -181,15 +189,18 @@ describe('POST /api/auth/register — reports whether the mail actually went out
     })
   }
 
-  it('says the link is on its way only when it actually is', async () => {
+  // The sign-up work runs after the response (so timing cannot reveal whether the
+  // address was already registered), so `delivered` is server state: is mail
+  // configured. It is the same for every address, which is what keeps it safe.
+  it('says the link is on its way only when mail is configured', async () => {
     const { POST } = await setup(async () => true)
     const body = await (await POST(req())).json()
     expect(body.delivered).toBe(true)
     expect(body.message).toContain('Check your email')
   })
 
-  it('does not claim a delivery when nothing was sent', async () => {
-    const { POST } = await setup(async () => false)
+  it('does not claim a delivery when mail is not configured', async () => {
+    const { POST } = await setup(async () => false, false)
     const res = await POST(req())
     const body = await res.json()
 
@@ -201,7 +212,7 @@ describe('POST /api/auth/register — reports whether the mail actually went out
     expect(body.message).toContain('could not be sent')
   })
 
-  it('reports undelivered rather than 500 when the transport throws', async () => {
+  it('still answers 201 (no 500) when the transport throws, and logs it', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { POST } = await setup(async () => {
       throw new Error('SMTP transport unavailable')
@@ -210,7 +221,7 @@ describe('POST /api/auth/register — reports whether the mail actually went out
     const body = await res.json()
 
     expect(res.status).toBe(201)
-    expect(body.delivered).toBe(false)
+    expect(body.ok).toBe(true)
     expect(err).toHaveBeenCalled()
   })
 })

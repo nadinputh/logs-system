@@ -29,7 +29,10 @@ self.addEventListener('notificationclick', (event) => {
 
   if (event.action === 'dismiss') return
 
-  const url = event.notification.data?.url || '/'
+  // The payload is server-signed, but the worker is the last stop before
+  // openWindow: never navigate off-origin whatever the payload says.
+  const target = new URL(event.notification.data?.url || '/', self.location.origin)
+  const url = target.origin === self.location.origin ? target.href : self.location.origin + '/'
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

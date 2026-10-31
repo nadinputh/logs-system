@@ -3,6 +3,8 @@ import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { assertSameOrigin } from "@/lib/csrf";
 import { findOwnedLocationById } from "@/lib/locationOwnership";
+import { publicLog } from "@/lib/checkoutLog";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 
@@ -14,6 +16,9 @@ const UUID_RE =
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+
+  const limited = await limitByIp(req, "logs-open", 120);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => null);
   const locationId = typeof body?.locationId === "string" ? body.locationId : null;
@@ -50,5 +55,5 @@ export async function POST(req: NextRequest) {
   });
   if (checkout) return NextResponse.json({ openLog: null });
 
-  return NextResponse.json({ openLog: lastCheckin });
+  return NextResponse.json({ openLog: publicLog(lastCheckin) });
 }

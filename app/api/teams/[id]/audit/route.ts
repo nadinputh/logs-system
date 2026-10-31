@@ -18,9 +18,9 @@ const QuerySchema = z.object({
       "ownership_transferred",
     ])
     .optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
-  cursor: z.string().optional(),
+  from: z.string().max(40).optional(),
+  to: z.string().max(40).optional(),
+  cursor: z.string().max(64).optional(),
   format: z.enum(["json", "csv"]).default("json"),
 });
 
@@ -41,8 +41,13 @@ function isValidDate(date: Date | null) {
   return !!date && Number.isFinite(date.getTime());
 }
 
+// Names and emails are user-chosen; a leading =,+,-,@ would run as a formula
+// when an admin opens the export in a spreadsheet. A leading ' keeps it text.
+const CSV_FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+
 function csvEscape(value: unknown) {
-  const text = String(value ?? "");
+  let text = String(value ?? "");
+  if (CSV_FORMULA_TRIGGER.test(text)) text = `'${text}`;
   if (!/[",\n]/.test(text)) return text;
   return `"${text.replace(/"/g, '""')}"`;
 }

@@ -12,12 +12,19 @@ async function claimedBy(jti: string, sessionToken: string): Promise<boolean> {
 /**
  * The 15s QR itself is single-scan too. The scan page mints the longer presence
  * token from it, so without this a URL forwarded within the QR's life gets its
- * own presence token. The first scanner's fingerprint (ip + user agent) owns the
- * QR's jti; the same device may reload, a different one is refused.
+ * own presence token. Up to SCAN_SLOTS distinct devices (ip + user agent) may use
+ * one QR, so a second visitor in the same window, or a stranger who opened the
+ * URL first, does not lock the real one out, while a forwarded URL still earns
+ * only a handful of tokens, each bound to one visitor identity. The same device
+ * may reload; a further one is refused.
  */
+export const SCAN_SLOTS = 3;
 export async function claimScan(jti: string, fingerprint: string): Promise<boolean> {
-  const prior = await claim(`kioskscan:${jti}`, fingerprint);
-  return prior === null || prior === fingerprint;
+  for (let slot = 0; slot < SCAN_SLOTS; slot++) {
+    const prior = await claim(`kioskscan:${jti}:${slot}`, fingerprint);
+    if (prior === null || prior === fingerprint) return true;
+  }
+  return false;
 }
 
 /**
@@ -46,6 +53,10 @@ export async function kioskGate(
   const ok = await verifyKioskToken(kioskToken)
     .then(
       async (t) =>
+        // Only the longer-lived presence token minted by the scan page may back
+        // a write. The raw 15s QR token is exchanged there (once, per device),
+        // so accepting it directly would skip that device check.
+        t.typ === "presence" &&
         t.locationId === locationId &&
         !!t.jti &&
         (await claimedBy(t.jti, sessionToken)),

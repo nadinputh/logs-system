@@ -11,15 +11,12 @@ import { Label } from '@/components/ui/label'
 import { LegalConsent } from '@/components/legal/LegalConsent'
 
 /** Mirrors the server's RegisterSchema so the hint never overstates the rule. */
-const MIN_PASSWORD = 8
-
 export function RegisterForm() {
   const t = useTranslations('register')
   const tLogin = useTranslations('login')
   const tCommon = useTranslations('common')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [teamName, setTeamName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -43,7 +40,7 @@ export function RegisterForm() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, teamName }),
+        body: JSON.stringify({ name, email, teamName }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -213,28 +210,6 @@ export function RegisterForm() {
             required
             autoComplete="email"
             placeholder={tLogin('emailPlaceholder')}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          {/* The requirement sits on the label row, so it is read before typing
-              rather than after — and it costs no extra line of height. */}
-          <div className="flex items-baseline justify-between gap-3">
-            <Label htmlFor="password">{tLogin('passwordLabel')}</Label>
-            <span id="password-hint" className="text-xs text-muted">
-              {t('passwordHint', { min: MIN_PASSWORD })}
-            </span>
-          </div>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={MIN_PASSWORD}
-            autoComplete="new-password"
-            aria-describedby="password-hint"
-            placeholder={t('passwordPlaceholder')}
           />
         </div>
 

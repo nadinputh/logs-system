@@ -4,6 +4,7 @@ import { QuestCard } from "@/lib/models/QuestCard";
 import { requireTeamAccess } from "@/lib/middleware/auth";
 import { assertSameOrigin } from "@/lib/csrf";
 import { v4 as uuidv4 } from "uuid";
+import { Types } from "mongoose";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,9 @@ export async function POST(
   if (auth.error) return auth.error;
 
   const { token: id } = await params;
+  if (!Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   await connectDB();
 
   const card = await QuestCard.findOneAndUpdate(

@@ -73,12 +73,27 @@ export function useLogRealtime(
 
     if (body !== undefined) {
       const ctrl = new AbortController();
-      readSse(streamPath, body, ctrl.signal, (event, data) => {
-        if (event !== "log.created") return;
-        try {
-          onLogCreatedRef.current(JSON.parse(data) as ClientLogCreatedEvent);
-        } catch {}
-      }).catch(() => {});
+      // The server ends each stream after a few minutes; reconnect until the
+      // component goes away. A failed attempt backs off rather than hammering.
+      (async () => {
+        let delay = 3_000;
+        while (!ctrl.signal.aborted) {
+          const startedAt = Date.now();
+          await readSse(streamPath, body, ctrl.signal, (event, data) => {
+            if (event !== "log.created") return;
+            try {
+              onLogCreatedRef.current(JSON.parse(data) as ClientLogCreatedEvent);
+            } catch {}
+          }).catch(() => {});
+          if (ctrl.signal.aborted) break;
+          // A stream that lived a while was healthy (the server ends them on
+          // purpose): reconnect soon. One that died at once (429, server error)
+          // backs off exponentially, so a throttled client does not keep
+          // hammering the endpoint that is throttling it.
+          delay = Date.now() - startedAt > 30_000 ? 3_000 : Math.min(delay * 2, 60_000);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      })();
       return () => ctrl.abort();
     }
 
@@ -94,8 +109,11 @@ export function useLogRealtime(
 
     source.addEventListener("log.created", handleLogCreated as EventListener);
 
+    // An error with the connection still CONNECTING is the browser retrying
+    // (the server ends each stream after its lifetime); only a CLOSED source,
+    // e.g. after a 401/403, is final.
     source.onerror = () => {
-      source.close();
+      if (source.readyState === EventSource.CLOSED) source.close();
     };
 
     return () => {

@@ -1,3 +1,4 @@
+import { SESSION_MAX_AGE_DAYS } from "@/lib/sessionPolicy";
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
 /**
@@ -38,6 +39,12 @@ const SessionInventorySchema = new Schema<ISessionInventory>(
 
 // Compound index for the list query — sort user's rows newest-first cheaply.
 SessionInventorySchema.index({ userId: 1, createdAt: -1 });
+// A row for a session whose JWT has expired is just clutter in the "Active
+// sessions" list; let Mongo drop it when the cookie would have died anyway.
+SessionInventorySchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: SESSION_MAX_AGE_DAYS * 24 * 60 * 60 },
+);
 
 export const SessionInventory: Model<ISessionInventory> =
   (mongoose.models.SessionInventory as Model<ISessionInventory>) ||

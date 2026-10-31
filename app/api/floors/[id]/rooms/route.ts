@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { Floor } from "@/lib/models/Floor";
 import { Room } from "@/lib/models/Room";
 import { requireTeamPermission } from "@/lib/middleware/auth";
+import { Types } from "mongoose";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,9 @@ export async function GET(
   if (auth.error) return auth.error;
 
   const { id } = await params;
+  if (!Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   await connectDB();
 
   const floor = await Floor.findOne({ _id: id, teamId: auth.teamId })

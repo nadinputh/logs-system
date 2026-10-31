@@ -1,3 +1,12 @@
 {
-  "crons": [{ "path": "/api/cron/cleanup-stale-logs", "schedule": "0 * * * *" }]
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-stale-logs",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/report-unverified",
+      "schedule": "0 4 * * *"
+    }
+  ]
 }

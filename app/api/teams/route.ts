@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { Team } from "@/lib/models/Team";
@@ -7,6 +8,7 @@ import { TeamMember } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 import { requireAuth } from "@/lib/middleware/auth";
 import { assertSameOrigin } from "@/lib/csrf";
+import { rateLimitShared } from "@/lib/rateLimitShared";
 
 export const runtime = "nodejs";
 
@@ -32,13 +34,9 @@ function slugify(input: string) {
 
 async function buildUniqueSlug(base: string): Promise<string> {
   const normalized = slugify(base) || "team";
-  let candidate = normalized;
-  let n = 2;
-  while (await Team.findOne({ slug: candidate }).select("_id").lean()) {
-    candidate = `${normalized}-${n}`;
-    n += 1;
-  }
-  return candidate;
+  if (!(await Team.findOne({ slug: normalized }).select("_id").lean())) return normalized;
+  // Taken: a random suffix instead of walking name-2, name-3 ... one query each.
+  return `${normalized}-${randomBytes(3).toString("hex")}`;
 }
 
 export async function GET() {
@@ -88,7 +86,15 @@ export async function POST(req: NextRequest) {
   const { error, session } = await requireAuth();
   if (error) return error;
 
-  const body = await req.json();
+  const made = await rateLimitShared(`team-create:${(session.user as any).id}`, 5, 60 * 60_000);
+  if (!made.ok) {
+    return NextResponse.json(
+      { error: "Too many teams created. Try again later." },
+      { status: 429, headers: { "Retry-After": String(made.retryAfter) } },
+    );
+  }
+
+  const body = await req.json().catch(() => null);
   const parsed = CreateTeamSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -106,11 +112,18 @@ export async function POST(req: NextRequest) {
 
   const slug = await buildUniqueSlug(parsed.data.slug ?? parsed.data.name);
 
-  const team = await Team.create({
-    name: parsed.data.name,
-    slug,
-    ownerUserId: userId,
-    createdByUserId: userId,
+  // Two requests can pass the slug probe together; the unique index decides.
+  // The loser gets one fresh random suffix instead of a 500.
+  const make = (s: string) =>
+    Team.create({
+      name: parsed.data.name,
+      slug: s,
+      ownerUserId: userId,
+      createdByUserId: userId,
+    });
+  const team = await make(slug).catch((err: any) => {
+    if (err?.code !== 11000) throw err;
+    return make(`${slug}-${randomBytes(3).toString("hex")}`);
   });
 
   await TeamMember.create({

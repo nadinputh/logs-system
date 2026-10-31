@@ -3,13 +3,24 @@ import { connectDB } from "@/lib/db";
 import { Log } from "@/lib/models/Log";
 import { assertSameOrigin } from "@/lib/csrf";
 import { findOwnedLocationById } from "@/lib/locationOwnership";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
 import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Each open stream polls MongoDB every 3s. Rate limiting only bounds how fast
+// streams are opened; this bounds how many one address can hold at once, and
+// maxMs bounds how long any of them lives (the client reconnects).
+const MAX_STREAMS_PER_IP = 5;
+const STREAM_MAX_MS = 5 * 60_000;
+declare global {
+  var _guestStreams: Map<string, number> | undefined;
+}
 
 function buildLogEvent(log: any) {
   return {
@@ -33,6 +44,11 @@ export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
+  // Each open stream polls MongoDB every 3s for as long as it lives, so opening
+  // them must cost the caller something.
+  const limited = await limitByIp(req, "guest-stream", 6);
+  if (limited) return limited;
+
   const body = await req.json().catch(() => null);
   const locationId = typeof body?.locationId === "string" ? body.locationId : null;
   const sessionToken = typeof body?.sessionToken === "string" ? body.sessionToken : null;
@@ -54,6 +70,13 @@ export async function POST(req: NextRequest) {
   if (!location) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
+
+  const streams = (global._guestStreams ??= new Map<string, number>());
+  const ip = ipBucket(getClientIp(req));
+  if ((streams.get(ip) ?? 0) >= MAX_STREAMS_PER_IP) {
+    return NextResponse.json({ error: "Too many open streams" }, { status: 429 });
+  }
+  streams.set(ip, (streams.get(ip) ?? 0) + 1);
 
   return createSseStream(req, (send) => {
     let since = new Date();
@@ -86,6 +109,9 @@ export async function POST(req: NextRequest) {
     return () => {
       clearInterval(heartbeat);
       clearInterval(pollInterval);
+      const left = (streams.get(ip) ?? 1) - 1;
+      if (left <= 0) streams.delete(ip);
+      else streams.set(ip, left);
     };
-  });
+  }, { maxMs: STREAM_MAX_MS });
 }

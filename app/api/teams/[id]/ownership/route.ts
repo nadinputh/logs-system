@@ -8,6 +8,7 @@ import { User } from "@/lib/models/User";
 import { requireTeamPermission } from "@/lib/middleware/auth";
 import { recordTeamAuditEvent } from "@/lib/teamAudit";
 import { assertSameOrigin } from "@/lib/csrf";
+import { TeamInvite } from "@/lib/models/TeamInvite";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid user" }, { status: 400 });
   }
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = TransferOwnershipSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -111,24 +112,57 @@ export async function POST(
     );
   }
 
-  await Promise.all([
-    Team.updateOne({ _id: auth.teamId }, { ownerUserId: targetUserId }),
-    TeamMember.updateOne(
-      { teamId: auth.teamId, userId: actorUserId },
-      { role: demoteCurrentOwnerRole as TeamRole, status: "active" },
-    ),
-    TeamMember.updateOne(
+  // No multi-document transaction (standalone Mongo has none), so the swap is
+  // ordered and compensated instead of fired in parallel: the first step is a
+  // compare-and-set on the current owner, which also serialises two concurrent
+  // transfers; a failure later rolls the earlier steps back, so the team is
+  // never left with two owners or none.
+  const claimed: any = await Team.updateOne(
+    { _id: auth.teamId, ownerUserId: actorUserId },
+    { ownerUserId: targetUserId },
+  );
+  if (claimed?.matchedCount === 0) {
+    return NextResponse.json(
+      { error: "Ownership changed while transferring. Reload and retry." },
+      { status: 409 },
+    );
+  }
+  try {
+    await TeamMember.updateOne(
       { teamId: auth.teamId, userId: targetUserId },
       { role: "owner", status: "active" },
-    ),
-    User.updateOne(
-      {
-        _id: targetUserId,
-        $or: [{ activeTeamId: { $exists: false } }, { activeTeamId: null }],
-      },
-      { activeTeamId: auth.teamId },
-    ),
-  ]);
+    );
+    await TeamMember.updateOne(
+      { teamId: auth.teamId, userId: actorUserId },
+      { role: demoteCurrentOwnerRole as TeamRole, status: "active" },
+    );
+  } catch (err) {
+    await Promise.allSettled([
+      Team.updateOne({ _id: auth.teamId }, { ownerUserId: actorUserId }),
+      TeamMember.updateOne(
+        { teamId: auth.teamId, userId: targetUserId },
+        { role: targetMembership.role },
+      ),
+      TeamMember.updateOne(
+        { teamId: auth.teamId, userId: actorUserId },
+        { role: "owner" },
+      ),
+    ]);
+    throw err;
+  }
+  // Invites carry the inviter's authority at the time they were written (only an
+  // owner may invite an admin). The old owner's must not outlive the handover.
+  await TeamInvite.updateMany(
+    { teamId: auth.teamId, invitedByUserId: actorUserId, status: "pending" },
+    { status: "revoked" },
+  ).catch((err: unknown) => console.error("[ownership] invite revoke failed:", err));
+  await User.updateOne(
+    {
+      _id: targetUserId,
+      $or: [{ activeTeamId: { $exists: false } }, { activeTeamId: null }],
+    },
+    { activeTeamId: auth.teamId },
+  );
 
   await recordTeamAuditEvent({
     teamId: auth.teamId,

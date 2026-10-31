@@ -228,7 +228,10 @@ export default function TeamSettingsPage() {
   // Only a real redirect (someone bounced here from a page that needed an
   // active team) earns the t('continueToRequestedPage') button — the default
   // fallback below is where the click lands, not a signal the button should show.
-  const explicitNextPath = searchParams.get('next')
+  // Same-origin paths only: `//evil.com`, `/\evil.com` and control characters
+  // (which browsers strip, turning `/\t/evil.com` into `//evil.com`) are refused.
+  const rawNext = searchParams.get('next')
+  const explicitNextPath = rawNext && /^\/(?![/\\])[^\x00-\x1f]*$/.test(rawNext) ? rawNext : null
   const nextPath = explicitNextPath ?? '/dashboard'
   const redirectReason = searchParams.get('reason') as
     | 'no_active_team'
@@ -1038,11 +1041,13 @@ export default function TeamSettingsPage() {
           <p className="text-sm font-semibold text-foreground">
             {pendingLink.label} was created, but the email could not be sent.
           </p>
-          <p className="text-xs text-muted">
-            {t('passThisLinkOnYourself')}
-          </p>
+          {pendingLink.url && (
+            <p className="text-xs text-muted">
+              {t('passThisLinkOnYourself')}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            {pendingLink.url && (<button
               type="button"
               onClick={() => {
                 void navigator.clipboard?.writeText(pendingLink.url)
@@ -1051,7 +1056,7 @@ export default function TeamSettingsPage() {
               className="max-w-full truncate rounded bg-muted px-2 py-1 text-xs text-muted hover:text-foreground sm:max-w-[420px]"
             >
               {pendingLink.url}
-            </button>
+            </button>)}
             <Button size="sm" variant="outline" onClick={() => setPendingLink(null)}>
               {t('dismiss')}
             </Button>

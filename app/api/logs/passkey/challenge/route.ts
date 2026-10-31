@@ -6,32 +6,36 @@ import { PasskeyCheckInChallenge } from "@/lib/models/PasskeyCheckInChallenge";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 
 const ChallengeSchema = z.object({
-  locationId: z.string().min(1),
+  locationId: z.string().min(1).max(64),
   locationType: z.enum(["building", "floor", "room"]),
   action: z.enum(["in", "out"]),
   sessionToken: z.string().uuid(),
-  relatedLogId: z.string().optional(),
-  idempotencyKey: z.string().min(1),
+  relatedLogId: z.string().max(64).optional(),
+  idempotencyKey: z.string().min(1).max(128),
   visitorName: z.string().min(1).max(100).optional(),
-  visitorEmail: z.string().email().optional(),
+  visitorEmail: z.string().email().max(254).optional(),
   visitorPhone: z.string().max(30).optional(),
   visitorGender: z
     .enum(["male", "female", "non_binary", "prefer_not_to_say"])
     .optional(),
   visitPurpose: z.string().max(200).optional(),
-  deviceId: z.string().optional(),
-  kioskToken: z.string().optional(),
+  deviceId: z.string().max(64).optional(),
+  kioskToken: z.string().max(2048).optional(),
 });
 
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
-  const body = await req.json();
+  const limited = await limitByIp(req, "passkey-challenge", 30);
+  if (limited) return limited;
+
+  const body = await req.json().catch(() => null);
   const parsed = ChallengeSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

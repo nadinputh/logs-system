@@ -11,6 +11,7 @@ import { getClientIp } from "@/lib/server/getClientIp";
 import { assertSameOrigin } from "@/lib/csrf";
 import { acquireCheckInLock } from "@/lib/checkInLock";
 import { claim } from "@/lib/claim";
+import { staffLog } from "@/lib/checkoutLog";
 
 export const runtime = "nodejs";
 
@@ -24,10 +25,14 @@ export async function POST(req: NextRequest) {
   const auth = await requireTeamPermission("terminal.scan");
   if (auth.error) return auth.error;
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => null)) ?? {};
   const { token, locationId, locationType } = body;
 
-  if (!token || !locationId || !locationType) {
+  if (
+    typeof token !== "string" ||
+    typeof locationId !== "string" ||
+    !["building", "floor", "room"].includes(locationType)
+  ) {
     return NextResponse.json(
       { error: "token, locationId, locationType required" },
       { status: 400 },
@@ -105,7 +110,7 @@ export async function POST(req: NextRequest) {
       });
       if (!existingCheckout) {
         return NextResponse.json(
-          { existing: true, log: lastCheckin },
+          { existing: true, log: staffLog(lastCheckin) },
           { status: 200 },
         );
       }
@@ -128,14 +133,14 @@ export async function POST(req: NextRequest) {
       userId,
       visitorName: (user as any).name,
       ipAddress: getClientIp(req),
-      userAgent: req.headers.get("user-agent") ?? undefined,
+      userAgent: (req.headers.get("user-agent") ?? undefined)?.slice(0, 256),
       action: "in",
       timestamp: new Date(),
     });
 
     publishLogCreated(log);
 
-    return NextResponse.json(log, { status: 201 });
+    return NextResponse.json(staffLog(log), { status: 201 });
   } finally {
     await release();
   }

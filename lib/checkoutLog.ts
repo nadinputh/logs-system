@@ -34,6 +34,16 @@ export function publicLog(log: any) {
 }
 
 /**
+ * A log as staff-side write endpoints echo it back: no network identifiers and
+ * no sessionToken (the guest's credential for the check-out and quest APIs).
+ */
+export function staffLog(log: any) {
+  const o = publicLog(log);
+  delete o.sessionToken;
+  return o;
+}
+
+/**
  * An Idempotency-Key is deterministic per session+location+day+action, so a
  * second visit that day presents the same key as the first. A cached response
  * is only a replay of *this* request if the log it describes is still the live

@@ -25,7 +25,7 @@ const VisitorPasskeyCredentialSchema = new Schema<IVisitorPasskeyCredential>(
     counter: { type: Number, required: true, default: 0 },
     transports: [{ type: String }],
     visitorName: { type: String, trim: true },
-    visitorEmail: { type: String, trim: true },
+    visitorEmail: { type: String, trim: true, maxlength: 254 },
     visitorPhone: { type: String, trim: true },
     visitorGender: { type: String, trim: true },
     visitPurpose: { type: String, trim: true },

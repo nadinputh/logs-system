@@ -29,7 +29,7 @@ const PasskeyCheckInChallengeSchema = new Schema<IPasskeyCheckInChallenge>(
     relatedLogId: { type: String },
     idempotencyKey: { type: String, required: true },
     visitorName: { type: String, trim: true },
-    visitorEmail: { type: String, trim: true },
+    visitorEmail: { type: String, trim: true, maxlength: 254 },
     visitorPhone: { type: String, trim: true },
     visitorGender: { type: String, trim: true },
     visitPurpose: { type: String, trim: true },

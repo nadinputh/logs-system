@@ -87,7 +87,9 @@ export async function GET(_req: NextRequest) {
       timestamp: { $gte: todayStart, $lt: tomorrowStart },
     }),
     Log.aggregate<{ count: number }>([
-      { $match: scopedMatch },
+      // Open check-ins are closed by the nightly job after 12h (30-day lookback),
+      // so scanning older history here only costs, never changes the answer.
+      { $match: { ...scopedMatch, timestamp: { $gte: monthStart } } },
       {
         $lookup: {
           from: logsCollection,

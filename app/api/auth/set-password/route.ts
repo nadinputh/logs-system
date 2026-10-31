@@ -5,15 +5,18 @@ import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { VerificationToken } from "@/lib/models/VerificationToken";
 import { hashToken } from "@/lib/verification";
+import { bumpSessionsVersion } from "@/lib/auth";
 import { assertSameOrigin } from "@/lib/csrf";
 import { clientKey } from "@/lib/rateLimit";
 import { rateLimitShared } from "@/lib/rateLimitShared";
+import { PasswordSchema } from "@/lib/validations/password";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(8).max(200),
+  token: z.string().min(1).max(128),
+  password: PasswordSchema,
 });
 
 /**
@@ -28,6 +31,8 @@ const Schema = z.object({
  * holder of the link already knows.
  */
 export async function GET(req: NextRequest) {
+  const limited = await limitByIp(req, "token-probe", 60);
+  if (limited) return limited;
   const token = req.nextUrl.searchParams.get("token");
   if (!token) {
     return NextResponse.json({ valid: false }, { status: 400 });
@@ -105,6 +110,10 @@ export async function POST(req: NextRequest) {
     { _id: doc.userId },
     { passwordHash, emailVerified: new Date(), termsAcceptedAt: new Date() },
   );
+  // Same as a reset: a link can replace a password that already existed (an
+  // unverified sign-up that had one), and whoever held the old one must not keep
+  // a live session. Also primes the revocation cache on this instance.
+  await bumpSessionsVersion(String(doc.userId));
 
   return NextResponse.json({ ok: true, email: doc.email });
 }

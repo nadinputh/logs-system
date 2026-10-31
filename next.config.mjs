@@ -9,6 +9,7 @@ const appPort = process.env.PORT || '4000'
 const appUrl = process.env.NEXTAUTH_URL || `http://localhost:${appPort}`
 
 const nextConfig = {
+  poweredByHeader: false,
   outputFileTracingRoot: dirname(fileURLToPath(import.meta.url)),
   env: {
     NEXT_PUBLIC_APP_PORT: appPort,
@@ -26,11 +27,10 @@ const nextConfig = {
   // trade every public font CDN (Google Fonts included) already makes.
   async headers() {
     return [
-      // ponytail: frame-ancestors only. A script-src CSP needs per-request
-      // nonces for Next's inline scripts; add via middleware when wanted.
       {
         source: '/:path*',
         headers: [
+          // CSP (nonce-based) is set per request in middleware.ts.
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },

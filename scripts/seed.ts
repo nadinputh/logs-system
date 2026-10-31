@@ -40,6 +40,15 @@ async function seed() {
   if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_PRODUCTION !== "1") {
     throw new Error("Refusing to seed with NODE_ENV=production (set SEED_ALLOW_PRODUCTION=1 to override).");
   }
+  // NODE_ENV alone is not a production check: a dev shell can hold a production
+  // MONGODB_URI. This script plants a verified owner with a known password, so
+  // only a local database (or an explicit override) is acceptable.
+  const isLocal = /^mongodb:\/\/(?:[^@/]*@)?(localhost|127\.0\.0\.1|\[::1\])(?:[:/?]|$)/.test(
+    process.env.MONGODB_URI ?? "",
+  );
+  if (!isLocal && process.env.SEED_ALLOW_REMOTE !== "1") {
+    throw new Error("Refusing to seed a non-local database (set SEED_ALLOW_REMOTE=1 to override).");
+  }
   await connectDB();
 
   let admin = await User.findOne({ email: "admin@example.com" });

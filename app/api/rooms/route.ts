@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireTeamPermission("locations.write");
   if (auth.error) return auth.error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = CreateRoomSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

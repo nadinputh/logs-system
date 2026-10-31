@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest) {
   const { error, session } = await requireAuth();
   if (error) return error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = SetActiveTeamSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

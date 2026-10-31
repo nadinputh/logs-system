@@ -6,20 +6,21 @@ import { Floor } from '@/lib/models/Floor'
 import { Room } from '@/lib/models/Room'
 import { ArrowLeft } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
+import { requireTeamPageAccess } from '@/lib/server/requireTeamPageAccess'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-async function getLocation(id: string) {
+async function getLocation(id: string, teamId: string) {
   try {
     await connectDB()
-    const room = await Room.findById(id).populate('floorId').populate('buildingId').lean<any>()
+    const room = await Room.findOne({ _id: id, teamId }).populate('floorId').populate('buildingId').lean<any>()
     if (room) return { ...JSON.parse(JSON.stringify(room)), locationType: 'room' }
 
-    const floor = await Floor.findById(id).populate('buildingId').lean<any>()
+    const floor = await Floor.findOne({ _id: id, teamId }).populate('buildingId').lean<any>()
     if (floor) return { ...JSON.parse(JSON.stringify(floor)), locationType: 'floor' }
 
-    const building = await Building.findById(id).lean<any>()
+    const building = await Building.findOne({ _id: id, teamId }).lean<any>()
     if (building) return { ...JSON.parse(JSON.stringify(building)), locationType: 'building' }
 
     return null
@@ -32,7 +33,10 @@ async function getLocation(id: string) {
 export default async function AdminQRPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const t = await getTranslations('adminQrPage')
-  const location = await getLocation(id)
+  // Scoped to the viewer's active team: findById alone let a manager of any
+  // team open another team's location by id.
+  const access = await requireTeamPageAccess('manager', `/admin/qr/${id}`)
+  const location = await getLocation(id, access.teamId)
 
   if (!location) {
     return (

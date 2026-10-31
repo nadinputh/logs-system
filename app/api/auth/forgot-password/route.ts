@@ -4,16 +4,23 @@ import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import {
   issueVerificationToken,
+  recentlyIssued,
+  reissueAsSetPassword,
   resetPasswordLink,
+  setPasswordLink,
 } from "@/lib/verification";
-import { sendPasswordResetEmail, smtpConfigured } from "@/lib/email/send";
+import { sendPasswordResetEmail, sendSetPasswordEmail, smtpConfigured } from "@/lib/email/send";
 import { clientKey } from "@/lib/rateLimit";
 import { rateLimitShared } from "@/lib/rateLimitShared";
 import { assertSameOrigin } from "@/lib/csrf";
+import { deferred, requestLocale } from "@/lib/server/deferred";
+import { mailAllowed } from "@/lib/rateLimitGuard";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
+import { trackedSend } from "@/lib/server/trackedSend";
 
 export const runtime = "nodejs";
 
-const Schema = z.object({ email: z.string().email() });
+const Schema = z.object({ email: z.string().email().max(254) });
 
 /**
  * Password-reset request.
@@ -53,26 +60,47 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return neutral;
 
   const email = parsed.data.email.toLowerCase().trim();
-  await connectDB();
+  // Deferred: mail is only sent for a resettable account, so awaiting it would
+  // make response time an account-existence oracle.
+  const ip = ipBucket(getClientIp(req));
+  const locale = await requestLocale();
+  await deferred(async () => {
+    await connectDB();
 
-  const user = await User.findOne({ email }).select(
-    "_id emailVerified passwordHash",
-  );
-  if (user && user.emailVerified && user.passwordHash) {
+    const user = await User.findOne({ email }).select(
+      "_id emailVerified passwordHash",
+    );
+    if (!user || !(await mailAllowed(email, "reset", ip))) return;
     try {
-      const { token, expiresAt } = await issueVerificationToken(
-        user._id,
-        email,
-        "password_reset",
-      );
-      await sendPasswordResetEmail(email, resetPasswordLink(token), {
-        expiresAt,
-      });
+      if (user.emailVerified && user.passwordHash) {
+        if (await recentlyIssued(user._id, "password_reset")) return;
+        const { token, expiresAt } = await issueVerificationToken(
+          user._id,
+          email,
+          "password_reset",
+        );
+        await trackedSend(user._id, "password_reset", () =>
+          sendPasswordResetEmail(email, resetPasswordLink(token), { expiresAt, locale }),
+        );
+      } else {
+        // No password worth resetting: a provisioned account that never set one,
+        // or a pending sign-up whose password nobody has proven they own. Login
+        // no longer names these cases, so this is their recovery: a set-password
+        // link, usable only by whoever controls the inbox.
+        const issued = await reissueAsSetPassword(user._id, email);
+        if (!issued) return;
+        await trackedSend(user._id, "set_password", () =>
+          sendSetPasswordEmail(email, setPasswordLink(issued.token), {
+            expiresAt: issued.expiresAt,
+            locale,
+          }),
+        );
+      }
     } catch (err) {
       // Stay neutral: revealing a send failure would leak that the address
-      // resolves to a resettable account. Log for the operator instead.
+      // resolves to an account. Log for the operator instead.
       console.error("[forgot-password] send failed:", err);
     }
-  }
+  });
   return neutral;
 }

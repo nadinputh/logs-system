@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireTeamAccess({ minRole: "manager" });
   if (auth.error) return auth.error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = CreateQuestCardSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

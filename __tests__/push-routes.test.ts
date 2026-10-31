@@ -41,7 +41,12 @@ describe("POST/DELETE /api/push/subscribe", () => {
     vi.doMock("@/lib/auth", () => ({ authOptions: {} }));
     vi.doMock("@/lib/db", () => ({ connectDB: vi.fn().mockResolvedValue(undefined) }));
     vi.doMock("@/lib/models/PushSubscription", () => ({
-      PushSubscription: { findOneAndUpdate, deleteOne },
+      PushSubscription: {
+        findOneAndUpdate,
+        deleteOne,
+        exists: vi.fn().mockResolvedValue(null),
+        countDocuments: vi.fn().mockResolvedValue(0),
+      },
     }));
 
     const { POST, DELETE } = await import("@/app/api/push/subscribe/route");
@@ -53,15 +58,15 @@ describe("POST/DELETE /api/push/subscribe", () => {
 
     const res = await POST(
       subscribeReq("POST", {
-        endpoint: "https://push.example/ep-1",
+        endpoint: "https://fcm.googleapis.com/fcm/send/ep-1",
         keys: { p256dh: "p1", auth: "a1" },
       }),
     );
 
     expect(res.status).toBe(200);
     expect(findOneAndUpdate).toHaveBeenCalledWith(
-      { endpoint: "https://push.example/ep-1" },
-      { userId: CALLER_USER_ID, endpoint: "https://push.example/ep-1", p256dh: "p1", auth: "a1" },
+      { endpoint: "https://fcm.googleapis.com/fcm/send/ep-1" },
+      { userId: CALLER_USER_ID, endpoint: "https://fcm.googleapis.com/fcm/send/ep-1", p256dh: "p1", auth: "a1" },
       { upsert: true },
     );
   });
@@ -79,7 +84,7 @@ describe("POST/DELETE /api/push/subscribe", () => {
     const { POST, findOneAndUpdate } = await setupSubscribeMocks({ session: null });
 
     const res = await POST(
-      subscribeReq("POST", { endpoint: "https://push.example/ep-1", keys: { p256dh: "p1", auth: "a1" } }),
+      subscribeReq("POST", { endpoint: "https://fcm.googleapis.com/fcm/send/ep-1", keys: { p256dh: "p1", auth: "a1" } }),
     );
 
     expect(res.status).toBe(401);
@@ -89,11 +94,11 @@ describe("POST/DELETE /api/push/subscribe", () => {
   it("DELETE scopes the delete to the caller's own userId, not just the endpoint", async () => {
     const { DELETE, deleteOne } = await setupSubscribeMocks();
 
-    const res = await DELETE(subscribeReq("DELETE", { endpoint: "https://push.example/ep-1" }));
+    const res = await DELETE(subscribeReq("DELETE", { endpoint: "https://fcm.googleapis.com/fcm/send/ep-1" }));
 
     expect(res.status).toBe(200);
     expect(deleteOne).toHaveBeenCalledWith({
-      endpoint: "https://push.example/ep-1",
+      endpoint: "https://fcm.googleapis.com/fcm/send/ep-1",
       userId: CALLER_USER_ID,
     });
   });
@@ -101,10 +106,26 @@ describe("POST/DELETE /api/push/subscribe", () => {
   it("DELETE 401s with no session", async () => {
     const { DELETE, deleteOne } = await setupSubscribeMocks({ session: null });
 
-    const res = await DELETE(subscribeReq("DELETE", { endpoint: "https://push.example/ep-1" }));
+    const res = await DELETE(subscribeReq("DELETE", { endpoint: "https://fcm.googleapis.com/fcm/send/ep-1" }));
 
     expect(res.status).toBe(401);
     expect(deleteOne).not.toHaveBeenCalled();
+  });
+
+  it("POST refuses an endpoint that is not a vendor push service (SSRF)", async () => {
+    const { POST, findOneAndUpdate } = await setupSubscribeMocks();
+    for (const endpoint of [
+      "https://push.example/ep-1",
+      "https://169.254.169.254/latest/meta-data",
+      "https://fcm.googleapis.com.evil.test/x",
+      "https://fcm.googleapis.com:8443/x",
+    ]) {
+      const res = await POST(
+        subscribeReq("POST", { endpoint, keys: { p256dh: "p1", auth: "a1" } }),
+      );
+      expect(res.status).toBe(400);
+    }
+    expect(findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   it("DELETE requires an endpoint in the body", async () => {

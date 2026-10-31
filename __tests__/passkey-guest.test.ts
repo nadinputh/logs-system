@@ -293,6 +293,7 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
     vi.doMock("@/lib/models/VisitorPasskeyCredential", () => ({
       VisitorPasskeyCredential: {
         create: vi.fn().mockResolvedValue({}),
+        countDocuments: vi.fn().mockResolvedValue(0),
       },
     }));
     vi.doMock("@simplewebauthn/server", () => ({
@@ -381,7 +382,10 @@ describe("POST /api/logs/passkey/visitor/register/verify", () => {
       },
     }));
     vi.doMock("@/lib/models/VisitorPasskeyCredential", () => ({
-      VisitorPasskeyCredential: { create: vi.fn().mockResolvedValue({}) },
+      VisitorPasskeyCredential: {
+        create: vi.fn().mockResolvedValue({}),
+        countDocuments: vi.fn().mockResolvedValue(0),
+      },
     }));
     vi.doMock("@/lib/locationOwnership", () => ({
       findOwnedLocationByType: vi.fn().mockResolvedValue({ teamId: TEAM_ID }),
@@ -581,7 +585,7 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
     }));
     vi.doMock("@/lib/models/PasskeyCheckInChallenge", () => ({
       PasskeyCheckInChallenge: {
-        findOne: vi.fn().mockResolvedValue(intentDoc),
+        findOneAndDelete: vi.fn().mockResolvedValue(intentDoc),
         deleteOne: vi.fn().mockResolvedValue({}),
       },
     }));
@@ -794,7 +798,7 @@ describe("POST /api/logs/passkey/verify — check-in", () => {
 
 describe("POST /api/logs/passkey/verify — check-out", () => {
   const CHECK_IN_LOG = {
-    _id: "checkin-log-id",
+    _id: "bbbbbbbbbbbbbbbbbbbbbbb1",
     teamId: TEAM_ID,
     action: "in",
     locationId: LOCATION_ID,
@@ -804,7 +808,7 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
     passkeyVerified: true,
     passkeyCredentialId: "visitor-cred-id",
     toObject: () => ({
-      _id: "checkin-log-id",
+      _id: "bbbbbbbbbbbbbbbbbbbbbbb1",
       action: "in",
       passkeyVerified: true,
       passkeyCredentialId: "visitor-cred-id",
@@ -814,13 +818,13 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
   const CHECKOUT_INTENT = {
     ...INTENT_DOC,
     action: "out",
-    relatedLogId: "checkin-log-id",
+    relatedLogId: "bbbbbbbbbbbbbbbbbbbbbbb1",
   };
 
   const CHECKOUT_BODY = {
     ...VERIFY_BODY,
     action: "out",
-    relatedLogId: "checkin-log-id",
+    relatedLogId: "bbbbbbbbbbbbbbbbbbbbbbb1",
   };
 
   async function setupCheckOutMocks(options?: {
@@ -841,7 +845,7 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
     }));
     vi.doMock("@/lib/models/PasskeyCheckInChallenge", () => ({
       PasskeyCheckInChallenge: {
-        findOne: vi.fn().mockResolvedValue(CHECKOUT_INTENT),
+        findOneAndDelete: vi.fn().mockResolvedValue(CHECKOUT_INTENT),
         deleteOne: vi.fn().mockResolvedValue({}),
       },
     }));
@@ -962,7 +966,7 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
         statusCode: 201,
         body: {
           verified: true,
-          log: { _id: "cached-checkout-id", relatedLogId: "checkin-log-id" },
+          log: { _id: "cached-checkout-id", relatedLogId: "bbbbbbbbbbbbbbbbbbbbbbb1" },
         },
       },
       cachedCheckout: { _id: "cached-checkout-id" },
@@ -1000,7 +1004,7 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
         statusCode: 201,
         body: {
           verified: true,
-          log: { _id: "cached-checkout-id", relatedLogId: "checkin-log-id" },
+          log: { _id: "cached-checkout-id", relatedLogId: "bbbbbbbbbbbbbbbbbbbbbbb1" },
         },
       },
       cachedCheckout: { _id: "cached-checkout-id" },
@@ -1020,7 +1024,7 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
         statusCode: 201,
         body: {
           verified: true,
-          log: { _id: "old-checkout-id", relatedLogId: "old-checkin-id" },
+          log: { _id: "old-checkout-id", relatedLogId: "bbbbbbbbbbbbbbbbbbbbbbb2" },
         },
       },
       cachedCheckout: null,
@@ -1062,7 +1066,9 @@ describe("POST /api/logs/passkey/verify — check-out", () => {
     expect([400, 201]).toContain(res.status); // 400 expected
     if (res.status === 400) {
       const body = await res.json();
-      expect(body.error).toMatch(/relatedLogId required/);
+      // Rejected either by the intent binding (the challenge named a visit this
+      // request no longer does) or, with no intent, by the explicit requirement.
+      expect(body.error).toMatch(/relatedLogId required|Intent mismatch/);
     }
   });
 

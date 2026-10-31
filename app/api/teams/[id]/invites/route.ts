@@ -10,16 +10,19 @@ import { requireTeamPermission } from "@/lib/middleware/auth";
 import { hashToken, inviteLink } from "@/lib/verification";
 import { sendInviteEmail } from "@/lib/email/send";
 import { assertSameOrigin } from "@/lib/csrf";
+import { actorMailLimit, mailAllowed } from "@/lib/rateLimitGuard";
+import { linkIfUndelivered } from "@/lib/server/exposeLink";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
 
 export const runtime = "nodejs";
 
 const CreateInviteSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(254),
   role: z.enum(["admin", "manager", "member", "auditor"]).default("member"),
 });
 
 const RevokeInviteSchema = z.object({
-  inviteId: z.string().min(1),
+  inviteId: z.string().regex(/^[0-9a-f]{24}$/i),
 });
 
 export async function GET(
@@ -66,7 +69,7 @@ export async function POST(
   });
   if (auth.error) return auth.error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = CreateInviteSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -79,6 +82,18 @@ export async function POST(
     return NextResponse.json(
       { error: "Only team owner can invite another team admin" },
       { status: 403 },
+    );
+  }
+
+  const capped = await actorMailLimit((auth.session.user as any).id, ipBucket(getClientIp(req)));
+  if (capped) return capped;
+  // Refuse rather than "fall back to showing the link": otherwise exhausting the
+  // per-address cap is how a caller extracts a bearer link for an address they
+  // do not control.
+  if (!(await mailAllowed(parsed.data.email.trim().toLowerCase(), "invite", (auth.session.user as any).id))) {
+    return NextResponse.json(
+      { error: "Too many messages to this address. Try again later." },
+      { status: 429 },
     );
   }
 
@@ -153,12 +168,10 @@ export async function POST(
         role: invite.role,
         status: invite.status,
         expiresAt: invite.expiresAt,
-        // Returned once, here only: this is the last moment the plaintext exists.
-        token: plainToken,
       },
       emailDelivered,
       // Bearer credential: only handed to the admin when the mail did not go out.
-      inviteUrl: emailDelivered ? undefined : inviteLink(plainToken),
+      inviteUrl: linkIfUndelivered(emailDelivered, inviteLink(plainToken)),
     },
     { status: 201 },
   );
@@ -177,7 +190,7 @@ export async function DELETE(
   });
   if (auth.error) return auth.error;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const parsed = RevokeInviteSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

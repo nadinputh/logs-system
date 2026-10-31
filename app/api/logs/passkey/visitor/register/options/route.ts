@@ -7,15 +7,16 @@ import { VisitorPasskeyChallenge } from "@/lib/models/VisitorPasskeyChallenge";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
-  locationId: z.string().min(1),
+  locationId: z.string().min(1).max(64),
   locationType: z.enum(["building", "floor", "room"]),
   sessionToken: z.string().uuid(),
-  visitorName: z.string().optional(),
-  visitorEmail: z.string().email().optional(),
+  visitorName: z.string().max(100).optional(),
+  visitorEmail: z.string().email().max(254).optional(),
   visitorPhone: z.string().max(30).optional(),
   visitorGender: z
     .enum(["male", "female", "non_binary", "prefer_not_to_say"])
@@ -48,7 +49,10 @@ export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
-  const body = await req.json();
+  const limited = await limitByIp(req, "passkey-visitor-reg", 20);
+  if (limited) return limited;
+
+  const body = await req.json().catch(() => null);
   const parsed = Schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

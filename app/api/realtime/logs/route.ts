@@ -3,6 +3,7 @@ import { requireTeamPermission } from "@/lib/middleware/auth";
 import { hasMinimumTeamRole } from "@/lib/teamPermissions";
 import { TeamRole } from "@/lib/models/TeamMember";
 import { connectDB } from "@/lib/db";
+import { TeamMember } from "@/lib/models/TeamMember";
 import { Log } from "@/lib/models/Log";
 import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
 
@@ -22,6 +23,10 @@ function buildLogEvent(log: any) {
         ? log.timestamp.toISOString()
         : String(log.timestamp),
   };
+}
+
+declare global {
+  var _staffStreams: Map<string, number> | undefined;
 }
 
 export async function GET(req: NextRequest) {
@@ -44,7 +49,16 @@ export async function GET(req: NextRequest) {
     "admin",
   );
 
-  return createSseStream(req, (send) => {
+  // Each stream polls MongoDB every 3s: bound how many one member can hold and
+  // how long any lives (EventSource reconnects on its own).
+  const open = (global._staffStreams ??= new Map<string, number>());
+  const mine = userId ?? "anon";
+  if ((open.get(mine) ?? 0) >= 5) {
+    return NextResponse.json({ error: "Too many open streams" }, { status: 429 });
+  }
+  open.set(mine, (open.get(mine) ?? 0) + 1);
+
+  return createSseStream(req, (send, close) => {
     let since = new Date();
     send(encodeComment("connected"));
 
@@ -71,9 +85,23 @@ export async function GET(req: NextRequest) {
       poll().catch(() => {});
     }, 3_000);
 
+    // Access is checked at connect, so a member suspended or removed afterwards
+    // would keep receiving events. Re-check every minute and end the stream.
+    const accessCheck = setInterval(() => {
+      TeamMember.exists({ teamId, userId, status: "active" })
+        .then((m) => {
+          if (!m) close();
+        })
+        .catch(() => {});
+    }, 60_000);
+
     return () => {
       clearInterval(heartbeat);
       clearInterval(pollInterval);
+      clearInterval(accessCheck);
+      const left = (open.get(mine) ?? 1) - 1;
+      if (left <= 0) open.delete(mine);
+      else open.set(mine, left);
     };
-  });
+  }, { maxMs: 10 * 60_000 });
 }

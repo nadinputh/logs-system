@@ -25,3 +25,18 @@ describe("rateLimitShared", () => {
     expect(!third.ok && third.retryAfter).toBeGreaterThan(0);
   });
 });
+
+describe('rateLimitRefund targets the window that was charged', () => {
+  it('uses the supplied window, not the current clock', async () => {
+    vi.resetModules()
+    const updateOne = vi.fn()
+    vi.doMock('@/lib/db', () => ({ connectDB: vi.fn() }))
+    vi.doMock('@/lib/models/RateBucket', () => ({ RateBucket: { updateOne } }))
+    const { rateLimitRefund } = await import('@/lib/rateLimitShared')
+    await rateLimitRefund('login:ip:1.2.3.4', 900_000, 42)
+    expect(updateOne).toHaveBeenCalledWith(
+      { key: 'login:ip:1.2.3.4:42', count: { $gt: 0 } },
+      { $inc: { count: -1 } },
+    )
+  })
+})

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
+import { appendOnly } from "./appendOnly";
 
 export type LocationType = "building" | "floor" | "room";
 
@@ -40,15 +41,15 @@ const LogSchema = new Schema<ILog>(
       required: true,
     },
     userId: { type: Schema.Types.ObjectId, ref: "User" },
-    visitorName: { type: String, trim: true },
-    visitorEmail: { type: String, trim: true },
-    visitorPhone: { type: String, trim: true },
-    visitorGender: { type: String, trim: true },
-    visitPurpose: { type: String, trim: true },
-    sessionToken: { type: String, required: true },
-    deviceId: { type: String },
-    ipAddress: { type: String },
-    userAgent: { type: String },
+    visitorName: { type: String, trim: true, maxlength: 100 },
+    visitorEmail: { type: String, trim: true, maxlength: 254 },
+    visitorPhone: { type: String, trim: true, maxlength: 30 },
+    visitorGender: { type: String, trim: true, maxlength: 32 },
+    visitPurpose: { type: String, trim: true, maxlength: 200 },
+    sessionToken: { type: String, required: true, maxlength: 64 },
+    deviceId: { type: String, maxlength: 64 },
+    ipAddress: { type: String, maxlength: 64 },
+    userAgent: { type: String, maxlength: 512 },
     geofenceStatus: { type: Boolean },
     action: { type: String, enum: ["in", "out"], required: true },
     timestamp: { type: Date, default: Date.now },
@@ -82,6 +83,8 @@ LogSchema.index(
     partialFilterExpression: { action: "out" },
   },
 );
+
+appendOnly(LogSchema, "Log");
 
 if (mongoose.models.Log && !mongoose.models.Log.schema.path("teamId")) {
   delete mongoose.models.Log;

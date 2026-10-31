@@ -27,6 +27,16 @@ describe("kiosk token", () => {
     expect(await verifyKioskToken(t)).toMatchObject({ locationId: "loc1", jti: expect.any(String) });
   });
 
+  it("marks the on-screen QR as qr and a minted presence token as presence", async () => {
+    // The scan page only exchanges a "qr" token for presence proof, so a
+    // presence token cannot be fed back in to mint the next one forever.
+    const { signKioskToken, verifyKioskToken } = await import("@/lib/jwt");
+    expect((await verifyKioskToken(await signKioskToken("loc1"))).typ).toBe("qr");
+    expect(
+      (await verifyKioskToken(await signKioskToken("loc1", "5m", "presence"))).typ,
+    ).toBe("presence");
+  });
+
   it("rejects an expired token beyond clock tolerance", async () => {
     const { signKioskToken, verifyKioskToken } = await import("@/lib/jwt");
     const t = await signKioskToken("loc1", "1s");
@@ -59,16 +69,23 @@ describe("kioskGate", () => {
   it("accepts a token for this location and rejects one for another", async () => {
     const { kioskGate } = await import("@/lib/kioskGate");
     const { signKioskToken } = await import("@/lib/jwt");
-    const t = await signKioskToken("loc1");
+    const t = await signKioskToken("loc1", "5m", "presence");
     expect(await kioskGate({ requireDynamicQr: true }, "loc1", t, "s1")).toBeNull();
     expect((await kioskGate({}, "loc2", t, "s1"))?.status).toBe(403);
     expect((await kioskGate({}, "loc1", "garbage", "s1"))?.status).toBe(403);
   });
 
+  it("refuses the raw 15s QR token as a write credential (it must be exchanged on the scan page)", async () => {
+    const { kioskGate } = await import("@/lib/kioskGate");
+    const { signKioskToken } = await import("@/lib/jwt");
+    const qr = await signKioskToken("loc1");
+    expect((await kioskGate({}, "loc1", qr, "s1"))?.status).toBe(403);
+  });
+
   it("binds a token to the first session that uses it", async () => {
     const { kioskGate } = await import("@/lib/kioskGate");
     const { signKioskToken } = await import("@/lib/jwt");
-    const t = await signKioskToken("loc1", "5m");
+    const t = await signKioskToken("loc1", "5m", "presence");
     expect(await kioskGate({}, "loc1", t, "s1")).toBeNull();
     expect(await kioskGate({}, "loc1", t, "s1")).toBeNull(); // retry, same visitor
     expect((await kioskGate({}, "loc1", t, "s2"))?.status).toBe(403);
@@ -81,11 +98,14 @@ describe("claimScan", () => {
     vi.resetModules();
   });
 
-  it("lets the first device reload but refuses a different one", async () => {
+  it("lets a device reload, admits up to three devices per QR, and refuses a fourth", async () => {
     const { claimScan } = await import("@/lib/kioskGate");
     expect(await claimScan("j1", "1.1.1.1|ua")).toBe(true);
-    expect(await claimScan("j1", "1.1.1.1|ua")).toBe(true);
-    expect(await claimScan("j1", "2.2.2.2|ua")).toBe(false);
+    expect(await claimScan("j1", "1.1.1.1|ua")).toBe(true); // same device reloads
+    expect(await claimScan("j1", "2.2.2.2|ua")).toBe(true); // a second visitor, or a stranger who was first
+    expect(await claimScan("j1", "3.3.3.3|ua")).toBe(true);
+    expect(await claimScan("j1", "2.2.2.2|ua")).toBe(true); // still theirs
+    expect(await claimScan("j1", "4.4.4.4|ua")).toBe(false); // forwarded-URL abuse is capped
   });
 });
 

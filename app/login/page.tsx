@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 // Only ever redirect within the app — an absolute or protocol-relative `next`
 // would turn an already-authenticated visit into an open redirect.
 function safeNext(next: string | undefined): string {
-  if (next && next.startsWith('/') && !next.startsWith('//')) return next
+  if (next && /^\/(?![/\\])[^\x00-\x1f]*$/.test(next)) return next
   return '/dashboard'
 }
 

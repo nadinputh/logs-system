@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { Building } from "@/lib/models/Building";
 import { Floor } from "@/lib/models/Floor";
@@ -38,6 +39,9 @@ export async function GET(
   if (auth.error) return auth.error;
 
   const { id } = await params;
+  if (!Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const type = req.nextUrl.searchParams.get("type");
   await connectDB();
 
@@ -74,8 +78,11 @@ export async function PATCH(
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
   const { id } = await params;
+  if (!Types.ObjectId.isValid(id)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
   const typeParam = req.nextUrl.searchParams.get("type");
   const type: LocationType | null =
     typeParam === "room" || typeParam === "floor" || typeParam === "building"

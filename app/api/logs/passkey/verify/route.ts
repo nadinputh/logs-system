@@ -11,16 +11,48 @@ import { getClientIp } from "@/lib/server/getClientIp";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { resolveBuildingId, computeGeofenceStatus } from "@/lib/geofence";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
 import { acquireCheckInLock } from "@/lib/checkInLock";
+import { publicLog } from "@/lib/checkoutLog";
+import { limitByIp } from "@/lib/rateLimitGuard";
+import { z } from "zod";
+import { Types } from "mongoose";
 
 export const runtime = "nodejs";
+
+// Every field below reaches a Mongo filter. Anything that is not a plain string
+// (e.g. {"$ne":null}) would be read as an operator, so shape is enforced up front.
+const VerifySchema = z.object({
+  response: z.object({
+    id: z.string().min(1).max(1024),
+    response: z.object({ clientDataJSON: z.string().min(1).max(4096) }).loose(),
+  }).loose(),
+  locationId: z.string().min(1).max(64),
+  locationType: z.enum(["building", "floor", "room"]),
+  action: z.enum(["in", "out"]),
+  sessionToken: z.string().uuid(),
+  relatedLogId: z.string().refine((v) => Types.ObjectId.isValid(v)).optional(),
+  idempotencyKey: z.string().min(1).max(128),
+  visitorName: z.string().max(100).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+});
 
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
 
-  const body = await req.json();
+  const limited = await limitByIp(req, "passkey-checkin", 30);
+  if (limited) return limited;
+
+  const parsedBody = VerifySchema.safeParse(await req.json().catch(() => null));
+  if (!parsedBody.success) {
+    return NextResponse.json(
+      { error: "Missing required fields" },
+      { status: 400 },
+    );
+  }
   const {
     response,
     locationId,
@@ -32,21 +64,7 @@ export async function POST(req: NextRequest) {
     visitorName: bodyVisitorName,
     latitude,
     longitude,
-  } = body;
-
-  if (
-    !response ||
-    !locationId ||
-    !locationType ||
-    !action ||
-    !sessionToken ||
-    !idempotencyKey
-  ) {
-    return NextResponse.json(
-      { error: "Missing required fields" },
-      { status: 400 },
-    );
-  }
+  } = parsedBody.data;
 
   // Step 1: Extract challenge from signed clientDataJSON
   let challenge: string;
@@ -56,6 +74,7 @@ export async function POST(req: NextRequest) {
         "utf8",
       ),
     );
+    if (typeof clientData.challenge !== "string") throw new Error("challenge");
     challenge = clientData.challenge;
   } catch {
     return NextResponse.json(
@@ -67,7 +86,9 @@ export async function POST(req: NextRequest) {
   await connectDB();
 
   // Step 2: Look up stored intent by challenge
-  const intentDoc = await PasskeyCheckInChallenge.findOne({ challenge });
+  // Consumed atomically up front: a captured assertion submitted twice at once
+  // can only find the challenge once, so only one request can verify and write.
+  const intentDoc = await PasskeyCheckInChallenge.findOneAndDelete({ challenge });
   if (!intentDoc) {
     return NextResponse.json(
       { error: "Challenge not found or expired" },
@@ -81,7 +102,10 @@ export async function POST(req: NextRequest) {
     intentDoc.locationType !== locationType ||
     intentDoc.action !== action ||
     intentDoc.sessionToken !== sessionToken ||
-    intentDoc.idempotencyKey !== idempotencyKey
+    intentDoc.idempotencyKey !== idempotencyKey ||
+    // A check-out challenge names the visit it closes; without this the same
+    // assertion could be replayed against a different relatedLogId.
+    (intentDoc.relatedLogId ?? undefined) !== (relatedLogId ?? undefined)
   ) {
     return NextResponse.json(
       {
@@ -99,25 +123,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Step 4: Replay idempotency cache if this key was already committed
+  // Step 4: Look up a cached response for this idempotency key. It is only
+  // REPLAYED after the assertion below has verified (step 8b): returning it here
+  // would hand a stored response (log, visitor details) to anyone who presents
+  // the key, without proving they hold the passkey.
   const cached = await checkIdempotency(idempotencyKey);
-  if (cached && action !== "out") {
-    const cachedBody = cached.body as any;
-    const cachedLogId = cachedBody?.log?._id ?? cachedBody?.log?.id;
-    if (cachedLogId) {
-      const cachedCheckout = await Log.findOne({
-        teamId,
-        relatedLogId: cachedLogId,
-        action: "out",
-      })
-        .select("_id")
-        .lean();
-
-      if (!cachedCheckout) {
-        return NextResponse.json(cached.body, { status: cached.statusCode });
-      }
-    }
-  }
 
   // Step 5: Resolve credential — try staff first, then visitor
   const anyStaffCred = await PasskeyCredential.findOne({
@@ -172,7 +182,8 @@ export async function POST(req: NextRequest) {
   let verification;
   try {
     verification = await verifyAuthenticationResponse({
-      response,
+      // Shape-checked above; the library validates the rest of the assertion.
+      response: response as unknown as AuthenticationResponseJSON,
       expectedChallenge: intentDoc.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
@@ -183,8 +194,8 @@ export async function POST(req: NextRequest) {
         transports: credTransports as any,
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+  } catch {
+    return NextResponse.json({ error: "Verification failed" }, { status: 400 });
   }
 
   if (!verification.verified) {
@@ -210,11 +221,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Step 8: Delete the consumed challenge
-  await PasskeyCheckInChallenge.deleteOne({ _id: intentDoc._id });
+  // Step 8: (the challenge was already consumed atomically at step 2)
+
+  // Step 8b: the caller has now proven possession of the passkey, so a retry of a
+  // check-in that already committed gets its original response instead of a
+  // second row.
+  if (cached && action !== "out") {
+    const cachedBody = cached.body as any;
+    const cachedLogId = cachedBody?.log?._id ?? cachedBody?.log?.id;
+    if (cachedLogId) {
+      const cachedCheckout = await Log.findOne({
+        teamId,
+        relatedLogId: cachedLogId,
+        action: "out",
+      })
+        .select("_id")
+        .lean();
+
+      if (!cachedCheckout) {
+        return NextResponse.json(cached.body, { status: cached.statusCode });
+      }
+    }
+  }
 
   const ipAddress = getClientIp(req);
-  const userAgent = req.headers.get("user-agent") ?? undefined;
+  const userAgent = (req.headers.get("user-agent") ?? undefined)?.slice(0, 256);
   const visitorName = intentDoc.visitorName ?? bodyVisitorName;
 
   // Step 9: Write the append-only log entry with passkeyVerified: true.
@@ -254,7 +285,7 @@ export async function POST(req: NextRequest) {
           action: "out",
         });
         if (!existingCheckout) {
-          const payload = { existing: true, log: lastCheckin };
+          const payload = { existing: true, log: publicLog(lastCheckin) };
           await saveIdempotency(idempotencyKey, 200, payload);
           return NextResponse.json(payload, { status: 200 });
         }
@@ -370,7 +401,7 @@ export async function POST(req: NextRequest) {
         action: "out",
       });
       if (existing) {
-        const payload = { already: true, log: existing };
+        const payload = { already: true, log: publicLog(existing) };
         await saveIdempotency(idempotencyKey, 200, payload);
         return NextResponse.json(payload, { status: 200 });
       }
@@ -394,7 +425,7 @@ export async function POST(req: NextRequest) {
 
     // Step 10: Commit idempotency key so the same ceremony can never write twice
     publishLogCreated(log);
-    const responsePayload = { verified: true, log: log.toObject() };
+    const responsePayload = { verified: true, log: publicLog(log) };
     await saveIdempotency(idempotencyKey, 201, responsePayload);
 
     return NextResponse.json(responsePayload, { status: 201 });

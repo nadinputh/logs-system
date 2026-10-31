@@ -7,12 +7,14 @@ import { hashToken } from "@/lib/verification";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { User } from "@/lib/models/User";
 import { assertSameOrigin } from "@/lib/csrf";
+import { limitByIp } from "@/lib/rateLimitGuard";
+import { PasswordSchema } from "@/lib/validations/password";
 
 export const runtime = "nodejs";
 
 const Schema = z.object({
   name: z.string().min(1).max(100),
-  password: z.string().min(8).max(200),
+  password: PasswordSchema,
 });
 
 // Unauthenticated: creates a brand-new account FROM an invite. Possession of the
@@ -25,6 +27,8 @@ export async function POST(
 ) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+  const limited = await limitByIp(req, "invite-register", 10, 15 * 60_000);
+  if (limited) return limited;
   const { token } = await params;
   const parsed = Schema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {

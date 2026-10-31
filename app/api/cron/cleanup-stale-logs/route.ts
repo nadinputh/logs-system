@@ -5,6 +5,7 @@ import { Log } from "@/lib/models/Log";
 import { AuditLog } from "@/lib/models/AuditLog";
 import { publishLogCreated } from "@/lib/realtime/logEvents";
 import { checkoutFields } from "@/lib/checkoutLog";
+import { readSecret } from "@/lib/secrets";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ function sha(s: string) {
 
 export async function GET(req: NextRequest) {
   // Fail closed: with no secret configured, an absent header must not match.
-  const expected = process.env.CRON_SECRET;
+  const expected = readSecret("CRON_SECRET");
   const given = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
   if (!expected || !timingSafeEqual(sha(given), sha(expected))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

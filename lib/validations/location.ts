@@ -10,8 +10,9 @@ const GeofenceSchema = z
   .object({
     type: z.literal("Polygon"),
     coordinates: z
-      .array(z.array(z.tuple([z.number(), z.number()])).min(4))
-      .min(1),
+      .array(z.array(z.tuple([z.number(), z.number()])).min(4).max(500))
+      .min(1)
+      .max(10),
   })
   .nullable()
   .transform((geofence) =>
@@ -28,15 +29,15 @@ export const CreateBuildingSchema = z.object({
 });
 
 export const CreateFloorSchema = z.object({
-  buildingId: z.string().min(1),
+  buildingId: z.string().regex(/^[0-9a-f]{24}$/i),
   number: z.number().int(),
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
 });
 
 export const CreateRoomSchema = z.object({
-  floorId: z.string().min(1),
-  buildingId: z.string().min(1),
+  floorId: z.string().regex(/^[0-9a-f]{24}$/i),
+  buildingId: z.string().regex(/^[0-9a-f]{24}$/i),
   name: z.string().min(1).max(100),
   number: z.string().min(1).max(20),
   type: z.string().max(50).optional(),

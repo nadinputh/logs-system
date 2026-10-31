@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
+import type { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/models/User";
 import { Team } from "@/lib/models/Team";
 import { TeamMember } from "@/lib/models/TeamMember";
-import { issueVerificationToken, verifyEmailLink } from "@/lib/verification";
-import { sendVerificationEmail } from "@/lib/email/send";
+import {
+  issueVerificationToken,
+  recentlyIssued,
+  reissueAsSetPassword,
+  resetPasswordLink,
+  setPasswordLink,
+} from "@/lib/verification";
+import { sendPasswordResetEmail, sendSetPasswordEmail, smtpConfigured } from "@/lib/email/send";
 import { clientKey } from "@/lib/rateLimit";
 import { rateLimitShared } from "@/lib/rateLimitShared";
 import { assertSameOrigin } from "@/lib/csrf";
+import { mailAllowed } from "@/lib/rateLimitGuard";
+import { deferred, requestLocale } from "@/lib/server/deferred";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
+import { trackedSend } from "@/lib/server/trackedSend";
 
 export const runtime = "nodejs";
 
 const RegisterSchema = z.object({
   name: z.string().min(1).max(100),
-  email: z.string().email(),
-  password: z.string().min(8).max(200),
+  email: z.string().email().max(254),
   teamName: z.string().min(1).max(100),
 });
 
@@ -54,14 +64,14 @@ const neutral = (delivered: boolean) =>
 /**
  * The notification is not the account. If the mail server is down or
  * misconfigured, the account still exists and `resend-verification` is the
- * recovery — so a send failure is logged, not thrown. Throwing here left an
+ * recovery, so a send failure is logged, not thrown. Throwing here left an
  * orphaned unverified account behind a 500, and the retry hit the same path.
  */
-async function trySendVerification(email: string, link: string) {
+async function trySendSetPassword(email: string, link: string, locale?: "en" | "km") {
   try {
-    return await sendVerificationEmail(email, link);
+    return await sendSetPasswordEmail(email, link, { locale });
   } catch (err) {
-    console.error("[register] verification email failed to send:", err);
+    console.error("[register] set-password email failed to send:", err);
     return false;
   }
 }
@@ -80,12 +90,35 @@ function slugify(input: string) {
 
 async function uniqueSlug(base: string) {
   const normalized = slugify(base);
-  let candidate = normalized;
-  let n = 2;
-  while (await Team.findOne({ slug: candidate }).select("_id").lean()) {
-    candidate = `${normalized}-${n++}`;
-  }
-  return candidate;
+  if (!(await Team.findOne({ slug: normalized }).select("_id").lean())) return normalized;
+  // Taken: a random suffix, so many sign-ups with one team name do not each walk
+  // name, name-2, name-3 ... (the unique index still settles a lost race).
+  return `${normalized}-${randomBytes(3).toString("hex")}`;
+}
+
+async function createWorkspace(
+  userId: Types.ObjectId,
+  teamName: string,
+  activate = true,
+) {
+  const slug = await uniqueSlug(teamName);
+  const make = (s: string) =>
+    Team.create({ name: teamName, slug: s, ownerUserId: userId, createdByUserId: userId });
+  // Two sign-ups can pass the probe for the same slug; the unique index decides.
+  // The loser retries once with a random suffix instead of leaving an account
+  // with no workspace.
+  const team = await make(slug).catch((err: any) => {
+    if (err?.code !== 11000) throw err;
+    return make(`${slug}-${randomBytes(3).toString("hex")}`);
+  });
+  await TeamMember.create({
+    teamId: team._id,
+    userId,
+    role: "owner",
+    status: "active",
+    joinedAt: new Date(),
+  });
+  if (activate) await User.updateOne({ _id: userId }, { activeTeamId: team._id });
 }
 
 export async function POST(req: NextRequest) {
@@ -107,60 +140,78 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { name, password, teamName } = parsed.data;
+  const { name, teamName } = parsed.data;
   const email = parsed.data.email.toLowerCase().trim();
 
-  await connectDB();
+  const ip = ipBucket(getClientIp(req));
+  // Read now: the request context is gone once the response has been sent.
+  const locale = await requestLocale();
+  // Everything below runs after the response is sent. The work differs a lot by
+  // case (a fresh account writes a user, a team and a membership and sends mail;
+  // an existing address does a read and maybe a send), so awaiting it would make
+  // response time a lookup for "is this address registered?". The reply is the
+  // same for every address; `delivered` reflects server state (is mail
+  // configured), not this address.
+  await deferred(async () => {
+    await connectDB();
+    const existing = await User.findOne({ email });
 
-  const existing = await User.findOne({ email });
+    // A verified account already owns this address. The response stays identical
+    // to a fresh sign-up (revealing it made this endpoint a lookup for "is X a
+    // user?"); the owner, and only the owner, is told by mail, with a link that
+    // lets them recover access.
+    if (existing?.emailVerified) {
+      if (!existing.passwordHash || !(await mailAllowed(email, "reset", ip))) return;
+      // A reset link from the last two minutes is still live in their inbox;
+      // issuing another would delete it, so a stranger could keep killing it.
+      if (await recentlyIssued(existing._id, "password_reset")) return;
+      const { token, expiresAt } = await issueVerificationToken(
+        existing._id,
+        email,
+        "password_reset",
+      );
+      await trackedSend(existing._id, "password_reset", () =>
+        sendPasswordResetEmail(email, resetPasswordLink(token), { expiresAt, locale }),
+      );
+      return;
+    }
 
-  // Verified account already owns this email — the one case we reveal.
-  if (existing?.emailVerified) {
-    return NextResponse.json(
-      { code: "EMAIL_IN_USE", error: "Email already in use." },
-      { status: 409 },
-    );
-  }
+    if (existing) {
+      // Unverified account exists: stay neutral, and trust nobody's password.
+      // Keeping the first registrant's would let a pre-registering attacker log
+      // in once the real owner verifies; replacing it with this request's would
+      // let a later attacker do the same to a pending signup. Instead drop the
+      // password and mail a set-password link, which only the inbox owner can use.
+      if (!(await mailAllowed(email, "signup", ip))) return;
+      const issued = await reissueAsSetPassword(existing._id, email);
+      if (!issued) return;
+      await trackedSend(existing._id, "set_password", () =>
+        trySendSetPassword(email, setPasswordLink(issued.token), locale),
+      );
+      // No workspace is created here. This request is unauthenticated: whoever
+      // typed the address has not proved they own the inbox, and a team named by
+      // them must not appear in that account. The owner creates or joins one
+      // after setting a password.
+      return;
+    }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+    // No password is stored at sign-up. An unverified address may belong to
+    // someone else, and a password chosen by whoever typed it would become the
+    // account's password once the real owner clicked the mailed link. The link is
+    // a set-password link instead: the inbox owner chooses the password.
+    const user = await User.create({
+      name,
+      email,
+      role: "staff",
+      emailVerified: null,
+      termsAcceptedAt: new Date(),
+    });
 
-  if (existing) {
-    // Unverified account exists — resend only, stay neutral. Never overwrite
-    // the credentials: whoever registers an address first would otherwise be
-    // able to replace the password of a signup still waiting on its email link
-    // (pre-hijack), or plant one the real owner then verifies.
-    const { token } = await issueVerificationToken(existing._id, email, "email_verify");
-    const delivered = await trySendVerification(email, verifyEmailLink(token));
-    return neutral(delivered);
-  }
+    await createWorkspace(user._id, teamName);
 
-  const user = await User.create({
-    name,
-    email,
-    passwordHash,
-    role: "staff",
-    emailVerified: null,
-    termsAcceptedAt: new Date(),
+    const { token } = await issueVerificationToken(user._id, email, "set_password");
+    await trySendSetPassword(email, setPasswordLink(token), locale);
   });
 
-  const slug = await uniqueSlug(teamName);
-  const team = await Team.create({
-    name: teamName,
-    slug,
-    ownerUserId: user._id,
-    createdByUserId: user._id,
-  });
-  await TeamMember.create({
-    teamId: team._id,
-    userId: user._id,
-    role: "owner",
-    status: "active",
-    joinedAt: new Date(),
-  });
-  await User.updateOne({ _id: user._id }, { activeTeamId: team._id });
-
-  const { token } = await issueVerificationToken(user._id, email, "email_verify");
-  const delivered = await trySendVerification(email, verifyEmailLink(token));
-
-  return neutral(delivered);
+  return neutral(smtpConfigured());
 }

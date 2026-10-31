@@ -100,6 +100,27 @@ async function loadNodemailer(): Promise<NodemailerModule> {
   }
 }
 
+/** Transport options. Pure, so the security-relevant ones can be tested. */
+export function smtpOptions(c: { host: string; port: number; user: string; pass: string }) {
+  const implicitTls = process.env.SMTP_SECURE === "true" || c.port === 465;
+  return {
+    host: c.host,
+    port: c.port,
+    secure: implicitTls,
+    // Without this, a network attacker who strips the STARTTLS advertisement
+    // downgrades the session and reads the SMTP credentials and the mailed
+    // set-password / reset links. Refuse to send unencrypted.
+    requireTLS: !implicitTls,
+    auth: { user: c.user, pass: c.pass },
+    // The send is awaited inside the request that triggered it, so an
+    // unresponsive mail server would otherwise hold the connection open until
+    // the platform's own timeout and take registration latency with it.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+  };
+}
+
 async function getTransport(): Promise<Transporter> {
   if (global._mailer) return global._mailer;
 
@@ -116,18 +137,7 @@ async function getTransport(): Promise<Transporter> {
 
   const nodemailer = await loadNodemailer();
 
-  global._mailer = nodemailer.createTransport({
-    host,
-    port,
-    secure: process.env.SMTP_SECURE === "true" || port === 465,
-    auth: { user, pass },
-    // The send is awaited inside the request that triggered it, so an
-    // unresponsive mail server would otherwise hold the connection open until
-    // the platform's own timeout and take registration latency with it.
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 20_000,
-  });
+  global._mailer = nodemailer.createTransport(smtpOptions({ host, port, user, pass }));
   return global._mailer;
 }
 

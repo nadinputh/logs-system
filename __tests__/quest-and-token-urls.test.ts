@@ -17,12 +17,15 @@ describe('POST /api/quests/[token]/progress — proof of presence', () => {
   beforeEach(() => vi.resetModules())
 
   async function setup(location: Record<string, unknown>) {
+    // The step is now one atomic findOneAndUpdate (no read-modify-write save).
     const save = vi.fn()
     class FakeProgress {
-      completedSteps: any[] = []
-      constructor(public init: any) {}
-      save = save
       static findOne = vi.fn().mockResolvedValue(null)
+      static findOneAndUpdate = save.mockResolvedValue({
+        _id: 'p1',
+        completedSteps: [{ stepOrder: 0 }],
+        completedAt: undefined,
+      })
     }
     vi.doMock('@/lib/db', () => ({ connectDB: vi.fn() }))
     vi.doMock('@/lib/csrf', () => ({ assertSameOrigin: () => null }))
@@ -64,7 +67,11 @@ describe('POST /api/quests/[token]/progress — proof of presence', () => {
     const { call, save } = await setup({})
     const res = await call()
     expect(res.status).toBe(200)
-    expect(save).toHaveBeenCalledOnce()
+    // Atomic: the filter refuses a step that is already recorded (so concurrent
+    // requests cannot both push it), then the card is stamped complete.
+    expect(save.mock.calls[0][0]).toMatchObject({ 'completedSteps.stepOrder': { $ne: 0 } })
+    expect(save.mock.calls[0][1]).toHaveProperty('$push')
+    expect(save).toHaveBeenCalledTimes(2)
   })
 })
 

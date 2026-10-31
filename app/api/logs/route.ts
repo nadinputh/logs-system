@@ -79,8 +79,11 @@ export async function GET(req: NextRequest) {
   // string ids from requireTeamPermission must become real ObjectIds here or
   // this silently matches nothing against the ObjectId-typed teamId/userId
   // fields, and distinctLocations comes back empty with no error at all.
+  // The dropdown only needs places visited recently; an unbounded $group over a
+  // team's whole history made every page load scan it all.
   const aggregateMatch: Record<string, unknown> = {
     ...baseQuery,
+    timestamp: { $gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) },
     teamId: new Types.ObjectId(auth.teamId),
   };
   if ("userId" in aggregateMatch) {
@@ -114,13 +117,15 @@ export async function GET(req: NextRequest) {
 
   const query: Record<string, unknown> = { ...baseQuery };
 
-  const search = req.nextUrl.searchParams.get("search");
+  // visitorName has no text index, so this is a collection-wide regex scan: bound
+  // the pattern a member can feed it.
+  const search = req.nextUrl.searchParams.get("search")?.slice(0, 100);
   if (search) {
     query.visitorName = { $regex: escapeRegex(search), $options: "i" };
   }
 
   const locationId = req.nextUrl.searchParams.get("locationId");
-  if (locationId) {
+  if (locationId && Types.ObjectId.isValid(locationId)) {
     query.locationId = locationId;
   }
 
@@ -128,9 +133,12 @@ export async function GET(req: NextRequest) {
   const to = req.nextUrl.searchParams.get("to");
   if (from || to) {
     const timestamp: Record<string, Date> = {};
-    if (from) timestamp.$gte = new Date(`${from}T00:00:00`);
-    if (to) timestamp.$lte = new Date(`${to}T23:59:59.999`);
-    query.timestamp = timestamp;
+    const fromAt = from ? new Date(`${from}T00:00:00`) : null;
+    const toAt = to ? new Date(`${to}T23:59:59.999`) : null;
+    // An unparsable date is ignored rather than cast into a 500.
+    if (fromAt && !isNaN(+fromAt)) timestamp.$gte = fromAt;
+    if (toAt && !isNaN(+toAt)) timestamp.$lte = toAt;
+    if (Object.keys(timestamp).length) query.timestamp = timestamp;
   }
 
   // "in" / "out" isn't a field on the check-in document itself — it's
@@ -139,16 +147,41 @@ export async function GET(req: NextRequest) {
   // that, without rewriting this route onto an aggregation pipeline.
   const status = req.nextUrl.searchParams.get("status");
   if (status === "in" || status === "out") {
+    // Without an explicit start date, look back 90 days: the open-or-closed
+    // answer is built from every check-out id in the window, so an unbounded one
+    // grows with the team's whole history. (The nightly job closes anything open
+    // after 12h, so a still-open visit older than the window barely exists.)
+    if (!(query.timestamp as any)?.$gte) {
+      query.timestamp = {
+        ...((query.timestamp as Record<string, Date>) ?? {}),
+        $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+      };
+    }
+    // A check-out is never earlier than its check-in, so the window's lower
+    // bound also bounds the check-outs worth looking at.
     const checkedOutIds = await Log.distinct("relatedLogId", {
       teamId: auth.teamId,
       action: "out",
       relatedLogId: { $ne: null },
+      timestamp: { $gte: (query.timestamp as any).$gte },
     });
+    // The id list rides in the query document (16MB cap). A window this large
+    // needs a narrower date range, not a 500.
+    if (checkedOutIds.length > 50_000) {
+      return NextResponse.json(
+        { error: "Too many check-outs in this range. Narrow the date range." },
+        { status: 400 },
+      );
+    }
     query._id =
       status === "in" ? { $nin: checkedOutIds } : { $in: checkedOutIds };
   }
 
-  const page = parseInt(req.nextUrl.searchParams.get("page") ?? "1");
+  // $skip walks every skipped row; an absurd page is a slow query (or an overflow).
+  const page = Math.min(
+    Math.max(parseInt(req.nextUrl.searchParams.get("page") ?? "1", 10) || 1, 1),
+    10_000,
+  );
   // Paginated table view stays at 50/page; a caller that needs every
   // matching row for export (see /settings/team's own CSV export) can raise
   // this up to the same 5000-row ceiling used there.
@@ -231,6 +264,9 @@ export async function GET(req: NextRequest) {
     ];
     return {
       ...l,
+      // The full sessionToken is the guest's credential for check-out and quest
+      // APIs; staff only need a reference to correlate rows.
+      sessionToken: l.sessionToken ? `${String(l.sessionToken).slice(0, 8)}…` : undefined,
       checkoutLog: checkout,
       checkoutAt: checkout?.timestamp ?? undefined,
       locationName: label?.name ?? null,
@@ -327,7 +363,7 @@ export async function POST(req: NextRequest) {
   const teamId = location.teamId.toString();
 
   const ipAddress = getClientIp(req);
-  const userAgent = req.headers.get("user-agent") ?? undefined;
+  const userAgent = (req.headers.get("user-agent") ?? undefined)?.slice(0, 256);
 
   // Enforce per-location passkey policy
   const mode = location.checkInMode ?? "click";

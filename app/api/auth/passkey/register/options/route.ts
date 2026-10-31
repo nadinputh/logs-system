@@ -6,16 +6,24 @@ import { PasskeyCredential } from "@/lib/models/PasskeyCredential";
 import { WebAuthnChallenge } from "@/lib/models/WebAuthnChallenge";
 import { User } from "@/lib/models/User";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
+import { requireRecentSignIn } from "@/lib/server/recentSignIn";
+import { assertSameOrigin } from "@/lib/csrf";
 
 export const runtime = "nodejs";
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  // This GET replaces the user's pending registration challenge, so it is a
+  // state change a cross-site navigation must not be able to trigger.
+  const _csrf = assertSameOrigin(req);
+  if (_csrf) return _csrf;
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   await connectDB();
+  const stale = await requireRecentSignIn((session.user as any).sid);
+  if (stale) return stale;
   const userId = (session.user as any).id;
   const user = await User.findById(userId).lean();
   if (!user)

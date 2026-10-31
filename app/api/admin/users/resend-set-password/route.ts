@@ -8,10 +8,13 @@ import { requireTeamPermission } from "@/lib/middleware/auth";
 import { issueVerificationToken, setPasswordLink } from "@/lib/verification";
 import { sendSetPasswordEmail } from "@/lib/email/send";
 import { assertSameOrigin } from "@/lib/csrf";
+import { actorMailLimit, mailAllowed } from "@/lib/rateLimitGuard";
+import { linkIfUndelivered } from "@/lib/server/exposeLink";
+import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
 
 export const runtime = "nodejs";
 
-const Schema = z.object({ userId: z.string().min(1) });
+const Schema = z.object({ userId: z.string().regex(/^[0-9a-f]{24}$/i) });
 
 /**
  * Reissues a set-password link for an admin-provisioned account that never
@@ -70,6 +73,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const capped = await actorMailLimit((auth.session?.user as any)?.id ?? auth.teamId, ipBucket(getClientIp(req)));
+  if (capped) return capped;
+  if (!(await mailAllowed(user.email, "provision", (auth.session?.user as any)?.id ?? "-"))) {
+    return NextResponse.json(
+      { error: "Too many messages to this address. Try again later." },
+      { status: 429 },
+    );
+  }
+
   const { token, expiresAt } = await issueVerificationToken(
     user._id,
     user.email,
@@ -92,7 +104,7 @@ export async function POST(req: NextRequest) {
   // Bearer credential: only handed to the admin when the mail did not go out.
   return NextResponse.json({
     emailDelivered,
-    setPasswordUrl: emailDelivered ? undefined : setPasswordUrl,
+    setPasswordUrl: linkIfUndelivered(emailDelivered, setPasswordUrl),
     expiresAt,
   });
 }

@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { VisitorPasskeyCredential } from "@/lib/models/VisitorPasskeyCredential";
 import { assertSameOrigin } from "@/lib/csrf";
 import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
+import { limitByIp } from "@/lib/rateLimitGuard";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,9 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const _csrf = assertSameOrigin(req);
   if (_csrf) return _csrf;
+
+  const limited = await limitByIp(req, "passkey-exists", 60);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => null);
   const { sessionToken, locationId, locationType } = body ?? {};

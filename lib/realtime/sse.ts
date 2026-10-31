@@ -18,20 +18,36 @@ export const SSE_RESPONSE_HEADERS = {
 type SendFn = (chunk: Uint8Array) => void;
 type CleanupFn = () => void;
 
+/**
+ * `maxMs` bounds a stream's life so abandoned or hostile connections cannot
+ * accumulate; clients that still want updates reconnect. `setup` also receives
+ * `close` so a stream can end itself (e.g. when the viewer loses access).
+ */
 export function createSseStream(
   req: { signal: AbortSignal },
-  setup: (send: SendFn) => CleanupFn,
+  setup: (send: SendFn, close: () => void) => CleanupFn,
+  opts: { maxMs?: number } = {},
 ): Response {
   let cleanup: CleanupFn = () => {};
+  // cancel() and the abort handler can both fire for one disconnect; callers'
+  // cleanups keep counters (per-IP stream caps), so run it exactly once.
+  let cleaned = false;
+  const runCleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    cleanup();
+  };
 
   const stream = new ReadableStream({
     start(controller) {
       let closed = false;
 
+      let lifetime: ReturnType<typeof setTimeout> | undefined;
       const close = () => {
         if (closed) return;
         closed = true;
-        cleanup();
+        if (lifetime) clearTimeout(lifetime);
+        runCleanup();
         try {
           controller.close();
         } catch {}
@@ -46,11 +62,12 @@ export function createSseStream(
         }
       };
 
-      cleanup = setup(send);
+      cleanup = setup(send, close);
+      if (opts.maxMs) lifetime = setTimeout(close, opts.maxMs);
       req.signal.addEventListener("abort", close, { once: true });
     },
     cancel() {
-      cleanup();
+      runCleanup();
     },
   });
 
