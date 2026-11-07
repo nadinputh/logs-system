@@ -1,4 +1,5 @@
 import mongoose, { Document, Model, Schema, Types } from "mongoose";
+import { appendOnly } from "./appendOnly";
 
 export type TeamAuditAction =
   | "member_role_changed"
@@ -40,6 +41,8 @@ TeamAuditLogSchema.index({ teamId: 1, createdAt: -1 });
 TeamAuditLogSchema.index({ actorUserId: 1, createdAt: -1 });
 TeamAuditLogSchema.index({ targetUserId: 1, createdAt: -1 });
 TeamAuditLogSchema.index({ action: 1, createdAt: -1 });
+
+appendOnly(TeamAuditLogSchema, "TeamAuditLog");
 
 if (
   mongoose.models.TeamAuditLog &&

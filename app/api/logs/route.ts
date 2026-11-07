@@ -312,7 +312,10 @@ export async function POST(req: NextRequest) {
   const idempotencyKey = req.headers.get("idempotency-key");
   if (idempotencyKey) {
     const cached = await checkIdempotency(idempotencyKey);
-    if (cached) {
+    // The key is client-chosen, so a hit only counts for the visitor it was
+    // written for: never echo another session's stored log (and its token).
+    const cachedLog = (cached?.body as any)?.log ?? cached?.body;
+    if (cached && cachedLog?.sessionToken === parsed.data.sessionToken) {
       // The key repeats for every check-in of the day, so a cached response
       // only counts while the visit it describes is still open. Once that
       // visit has a check-out, this is a new visit and must be written.

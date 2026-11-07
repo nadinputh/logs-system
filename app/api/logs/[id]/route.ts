@@ -43,7 +43,11 @@ export async function PATCH(
     const cached = await checkIdempotency(idempotencyKey);
     // The key is the same for every check-out of the day. It only replays the
     // check-out of *this* check-in; another visit's cached OUT is stale.
-    if (cached && String((cached.body as any)?.relatedLogId) === id) {
+    if (
+      cached &&
+      String((cached.body as any)?.relatedLogId) === id &&
+      (cached.body as any)?.sessionToken === sessionToken
+    ) {
       return NextResponse.json(cached.body, { status: cached.statusCode });
     }
   }

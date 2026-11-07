@@ -50,10 +50,22 @@ describe("check-out", () => {
   it("replays the cached check-out of this same check-in", async () => {
     const { call, create } = await patchRoute({
       checkin: checkin(),
-      cached: { statusCode: 201, body: { _id: "out1", relatedLogId: "aaaaaaaaaaaaaaaaaaaaaaa2" } },
+      cached: { statusCode: 201, body: { _id: "out1", relatedLogId: "aaaaaaaaaaaaaaaaaaaaaaa2", sessionToken: SESSION } },
     });
     expect((await call()).status).toBe(201);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("never replays a cached check-out that belongs to another session", async () => {
+    const { call, create } = await patchRoute({
+      checkin: checkin(),
+      cached: {
+        statusCode: 201,
+        body: { _id: "out1", relatedLogId: "aaaaaaaaaaaaaaaaaaaaaaa2", sessionToken: "22222222-2222-4222-8222-222222222222" },
+      },
+    });
+    await call();
+    expect(create).toHaveBeenCalledOnce();
   });
 
   it("lets a click check-in be closed after the location switched to passkey", async () => {

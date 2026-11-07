@@ -23,7 +23,9 @@ export function assertSameOrigin(req: Request): NextResponse | null {
   // strip it, so it still protects the cases the Origin/Referer fallback below
   // lets through (a request with neither header, e.g. a cross-site navigation
   // to a GET with side effects, or a Referrer-Policy: no-referrer page).
-  if (req.headers.get("sec-fetch-site") === "cross-site") {
+  // `same-site` is a sibling subdomain, not this app: refuse it too.
+  const fetchSite = req.headers.get("sec-fetch-site");
+  if (fetchSite === "cross-site" || fetchSite === "same-site") {
     return NextResponse.json(
       { error: "Cross-origin request rejected" },
       { status: 403 },

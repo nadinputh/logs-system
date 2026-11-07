@@ -36,6 +36,15 @@ describe('assertSameOrigin — allows same origin, refuses cross-origin', () => 
     expect(body.error).toMatch(/cross-origin/i)
   })
 
+  it('rejects a same-site (sibling subdomain) request even with no Origin', () => {
+    const res = assertSameOrigin(reqWith({ 'sec-fetch-site': 'same-site' }))
+    expect(res!.status).toBe(403)
+  })
+
+  it('allows a browser same-origin request', () => {
+    expect(assertSameOrigin(reqWith({ 'sec-fetch-site': 'same-origin', origin: APP }))).toBeNull()
+  })
+
   it('rejects a malformed Origin with 400', async () => {
     const res = assertSameOrigin(reqWith({ origin: 'not-a-url' }))
     expect(res).not.toBeNull()
