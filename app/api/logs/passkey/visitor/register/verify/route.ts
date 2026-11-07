@@ -7,6 +7,7 @@ import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
 import { limitByIp } from "@/lib/rateLimitGuard";
+import { kioskGate } from "@/lib/kioskGate";
 import { RegistrationResponseSchema, safeTransports } from "@/lib/validations/webauthn";
 
 export const runtime = "nodejs";
@@ -23,6 +24,7 @@ const Schema = z.object({
     .enum(["male", "female", "non_binary", "prefer_not_to_say"])
     .optional(),
   visitPurpose: z.string().max(200).optional(),
+  kioskToken: z.string().max(2048).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
     visitorPhone,
     visitorGender,
     visitPurpose,
+    kioskToken,
   } = parsed.data;
 
   await connectDB();
@@ -62,6 +65,13 @@ export async function POST(req: NextRequest) {
   if (!location) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
+  const gate = await kioskGate(
+    { requireDynamicQr: location.requireDynamicQr || location.checkInMode === "passkey" },
+    locationId,
+    kioskToken,
+    sessionToken,
+  );
+  if (gate) return gate;
   const teamId = location.teamId.toString();
 
   const challengeDoc = await VisitorPasskeyChallenge.findOne({
@@ -109,6 +119,11 @@ export async function POST(req: NextRequest) {
   if ((await VisitorPasskeyCredential.countDocuments({ teamId, sessionToken })) >= 5) {
     return NextResponse.json({ error: "Too many passkeys for this visitor" }, { status: 429 });
   }
+
+  // The per-session cap above is keyed by a client-chosen token, so it does not
+  // bound a caller who rotates tokens. Cap rows written per IP per hour.
+  const writeLimited = await limitByIp(req, "passkey-visitor-write", 10, 60 * 60_000);
+  if (writeLimited) return writeLimited;
 
   await VisitorPasskeyCredential.create({
     teamId,

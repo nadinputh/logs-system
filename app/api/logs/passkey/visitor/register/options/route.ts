@@ -8,6 +8,7 @@ import { findOwnedLocationByType, LocationType } from "@/lib/locationOwnership";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
 import { assertSameOrigin } from "@/lib/csrf";
 import { limitByIp } from "@/lib/rateLimitGuard";
+import { kioskGate } from "@/lib/kioskGate";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,7 @@ const Schema = z.object({
     .enum(["male", "female", "non_binary", "prefer_not_to_say"])
     .optional(),
   visitPurpose: z.string().max(200).optional(),
+  kioskToken: z.string().max(2048).optional(),
 });
 
 function buildVisitorPasskeyNames({
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
     visitorName,
     visitorEmail,
     visitorPhone,
+    kioskToken,
   } = parsed.data;
 
   await connectDB();
@@ -79,6 +82,13 @@ export async function POST(req: NextRequest) {
   if (!location) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
+  const gate = await kioskGate(
+    { requireDynamicQr: location.requireDynamicQr || location.checkInMode === "passkey" },
+    locationId,
+    kioskToken,
+    sessionToken,
+  );
+  if (gate) return gate;
 
   const teamId = location.teamId.toString();
 

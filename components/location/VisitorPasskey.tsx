@@ -145,6 +145,7 @@ export default function VisitorPasskey({
         ...contactFields(visitorContact),
         visitorGender,
         visitPurpose,
+        kioskToken,
       }
 
       const optionsRes = await fetch('/api/logs/passkey/visitor/register/options', {
@@ -179,7 +180,7 @@ export default function VisitorPasskey({
     } finally {
       setLoading(false)
     }
-  }, [sessionToken, visitorName, visitorContact, visitorGender, visitPurpose, registerOnly, authenticate, onRegistered])
+  }, [locationId, locationType, sessionToken, visitorName, visitorContact, visitorGender, visitPurpose, kioskToken, registerOnly, authenticate, onRegistered])
 
   // supported === null mid-check reads as unsupported here too — nothing to
   // show yet, and the alternative (flashing this control on then off a beat
