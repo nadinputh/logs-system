@@ -70,8 +70,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
   // Only the check-in leg needs proof of presence; checkout does not.
+  //
+  // A passkey-mode location always demands the live kiosk QR. A visitor passkey
+  // is registered from nothing (no account, attestation "none"), so a script's
+  // software authenticator would otherwise earn `passkeyVerified: true` from
+  // anywhere. The passkey is the device continuity; the live QR is the presence.
   if (action === "in") {
-    const gate = await kioskGate(location, locationId, kioskToken, sessionToken);
+    const gate = await kioskGate(
+      {
+        requireDynamicQr:
+          location.requireDynamicQr || location.checkInMode === "passkey",
+      },
+      locationId,
+      kioskToken,
+      sessionToken,
+    );
     if (gate) return gate;
   }
   const teamId = location.teamId.toString();

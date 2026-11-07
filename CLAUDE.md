@@ -159,7 +159,8 @@ Every check-in/out event must support cryptographic validation via the device's 
 - Authentication: `POST /api/auth/passkey/authenticate/options` → `POST /api/auth/passkey/authenticate/verify`
 - Passkey auth replaces the `POST /api/logs` password check but co-exists with credential auth for backwards compatibility.
 - Every passkey-verified check-in must set `passkeyVerified: true` on the Log document.
-- **Visitor passkeys prove device continuity, not identity or presence.** Visitor registration is unauthenticated with `attestationType: "none"`, so a scripted authenticator can obtain `passkeyVerified: true` at a passkey-mode location from anywhere. Where presence matters, pair passkey mode with `requireDynamicQr`.
+- **Visitor passkeys prove device continuity, not identity or presence.** Visitor registration is unauthenticated with `attestationType: "none"`, so a scripted authenticator could otherwise obtain `passkeyVerified: true` from anywhere. Presence therefore comes from the live kiosk QR: `POST /api/logs/passkey/challenge` treats a `checkInMode: "passkey"` location as `requireDynamicQr` for check-in (check-out never needs it), and the client shows the scan-the-kiosk notice to match.
+- Concurrent SSE stream caps (`lib/realtime/streamSlot.ts`) live in the shared MongoDB limiter, not in process memory, so they hold across instances.
 
 ---
 

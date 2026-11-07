@@ -508,9 +508,13 @@ export default function CheckInOutClient({ locationId, initialLocation, kioskTok
                 : ''
 
   const passkeyRequired = location?.checkInMode === 'passkey'
-  // Live-QR locations need proof of presence to check in, not to check out.
+  // Live-QR locations need proof of presence to check in, not to check out. A
+  // passkey location counts as one: the server refuses its check-in challenge
+  // without the live QR (app/api/logs/passkey/challenge).
   const needsLiveQr =
-    !!location?.requireDynamicQr && !kioskToken && (step === 'identity' || step === 'checkin')
+    (!!location?.requireDynamicQr || passkeyRequired) &&
+    !kioskToken &&
+    (step === 'identity' || step === 'checkin')
   const checkoutSuggested = openLog
     ? getPredictedAction(openLog.timestamp, currentTime) === 'checkout_suggested'
     : false

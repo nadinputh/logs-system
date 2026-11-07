@@ -6,6 +6,7 @@ import { findOwnedLocationById } from "@/lib/locationOwnership";
 import { getClientIp, ipBucket } from "@/lib/server/getClientIp";
 import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
 import { limitByIp } from "@/lib/rateLimitGuard";
+import { acquireStreamSlot } from "@/lib/realtime/streamSlot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,9 +19,6 @@ const UUID_RE =
 // maxMs bounds how long any of them lives (the client reconnects).
 const MAX_STREAMS_PER_IP = 5;
 const STREAM_MAX_MS = 5 * 60_000;
-declare global {
-  var _guestStreams: Map<string, number> | undefined;
-}
 
 function buildLogEvent(log: any) {
   return {
@@ -71,12 +69,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
   }
 
-  const streams = (global._guestStreams ??= new Map<string, number>());
-  const ip = ipBucket(getClientIp(req));
-  if ((streams.get(ip) ?? 0) >= MAX_STREAMS_PER_IP) {
+  const releaseSlot = await acquireStreamSlot(
+    `guest-streams:${ipBucket(getClientIp(req))}`,
+    MAX_STREAMS_PER_IP,
+    STREAM_MAX_MS,
+  );
+  if (!releaseSlot) {
     return NextResponse.json({ error: "Too many open streams" }, { status: 429 });
   }
-  streams.set(ip, (streams.get(ip) ?? 0) + 1);
 
   return createSseStream(req, (send) => {
     let since = new Date();
@@ -109,9 +109,7 @@ export async function POST(req: NextRequest) {
     return () => {
       clearInterval(heartbeat);
       clearInterval(pollInterval);
-      const left = (streams.get(ip) ?? 1) - 1;
-      if (left <= 0) streams.delete(ip);
-      else streams.set(ip, left);
+      releaseSlot();
     };
   }, { maxMs: STREAM_MAX_MS });
 }

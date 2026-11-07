@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/db";
 import { TeamMember } from "@/lib/models/TeamMember";
 import { Log } from "@/lib/models/Log";
 import { createSseStream, encodeComment, encodeEvent } from "@/lib/realtime/sse";
+import { acquireStreamSlot } from "@/lib/realtime/streamSlot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +26,8 @@ function buildLogEvent(log: any) {
   };
 }
 
-declare global {
-  var _staffStreams: Map<string, number> | undefined;
-}
+const MAX_STREAMS_PER_MEMBER = 5;
+const STREAM_MAX_MS = 10 * 60_000;
 
 export async function GET(req: NextRequest) {
   const auth = await requireTeamPermission("logs.read");
@@ -51,12 +51,14 @@ export async function GET(req: NextRequest) {
 
   // Each stream polls MongoDB every 3s: bound how many one member can hold and
   // how long any lives (EventSource reconnects on its own).
-  const open = (global._staffStreams ??= new Map<string, number>());
-  const mine = userId ?? "anon";
-  if ((open.get(mine) ?? 0) >= 5) {
+  const releaseSlot = await acquireStreamSlot(
+    `staff-streams:${userId ?? "anon"}`,
+    MAX_STREAMS_PER_MEMBER,
+    STREAM_MAX_MS,
+  );
+  if (!releaseSlot) {
     return NextResponse.json({ error: "Too many open streams" }, { status: 429 });
   }
-  open.set(mine, (open.get(mine) ?? 0) + 1);
 
   return createSseStream(req, (send, close) => {
     let since = new Date();
@@ -99,9 +101,7 @@ export async function GET(req: NextRequest) {
       clearInterval(heartbeat);
       clearInterval(pollInterval);
       clearInterval(accessCheck);
-      const left = (open.get(mine) ?? 1) - 1;
-      if (left <= 0) open.delete(mine);
-      else open.set(mine, left);
+      releaseSlot();
     };
-  }, { maxMs: 10 * 60_000 });
+  }, { maxMs: STREAM_MAX_MS });
 }
