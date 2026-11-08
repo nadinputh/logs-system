@@ -1,0 +1,55 @@
+# Run with: docker compose --env-file .env.production.local up -d --build
+# No service publishes a port: the only way in is the outbound Cloudflare Tunnel.
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  app:
+    <<: *hardening
+    build:
+      context: .
+      args:
+        NEXTAUTH_URL: ${NEXTAUTH_URL}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
+    env_file: .env.production.local
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1000,gid=1000
+    mem_limit: 1g
+    pids_limit: 256
+
+  cloudflared:
+    <<: *hardening
+    # Pinned: the X-Forwarded-For behaviour TRUSTED_PROXY_HOPS=1 relies on was
+    # verified against this version. Re-check client IPs after bumping it.
+    image: cloudflare/cloudflared:2026.10.7
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      app:
+        condition: service_healthy
+
+  # Replaces vercel.json's crons. Calls the app over the private network, so
+  # /api/cron/* can be blocked at Cloudflare entirely. Schedules are UTC.
+  cron:
+    restart: unless-stopped
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID] # busybox crond drops to the job user
+    security_opt: ["no-new-privileges:true"]
+    image: alpine:3.20
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+    command:
+      - sh
+      - -c
+      - |
+        hit='wget -qO- --header "Authorization: Bearer '"$$CRON_SECRET"'" http://app:4000/api/cron'
+        printf '0 * * * * %s/cleanup-stale-logs\n0 4 * * * %s/report-unverified\n' "$$hit" "$$hit" > /etc/crontabs/root
+        exec crond -f -l 8
+    depends_on:
+      app:
+        condition: service_healthy

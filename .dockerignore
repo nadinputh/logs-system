@@ -1,0 +1,21 @@
+# Secrets must never enter the build context (Next would also load .env* into the bundle).
+.env*
+!.env.local.example
+*credentials*.env
+*.pem
+
+.git
+node_modules
+.next
+coverage
+graphify-out
+.claude
+.codex
+.agents
+.impeccable
+.playwright-mcp
+__tests__
+*.tsbuildinfo
+Dockerfile
+docker-compose.yml
+DEPLOY.md

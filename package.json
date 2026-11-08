@@ -2,6 +2,7 @@
   "name": "logs-system",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "node scripts/next-with-port.mjs dev",
     "build": "next build",

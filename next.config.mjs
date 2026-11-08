@@ -10,6 +10,8 @@ const appUrl = process.env.NEXTAUTH_URL || `http://localhost:${appPort}`
 
 const nextConfig = {
   poweredByHeader: false,
+  // Self-contained server bundle for the Docker image; Vercel ignores it.
+  output: 'standalone',
   outputFileTracingRoot: dirname(fileURLToPath(import.meta.url)),
   env: {
     NEXT_PUBLIC_APP_PORT: appPort,
