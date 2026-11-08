@@ -33,7 +33,7 @@ services:
       app:
         condition: service_healthy
 
-  # Replaces vercel.json's crons. Calls the app over the private network, so
+  # Runs the scheduled jobs. Calls the app over the private network, so
   # /api/cron/* can be blocked at Cloudflare entirely. Schedules are UTC.
   cron:
     restart: unless-stopped
