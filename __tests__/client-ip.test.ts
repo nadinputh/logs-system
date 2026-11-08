@@ -11,7 +11,7 @@ describe('pickClientIp', () => {
     expect(pickClientIp('1.1.1.1, 203.0.113.7')).toBe('203.0.113.7')
   })
 
-  it('a single entry (Vercel overwrites the header) is used as is', () => {
+  it('a single entry (client sent no header) is used as is', () => {
     expect(pickClientIp('203.0.113.7')).toBe('203.0.113.7')
   })
 

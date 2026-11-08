@@ -6,7 +6,7 @@
  * value lets any client pick its own IP (and its own rate-limit bucket). The
  * trustworthy entry is the one our nearest proxy appended, i.e. counted from
  * the END. `TRUSTED_PROXY_HOPS` is how many proxies sit in front of the app
- * (default 1: Vercel, or a single nginx/ALB). Behind a CDN plus a load
+ * (default 1: Cloudflare Tunnel, or a single nginx/ALB). Behind a CDN plus a load
  * balancer set it to 2, or all clients collapse onto the balancer's IP.
  */
 export function pickClientIp(
